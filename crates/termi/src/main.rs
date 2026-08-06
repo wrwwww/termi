@@ -1,0 +1,77 @@
+use std::sync::Mutex;
+
+use assets::Assets;
+use gpui::{App, Application};
+use gpui_platform;
+use workspace::WorkspaceView;
+fn build_application() -> Application {
+    let platform = gpui_platform::current_platform(false);
+    if std::env::var("ZED_EXPERIMENTAL_A11Y").as_deref() == Ok("1") {
+        Application::with_platform(platform)
+    } else {
+        Application::new_inaccessible(platform)
+    }
+}
+
+fn main() {
+    // log initialization
+    env_logger::init();
+    let app = build_application().with_assets(Assets);
+    app.run(move |cx| {
+        settings::init(cx);
+        // extension::init(cx);
+        theme_settings::init(theme::LoadThemes::All(Box::new(Assets)), cx);
+        load_embedded_fonts(cx);
+        terminal_view::init(cx);
+        theme_selector::init(cx);
+        open_window(cx);
+    });
+}
+fn load_embedded_fonts(cx: &App) {
+    let asset_source = cx.asset_source();
+    let font_paths = asset_source.list("fonts").unwrap();
+    let embedded_fonts = Mutex::new(Vec::new());
+    let executor = cx.background_executor();
+
+    cx.foreground_executor().block_on(executor.scoped(|scope| {
+        for font_path in &font_paths {
+            if !font_path.ends_with(".ttf") {
+                continue;
+            }
+
+            scope.spawn(async {
+                let font_bytes = asset_source.load(font_path).unwrap().unwrap();
+                embedded_fonts.lock().push(font_bytes);
+            });
+        }
+    }));
+
+    cx.text_system()
+        .add_fonts(embedded_fonts.into_inner().unwrap())
+        .unwrap();
+}
+
+fn open_window(cx: &mut App) {
+    cx.run(move |cx| {
+        // gpui_component::init(cx);
+        // crate::settings::init(cx);
+        // crate::ui::theme::init(LoadThemes::JustBase, cx);
+
+        let bounds = Bounds::centered(None, size(px(1000.), px(600.0)), cx);
+        cx.spawn(async move |cx| {
+            cx.open_window(
+                WindowOptions {
+                    window_bounds: Some(WindowBounds::Windowed(bounds)),
+                    titlebar: Some(TitleBar::title_bar_options()),
+                    ..Default::default()
+                },
+                |window, cx| {
+                    let view = cx.new(|cx| WorkspaceView::new(window, cx));
+                    cx.new(|cx| Root::new(view, window, cx))
+                },
+            )
+            .expect("Failed to open window");
+        })
+        .detach();
+    });
+}

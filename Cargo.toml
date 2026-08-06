@@ -1,0 +1,104 @@
+# [package]
+# name = "termi"
+# version = "0.1.0"
+# edition = "2024"
+
+[workspace]
+members = [
+    "crates/terminal",
+    "crates/terminal_view",
+    "crates/title_bar",
+    "crates/theme",
+    "crates/theme_settings",
+    "crates/settings",
+    "crates/settings_macros",
+    "crates/ui",
+    "crates/utils",
+    "crates/utils_macros",
+    "crates/termi",
+    "crates/protocol",
+]
+default-members = ["crates/termi"]
+resolver = "3"
+[workspace.package]
+publish = false
+edition = "2024"
+
+
+[workspace.dependencies]
+
+assets = { path = "crates/assets" }
+utils = { path = "crates/utils" }
+ui = { path = "crates/ui" }
+utils_macros = { path = "crates/utils_macros" }
+settings = { path = "crates/settings" }
+settings_macros = { path = "crates/settings_macros" }
+settings_content = { path = "crates/settings_content" }
+settings_ui = { path = "crates/settings_ui" }
+
+theme = { path = "crates/theme" }
+theme_settings = { path = "crates/theme_settings" }
+terminal = { path = "crates/terminal" }
+terminal_view = { path = "crates/terminal_view" }
+workspace = { path = "crates/workspace" }
+protocol = { path = "crates/protocol" }
+#
+# Workspace member crates
+#
+
+gpui = { git = "https://github.com/zed-industries/zed", rev = "1d217ee39d381ac101b7cf49d3d22451ac1093fe" }
+gpui_platform = { git = "https://github.com/zed-industries/zed", rev = "1d217ee39d381ac101b7cf49d3d22451ac1093fe", features = [
+    "font-kit",
+] }
+# gpui-component = { git = "https://github.com/longbridge/gpui-component" }
+# 可选：使用内置默认资源
+# gpui-component-assets = { git = "https://github.com/longbridge/gpui-component" }
+anyhow = "1.0"
+log = "0.4.33"
+env_logger = "0.11.11"
+serde = "1.0.228"
+serde_json = "1.0.150"
+tokio = { version = "1.52.3", features = ["full"] }
+futures = "0.3.32"
+vte = "0.15.0"
+#termion = "4.0.6"
+regex = "1.12.4"
+dirs = "6.0.0"
+palette = "0.7.6"
+toml = "1.1.2"
+# ssh2 = "0.9.6"
+notify = "8.2.0"
+alacritty_terminal = "0.26.0"
+uuid = { version = "1.0", features = ["v4", "serde"] }
+gpui-rsx = "0.6"
+aws-lc-rs = { version = "1.15.3", features = ["prebuilt-nasm"] }
+async-trait = "0.1.91"
+# russh-keys = "0.49.2"
+russh = { version = "0.62.3", features = ["async-trait"] }
+parking_lot = "0.12.5"
+itertools = "0.15.0"
+thiserror = "2.0.19"
+strum = { version = "0.28.0", features = ["derive"] }
+inventory = "0.3.24"
+indexmap = "2.14.0"
+rustc-hash = "2.1.3"
+schemars = { version = "1.2.2", features = ["derive"] }
+
+rust-embed = { version = "8.11", features = ["include-exclude"] }
+serde_json_lenient = "0.2.4"
+quote = "1.0"
+proc-macro2 = "1.0"
+syn = { version = "2.0", features = ["full", "derive"] }
+smallvec = { version = "1.6", features = ["union", "const_new"] }
+
+[workspace.lints.rust]
+unexpected_cfgs = { level = "allow" }
+
+[workspace.lints.clippy]
+dbg_macro = "deny"
+todo = "deny"
+
+declare_interior_mutable_const = "deny"
+
+redundant_clone = "deny"
+disallowed_methods = "deny"

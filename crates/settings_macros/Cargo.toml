@@ -1,0 +1,16 @@
+[package]
+name = "settings_macros"
+version = "0.1.0"
+publish.workspace = true
+edition.workspace = true
+
+[lints]
+workspace = true
+
+[lib]
+path = "src/settings_macros.rs"
+proc-macro = true
+
+[dependencies]
+quote.workspace = true
+syn.workspace = true

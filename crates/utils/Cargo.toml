@@ -1,0 +1,17 @@
+[package]
+name = "utils"
+version = "0.1.0"
+publish.workspace = true
+edition.workspace = true
+
+[lints]
+workspace = true
+
+[lib]
+path = "src/utils.rs"
+
+[dependencies]
+rustc-hash.workspace = true
+indexmap.workspace = true
+anyhow.workspace = true
+rust-embed.workspace = true

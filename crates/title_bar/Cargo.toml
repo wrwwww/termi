@@ -1,0 +1,14 @@
+[package]
+name = "title_bar"
+version = "0.1.0"
+publish.workspace = true
+edition.workspace = true
+
+[lints]
+workspace = true
+
+[lib]
+name = "title_bar"
+path = "src/ui.rs"
+
+[dependencies]

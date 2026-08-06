@@ -1,0 +1,23 @@
+[package]
+name = "terminal-view"
+version = "0.1.0"
+publish.workspace = true
+edition.workspace = true
+
+[lints]
+workspace = true
+
+[lib]
+path = "src/terminal_view.rs"
+
+[dependencies]
+gpui.workspace = true
+anyhow.workspace = true
+gpui-rsx.workspace = true
+log.workspace = true
+terminal.workspace = true
+vte.workspace = true
+settings.workspace = true
+serde.workspace = true
+theme_settings.workspace = true
+theme.workspace = true

@@ -1,0 +1,22 @@
+[package]
+name = "workspace"
+version = "0.1.0"
+publish.workspace = true
+edition.workspace = true
+
+[lints]
+workspace = true
+
+[lib]
+name = "workspace"
+path = "src/workspace.rs"
+
+[dependencies]
+anyhow.workspace = true
+gpui.workspace = true
+serde.workspace = true
+utils.workspace = true
+smallvec.workspace = true
+ui.workspace = true
+theme_settings.workspace = true
+theme.workspace = true

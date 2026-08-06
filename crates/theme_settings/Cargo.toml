@@ -1,0 +1,24 @@
+[package]
+name = "theme_settings"
+version = "0.1.0"
+publish.workspace = true
+edition.workspace = true
+
+[lints]
+workspace = true
+
+[lib]
+path = "src/theme_settings.rs"
+
+[dependencies]
+settings_macros.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+settings.workspace = true
+gpui.workspace = true
+anyhow.workspace = true
+theme.workspace = true
+settings_content.workspace = true
+log.workspace = true
+serde_json_lenient.workspace = true
+uuid.workspace = true

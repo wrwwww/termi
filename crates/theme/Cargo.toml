@@ -1,0 +1,20 @@
+[package]
+name = "theme"
+version = "0.1.0"
+publish.workspace = true
+edition.workspace = true
+
+[lints]
+workspace = true
+
+[lib]
+path = "src/theme.rs"
+
+[dependencies]
+gpui.workspace = true
+anyhow.workspace = true
+parking_lot.workspace = true
+thiserror.workspace = true
+strum.workspace = true
+log.workspace = true
+serde.workspace = true

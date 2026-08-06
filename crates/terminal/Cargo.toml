@@ -1,0 +1,24 @@
+[package]
+name = "terminal"
+version = "0.1.0"
+publish.workspace = true
+edition.workspace = true
+
+[lints]
+workspace = true
+
+[lib]
+path = "src/terminal.rs"
+
+[dependencies]
+alacritty_terminal.workspace = true
+gpui.workspace = true
+itertools.workspace = true
+vte.workspace = true
+serde.workspace = true
+anyhow.workspace = true
+log.workspace = true
+settings.workspace = true
+settings_content.workspace = true
+settings_macros.workspace = true
+protocol.workspace = true
