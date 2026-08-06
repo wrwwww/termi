@@ -4,9 +4,9 @@ pub mod Blink_manager;
 pub mod terminal_element;
 use gpui::*;
 use gpui_rsx::rsx;
-use terminal::{CursorShape, Terminal, TerminalBounds, terminal_settings::TerminalSettings};
+use terminal::{terminal_settings::TerminalSettings, CursorShape, Terminal, TerminalBounds};
 
-use crate::{Blink_manager::BlinkManager, terminal_element::TerminalElement};
+use crate::{terminal_element::TerminalElement, Blink_manager::BlinkManager};
 
 pub struct ImeState {
     pub marked_text: String,
@@ -129,6 +129,13 @@ impl TerminalView {
         window.invalidate_character_coordinates();
         cx.notify();
     }
+    fn send_text(&mut self, text: &SendText, _: &mut Window, cx: &mut Context<Self>) {
+        self.clear_bell(cx);
+        self.blink_manager.update(cx, BlinkManager::pause_blinking);
+        self.terminal.update(cx, |term, _| {
+            term.input(text.0.to_string().into_bytes());
+        });
+    }
 
     fn focus_out(&mut self, _window: &mut Window, cx: &mut Context<Self>) {
         self.blink_manager.update(cx, BlinkManager::disable);
@@ -149,7 +156,9 @@ impl Render for TerminalView {
         // let list = self.terminal_manager.read(cx).session_manager.read(cx);
 
         rsx! {
-            <div id="terminal_view" class="bg-black" h_full w_full>
+            <div id="terminal_view" class="bg-black" h_full w_full
+                on_action={cx.listener(TerminalView::send_text)}
+                on_key_down={cx.listener(Self::key_down)}>
                 <div id="terminal_container" class="" h_full w_full>
                     {
                         TerminalElement::new(
