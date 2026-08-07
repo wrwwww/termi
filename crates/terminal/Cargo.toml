@@ -22,3 +22,5 @@ settings.workspace = true
 settings_content.workspace = true
 settings_macros.workspace = true
 protocol.workspace = true
+futures.workspace = true
+tokio.workspace = true

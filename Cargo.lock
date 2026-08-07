@@ -6843,6 +6843,7 @@ version = "0.1.0"
 dependencies = [
  "alacritty_terminal",
  "anyhow",
+ "futures",
  "gpui",
  "itertools 0.15.0",
  "log",
@@ -6851,6 +6852,7 @@ dependencies = [
  "settings",
  "settings_content",
  "settings_macros",
+ "tokio",
  "vte",
 ]
 
@@ -6861,9 +6863,13 @@ dependencies = [
  "anyhow",
  "gpui",
  "gpui-rsx",
+ "itertools 0.15.0",
  "log",
+ "schemars",
  "serde",
+ "serde_json",
  "settings",
+ "settings_content",
  "terminal",
  "theme",
  "theme_settings",

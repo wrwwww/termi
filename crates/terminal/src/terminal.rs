@@ -1,17 +1,17 @@
+pub mod alacritty;
 pub mod terminal_settings;
+use futures::{
+    FutureExt, SinkExt, StreamExt, channel::mpsc::{UnboundedReceiver, UnboundedSender, unbounded},
+};
+use log::info;
+use tokio::task::yield_now;
 use std::{
-    cmp,
-    collections::{VecDeque, vec_deque},
-    mem,
-    ops::{BitOr, BitOrAssign, Deref, Range as StdRange},
-    rc::Rc,
-    sync::Arc,
-    time::{Instant, SystemTime, UNIX_EPOCH},
+    borrow::Cow, cmp, collections::{VecDeque, vec_deque}, fmt::{self, Formatter}, mem, ops::{BitOr, BitOrAssign, Deref, Range as StdRange}, process::ExitStatus, rc::Rc, sync::{Arc, atomic::AtomicU64, mpsc::Sender}, time::{Instant, SystemTime, UNIX_EPOCH},
 };
 
 use alacritty_terminal::{
     Term,
-    event::{Event, EventListener},
+    event::{self, Event, EventListener},
     grid::{Dimensions, GridIterator},
     index::Column,
     sync::FairMutex,
@@ -19,19 +19,14 @@ use alacritty_terminal::{
 };
 
 use gpui::{
-    AbsoluteLength, AnyElement, App, AvailableSpace, Background, BorderStyle, Bounds, ContentMask,
-    Context, Corners, DefiniteLength, DispatchPhase, Edges, Element, Entity, FocusHandle, Font,
-    FontFeatures, FontStyle, FontWeight, HighlightStyle, Hitbox, HitboxBehavior, Hsla,
-    InputHandler, InteractiveElement, Interactivity, IntoElement, KeyDownEvent, Keystroke,
-    Modifiers, ModifiersChangedEvent, MouseButton, MouseMoveEvent, PaintQuad, ParentElement,
-    Pixels, Point as GpuiPoint, ShapedLine, Size, StrikethroughStyle, TextAlign, TextRun,
-    TextStyle, UTF16Selection, UnderlineStyle, WeakEntity, WhiteSpace, Window, accesskit::Uuid,
-    div, fill, font, hsla, point, px, relative, rgba, size,
+    AbsoluteLength, AnyElement, App, AvailableSpace, Background, BorderStyle, Bounds, ClipboardItem, ContentMask, Context, Corners, DefiniteLength, DispatchPhase, Edges, Element, Entity, EventEmitter, FocusHandle, Font, FontFeatures, FontStyle, FontWeight, HighlightStyle, Hitbox, HitboxBehavior, Hsla, InputHandler, InteractiveElement, Interactivity, IntoElement, KeyDownEvent, Keystroke, Modifiers, ModifiersChangedEvent, MouseButton, MouseMoveEvent, PaintQuad, ParentElement, Pixels, Point as GpuiPoint, ShapedLine, Size, StrikethroughStyle, Task, TextAlign, TextRun, TextStyle, UTF16Selection, UnderlineStyle, WeakEntity, WhiteSpace, Window, accesskit::Uuid, div, fill, font, hsla, point, px, relative, rgba, size,
 };
 use itertools::Itertools;
 use protocol::{BackendTx, SshMessage, SystemEvent};
 use serde::{Deserialize, Serialize};
-use vte::ansi::{Attr, Color, Handler, NamedColor, Processor, StdSyncHandler};
+use vte::ansi::{Attr, Color, Handler, NamedColor, Processor, Rgb, StdSyncHandler};
+
+use crate::alacritty::{last_non_empty_lines, window_size_from_terminal_bounds};
 pub struct Terminal {
     pub id: String,
     pub title: String,
@@ -52,9 +47,11 @@ pub struct Terminal {
     output_processor: Processor,
     events: VecDeque<InternalEvent>,
     term: Arc<FairMutex<Term<TerminalListener>>>,
-
-    pub cols: u16,
-    pub rows: u16,
+    keyboard_input_sent: bool,
+    init_command_startup_marker: Option<String>,
+    init_command_startup_tx: Option<Sender<()>>,
+ 
+    event_loop_task: Task<Result<(), anyhow::Error>>,
     // pub backend: std::sync::Arc<std::sync::Mutex<BackendTx>>,
     pub scroll_pixel_y: f32,
     backend: std::sync::Arc<std::sync::Mutex<BackendTx>>,
@@ -83,12 +80,154 @@ enum InternalEvent {
     ViMotion(ViMotion),
     // MoveViCursorToPoint(Point),
 }
+
+type ClipboardFormatter = Arc<dyn Fn(&str) -> String + Sync + Send + 'static>;
+type ColorFormatter = Arc<dyn Fn(Rgb) -> String + Sync + Send + 'static>;
+type TextAreaSizeFormatter = Arc<dyn Fn(TerminalBounds) -> String + Sync + Send + 'static>;
+
+#[derive(Clone)]
+pub(crate) enum TerminalBackendEvent {
+    MouseCursorDirty,
+    Title(String),
+    ResetTitle,
+    ClipboardStore(String),
+    ClipboardLoad(ClipboardFormatter),
+    ColorRequest(usize, ColorFormatter),
+    PtyWrite(String),
+    TextAreaSizeRequest(TextAreaSizeFormatter),
+    CursorBlinkingChange,
+    Wakeup,
+    Bell,
+    Exit,
+    ChildExit(ExitStatus),
+}
+
+impl fmt::Debug for TerminalBackendEvent {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::MouseCursorDirty => f.write_str("MouseCursorDirty"),
+            Self::Title(title) => write!(f, "Title({title})"),
+            Self::ResetTitle => f.write_str("ResetTitle"),
+            Self::ClipboardStore(data) => write!(f, "ClipboardStore({data})"),
+            Self::ClipboardLoad(_) => f.write_str("ClipboardLoad"),
+            Self::ColorRequest(index, _) => write!(f, "ColorRequest({index})"),
+            Self::PtyWrite(output) => write!(f, "PtyWrite({output})"),
+            Self::TextAreaSizeRequest(_) => f.write_str("TextAreaSizeRequest"),
+            Self::CursorBlinkingChange => f.write_str("CursorBlinkingChange"),
+            Self::Wakeup => f.write_str("Wakeup"),
+            Self::Bell => f.write_str("Bell"),
+            Self::Exit => f.write_str("Exit"),
+            Self::ChildExit(status) => write!(f, "ChildExit({status})"),
+        }
+    }
+}
+pub type AlacTermEvent = alacritty_terminal::event::Event;
+impl From<AlacTermEvent> for TerminalBackendEvent {
+    fn from(event: AlacTermEvent) -> Self {
+        match event {
+            AlacTermEvent::MouseCursorDirty => Self::MouseCursorDirty,
+            AlacTermEvent::Title(title) => Self::Title(title),
+            AlacTermEvent::ResetTitle => Self::ResetTitle,
+            AlacTermEvent::ClipboardStore(_, data) => Self::ClipboardStore(data),
+            AlacTermEvent::ClipboardLoad(_, format) => Self::ClipboardLoad(format),
+            AlacTermEvent::ColorRequest(index, format) => Self::ColorRequest(index, format),
+            AlacTermEvent::PtyWrite(output) => Self::PtyWrite(output),
+            AlacTermEvent::TextAreaSizeRequest(format) => {
+                Self::TextAreaSizeRequest(Arc::new(move |bounds| {
+                    format(window_size_from_terminal_bounds(bounds))
+                }))
+            }
+            AlacTermEvent::CursorBlinkingChange => Self::CursorBlinkingChange,
+            AlacTermEvent::Wakeup => Self::Wakeup,
+            AlacTermEvent::Bell => Self::Bell,
+            AlacTermEvent::Exit => Self::Exit,
+            AlacTermEvent::ChildExit(status) => Self::ChildExit(status),
+        }
+    }
+}
+enum PtyEvent {
+    Event(TerminalBackendEvent),
+}
+
+// https://github.com/alacritty/alacritty/blob/cb3a79dbf6472740daca8440d5166c1d4af5029e/extra/man/alacritty.5.scd?plain=1#L207-L213
+const DEFAULT_SCROLL_HISTORY_LINES: usize = 10_000;
+pub const MAX_SCROLL_HISTORY_LINES: usize = 100_000;
+static NEXT_INIT_COMMAND_STARTUP_MARKER_ID: AtomicU64 = AtomicU64::new(1);
+
+const INIT_COMMAND_STARTUP_MARKER_PREFIX: &str = "__zed_init_command_ready_";
+const INIT_COMMAND_STARTUP_MARKER_SUFFIX: &str = "__";
+const INIT_COMMAND_STARTUP_MARKER_SEARCH_LINES: usize = 64;
+
+fn init_command_startup_marker(marker_id: u64) -> String {
+    format!("{INIT_COMMAND_STARTUP_MARKER_PREFIX}{marker_id}{INIT_COMMAND_STARTUP_MARKER_SUFFIX}")
+}
+
+#[derive(Debug, Default, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
+pub enum ShellKind {
+    #[default]
+    Posix,
+    Csh,
+    Tcsh,
+    Rc,
+    Fish,
+    /// Pre-installed "legacy" powershell for windows
+    PowerShell,
+    /// PowerShell 7.x
+    Pwsh,
+    Nushell,
+    Cmd,
+    Xonsh,
+    Elvish,
+}
+
+fn init_command_startup_marker_command(shell_kind: ShellKind, marker_id: u64) -> String {
+    // Split the marker across the command so its echo can't satisfy the
+    // handshake; only the command's output contains the contiguous marker.
+    match shell_kind {
+        ShellKind::PowerShell | ShellKind::Pwsh => format!(
+            "Write-Output ('{INIT_COMMAND_STARTUP_MARKER_PREFIX}' + '{marker_id}' + '{INIT_COMMAND_STARTUP_MARKER_SUFFIX}')"
+        ),
+        ShellKind::Cmd => {
+            format!(
+                "<nul set /p zed_init_ready={INIT_COMMAND_STARTUP_MARKER_PREFIX}&echo {marker_id}{INIT_COMMAND_STARTUP_MARKER_SUFFIX}"
+            )
+        }
+        ShellKind::Nushell => {
+            format!(
+                "print $\"{INIT_COMMAND_STARTUP_MARKER_PREFIX}({marker_id}){INIT_COMMAND_STARTUP_MARKER_SUFFIX}\""
+            )
+        }
+        ShellKind::Posix
+        | ShellKind::Csh
+        | ShellKind::Tcsh
+        | ShellKind::Rc
+        | ShellKind::Fish
+        | ShellKind::Xonsh
+        | ShellKind::Elvish => format!(
+            "printf '%s%s%s\\n' {INIT_COMMAND_STARTUP_MARKER_PREFIX} {marker_id} {INIT_COMMAND_STARTUP_MARKER_SUFFIX}"
+        ),
+    }
+}
+///Upward flowing events, for changing the title and such
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum TerminalEvent {
+    TitleChanged,
+    BreadcrumbsChanged,
+    CloseTerminal,
+    Bell,
+    Wakeup,
+    BlinkChanged(bool),
+    SelectionsChanged,
+    // NewNavigationTarget(Option<MaybeNavigationTarget>),
+    // Open(MaybeNavigationTarget),
+}
+impl EventEmitter<TerminalEvent> for Terminal {}
 impl Terminal {
     pub fn try_keystroke(&mut self, keystroke: &Keystroke, option_as_meta: bool) -> bool {
-        if self.vi_mode_enabled {
-            self.vi_motion(keystroke);
-            return true;
-        }
+        // if self.vi_mode_enabled {
+        //     self.vi_motion(keystroke);
+        //     return true;
+        // }
 
         // Keep default terminal behavior
         let esc = to_esc_str(keystroke, self.last_content.mode, option_as_meta);
@@ -102,158 +241,148 @@ impl Terminal {
             false
         }
     }
-    // fn process_terminal_event(
-    //     &mut self,
-    //     event: &InternalEvent,
-    //     term: &mut AlacrittyTerm,
-    //     window: &mut Window,
-    //     cx: &mut Context<Self>,
-    // ) {
-    //     match event {
-    //         &InternalEvent::Resize(new_bounds) => {
-    //             let new_bounds = normalize_terminal_bounds(new_bounds);
-    //             trace!("Resizing: new_bounds={new_bounds:?}");
+    pub fn input(&mut self, input: impl Into<Cow<'static, [u8]>>) {
+        self.keyboard_input_sent = true;
+        self.complete_init_command_startup_handshake();
+        self.write_input(input);
+    }
+    fn complete_init_command_startup_handshake(&mut self) {
+        self.init_command_startup_marker = None;
+        if let Some(startup_tx) = self.init_command_startup_tx.take() {
+            // match startup_tx.try_send(()) {
+            //     Ok(()) | Err(async_channel::TrySendError::Full(())) => {}
+            //     Err(async_channel::TrySendError::Closed(())) => {}
+            // }
+        }
+    }
+    fn process_pty_event(&mut self, event: PtyEvent, cx: &mut Context<Self>) {
+        match event {
+            PtyEvent::Event(event) => self.process_event(event, cx),
+        }
+    }
 
-    //             self.last_content.terminal_bounds = new_bounds;
+    fn process_event(&mut self, event: TerminalBackendEvent, cx: &mut Context<Self>) {
+        match event {
+            TerminalBackendEvent::Title(title) => {
+      
 
-    //             if let TerminalType::Pty { pty_tx, .. } = &self.terminal_type {
-    //                 pty_tx.resize(new_bounds);
-    //             }
+             
+                cx.emit(TerminalEvent::BreadcrumbsChanged);
+            }
+            TerminalBackendEvent::ResetTitle => {
+              
+                cx.emit(TerminalEvent::BreadcrumbsChanged);
+            }
+            TerminalBackendEvent::ClipboardStore(data) => {
+                cx.write_to_clipboard(ClipboardItem::new_string(data))
+            }
+            TerminalBackendEvent::ClipboardLoad(format) => {
+                self.write_to_pty(
+                    match &cx.read_from_clipboard().and_then(|item| item.text()) {
+                        // The terminal only supports pasting strings, not images.
+                        Some(text) => format(text),
+                        _ => format(""),
+                    }
+                    .into_bytes(),
+                )
+            }
+            TerminalBackendEvent::PtyWrite(out) => self.write_to_pty(out.into_bytes()),
+            TerminalBackendEvent::TextAreaSizeRequest(format) => {
+                self.write_to_pty(format(self.last_content.terminal_bounds).into_bytes())
+            }
+            TerminalBackendEvent::CursorBlinkingChange => {
+                let terminal = self.term.lock();
+                let blinking = terminal.cursor_style().blinking;
+                cx.emit(TerminalEvent::BlinkChanged(blinking));
+            }
+            TerminalBackendEvent::Bell => {
+                cx.emit(TerminalEvent::Bell);
+            }
+            TerminalBackendEvent::Exit => {
 
-    //             resize(term, new_bounds);
-    //             // If there are matches we need to emit a wake up event to
-    //             // invalidate the matches and recalculate their locations
-    //             // in the new terminal layout
-    //             if !self.matches.is_empty() {
-    //                 cx.emit(Event::Wakeup);
-    //             }
-    //         }
-    //         InternalEvent::Clear => {
-    //             trace!("Clearing");
-    //             clear_saved_screen(term);
-    //             cx.emit(Event::Wakeup);
-    //         }
-    //         InternalEvent::Scroll(scroll) => {
-    //             trace!("Scrolling: scroll={scroll:?}");
-    //             scroll_display(term, *scroll);
-    //             self.refresh_hovered_word(window);
+            },
+            TerminalBackendEvent::MouseCursorDirty => {
+                //NOOP, Handled in render
+            }
+            TerminalBackendEvent::Wakeup => {
+                self.detect_init_command_startup_marker();
+                cx.emit(TerminalEvent::Wakeup);
 
-    //             if self.vi_mode_enabled {
-    //                 update_vi_cursor_for_scroll(term, *scroll);
-    //                 if let Some(selection_head) = update_selection_to_vi_cursor(term) {
-    //                     #[cfg(any(target_os = "linux", target_os = "freebsd"))]
-    //                     if let Some(selection_text) = selection_text(term) {
-    //                         cx.write_to_primary(ClipboardItem::new_string(selection_text));
-    //                     }
+                // if let TerminalType::Pty { info, .. } = &self.terminal_type {
+                //     info.emit_title_changed_if_changed(cx);
+                // }
+            }
+            TerminalBackendEvent::ColorRequest(index, format) => {
+                // It's important that the color request is processed here to retain relative order
+                // with other PTY writes. Otherwise applications might witness out-of-order
+                // responses to requests. For example: An application sending `OSC 11 ; ? ST`
+                // (color request) followed by `CSI c` (request device attributes) would receive
+                // the response to `CSI c` first.
+                // Instead of locking, we could store the colors in `self.last_content`. But then
+                // we might respond with out of date value if a "set color" sequence is immediately
+                // followed by a color request sequence.
 
-    //                     self.selection_head = Some(selection_head);
-    //                     cx.emit(Event::SelectionsChanged)
-    //                 }
-    //             }
-    //         }
-    //         InternalEvent::SetSelection(selection) => {
-    //             trace!("Setting selection: selection={selection:?}");
-    //             set_term_selection(term, selection.as_ref());
+                // let color = self.term.lock().colors()[index]
+                //     .unwrap_or_else(|| to_vte_rgb(get_color_at_index(index, cx.theme().as_ref())));
+                // self.write_to_pty(format(color).into_bytes());
+            }
+            TerminalBackendEvent::ChildExit(exit_status) => {
+                // self.register_task_finished(Some(exit_status), cx);
+            }
+        }
+    }
 
-    //             #[cfg(any(target_os = "linux", target_os = "freebsd"))]
-    //             if let Some(selection_text) = selection_text(term) {
-    //                 cx.write_to_primary(ClipboardItem::new_string(selection_text));
-    //             }
-
-    //             if let Some(selection) = selection {
-    //                 self.selection_head = Some(selection.head);
-    //             }
-    //             cx.emit(Event::SelectionsChanged)
-    //         }
-    //         InternalEvent::UpdateSelection(position) => {
-    //             trace!("Updating selection: position={position:?}");
-    //             let (point, side) = grid_point_and_side(
-    //                 *position,
-    //                 self.last_content.terminal_bounds,
-    //                 display_offset(term),
-    //             );
-
-    //             if update_term_selection(term, point, side) {
-    //                 #[cfg(any(target_os = "linux", target_os = "freebsd"))]
-    //                 if let Some(selection_text) = selection_text(term) {
-    //                     cx.write_to_primary(ClipboardItem::new_string(selection_text));
-    //                 }
-
-    //                 self.selection_head = Some(point);
-    //                 cx.emit(Event::SelectionsChanged)
-    //             }
-    //         }
-
-    //         InternalEvent::Copy(keep_selection) => {
-    //             trace!("Copying selection: keep_selection={keep_selection:?}");
-    //             if let Some(txt) = selection_text(term) {
-    //                 cx.write_to_clipboard(ClipboardItem::new_string(txt));
-    //                 if !keep_selection.unwrap_or_else(|| {
-    //                     let settings = TerminalSettings::get_global(cx);
-    //                     settings.keep_selection_on_copy
-    //                 }) {
-    //                     self.events.push_back(InternalEvent::SetSelection(None));
-    //                 }
-    //             }
-    //         }
-    //         InternalEvent::ScrollToPoint(point) => {
-    //             trace!("Scrolling to point: point={point:?}");
-    //             scroll_to_point(term, *point);
-    //             self.refresh_hovered_word(window);
-    //         }
-    //         InternalEvent::MoveViCursorToPoint(point) => {
-    //             trace!("Move vi cursor to point: point={point:?}");
-    //             vi_goto_point(term, *point);
-    //             self.refresh_hovered_word(window);
-    //         }
-    //         InternalEvent::ToggleViMode => {
-    //             trace!("Toggling vi mode");
-    //             self.vi_mode_enabled = !self.vi_mode_enabled;
-    //             toggle_term_vi_mode(term);
-    //         }
-    //         InternalEvent::ViMotion(motion) => {
-    //             trace!("Performing vi motion: motion={motion:?}");
-    //             vi_motion(term, *motion);
-    //         }
-    //         InternalEvent::FindHyperlink(position, open) => {
-    //             trace!("Finding hyperlink at position: position={position:?}, open={open:?}");
-
-    //             let point = grid_point(
-    //                 *position,
-    //                 self.last_content.terminal_bounds,
-    //                 display_offset(term),
-    //             );
-
-    //             match find_from_terminal_point(
-    //                 term,
-    //                 point,
-    //                 &mut self.hyperlink_regex_searches,
-    //                 self.path_style,
-    //             ) {
-    //                 Some(hyperlink) => {
-    //                     self.process_hyperlink(hyperlink, *open, cx);
-    //                 }
-    //                 None => {
-    //                     self.last_content.last_hovered_word = None;
-    //                     cx.emit(Event::NewNavigationTarget(None));
-    //                 }
-    //             }
-    //         }
-    //         InternalEvent::ProcessHyperlink(hyperlink, open) => {
-    //             self.process_hyperlink(hyperlink.clone(), *open, cx);
-    //         }
-    //     }
-    // }
     pub fn sync(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         let term = self.term.clone();
-        let terminal = term.lock();
+        let mut terminal = term.lock_unfair();
 
         //Note that the ordering of events matters for event processing
         while let Some(e) = self.events.pop_front() {
-            // self.process_terminal_event(&e, &mut terminal, window, cx)
+            self.process_terminal_event(&e,  &mut terminal, window, cx)
         }
 
         self.last_content = make_content(&terminal, &self.last_content);
+    }
+
+    fn process_terminal_event(
+        &mut self,
+        event: &InternalEvent,
+        term: &mut Term<TerminalListener> ,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        match event {
+            &InternalEvent::Resize(new_bounds) => {
+      
+            }
+            InternalEvent::Clear => {
+               
+            }
+            InternalEvent::Scroll(scroll) => {
+              
+            }
+            InternalEvent::SetSelection(selection) => {
+            
+            }
+            InternalEvent::UpdateSelection(position) => {
+            
+            }
+
+            InternalEvent::Copy(keep_selection) => {
+                
+            }
+            
+            InternalEvent::ToggleViMode => {
+           
+            }
+            InternalEvent::ViMotion(motion) => {
+               
+            }
+            InternalEvent::FindHyperlink(position, open) => {
+               
+            }
+         
+        }
     }
     pub fn try_modifiers_change(
         &mut self,
@@ -272,40 +401,6 @@ impl Terminal {
         }
         cx.notify();
     }
-    pub fn new(
-        id: String,
-        title: String,
-        // kind: TabKind,
-        status: String,
-        backend: BackendTx,
-        events: std::sync::mpsc::Sender<SystemEvent>,
-    ) -> Self {
-        let shared_backend = std::sync::Arc::new(std::sync::Mutex::new(backend));
-        Self {
-            id: id.clone(),
-            title: title.clone(),
-            dynamic_title: title,
-            status,
-            connected: false,
-            disconnected_reason: None,
-            backend_generation: 0,
-            backend_initialized: true,
-            output_processor: Processor::new(),
-            term: Arc::new(FairMutex::new(new_term(
-                60,
-                30,
-                shared_backend.clone(),
-                id,
-                events,
-            ))),
-            cols: 100,
-            rows: 30,
-            scroll_pixel_y: 0.0,
-            backend: shared_backend.clone(),
-            last_content: Content::default(),
-            events: vec_deque::VecDeque::new(),
-        }
-    }
     pub fn last_content(&self) -> &Content {
         &self.last_content
     }
@@ -323,31 +418,47 @@ impl Terminal {
         let mut term = self.term.lock();
         self.output_processor.advance(&mut *term, &converted);
         drop(term);
-        // self.detect_init_command_startup_marker();
+        self.detect_init_command_startup_marker();
         // cx.emit(Event::Wakeup);
     }
 
-    pub fn write_input(&mut self, bytes: impl Into<Vec<u8>>) {
+    pub fn write_to_pty(&mut self, bytes: impl Into<Vec<u8>>) {
         if let Ok(backend) = self.backend.lock() {
             backend.send(SshMessage::Input(bytes.into()));
         }
     }
-    // fn detect_init_command_startup_marker(&mut self) {
-    //     let Some(marker) = self.init_command_startup_marker.as_deref() else {
-    //         return;
-    //     };
+    fn write_input(&mut self, input: impl Into<Cow<'static, [u8]>>) {
+        let input = input.into();
+        // if !self.is_remote_terminal && input.contains(&b'\r') {
+        //     let term = self.term.lock_unfair();
+        //     self.pending_cwd_boundary = Some(Self::scrollback_position(
+        //         term.grid().cursor.point.line.0,
+        //         term.history_size(),
+        //     ));
+        // }
 
-    //     let has_marker = {
-    //         let term = self.term.lock_unfair();
-    //         last_non_empty_lines(&term, INIT_COMMAND_STARTUP_MARKER_SEARCH_LINES)
-    //             .iter()
-    //             .any(|line| line.contains(marker))
-    //     };
+        self.events.push_back(InternalEvent::Scroll(Scroll::Bottom));
+        self.events.push_back(InternalEvent::SetSelection(None));
 
-    //     if has_marker {
-    //         self.complete_init_command_startup_handshake();
-    //     }
-    // }
+
+        self.write_to_pty(input);
+    }
+    fn detect_init_command_startup_marker(&mut self) {
+        let Some(marker) = self.init_command_startup_marker.as_deref() else {
+            return;
+        };
+
+        let has_marker = {
+            let term = self.term.lock_unfair();
+            last_non_empty_lines(&term, INIT_COMMAND_STARTUP_MARKER_SEARCH_LINES)
+                .iter()
+                .any(|line| line.contains(marker))
+        };
+
+        if has_marker {
+            self.complete_init_command_startup_handshake();
+        }
+    }
 }
 pub type AlacPoint = alacritty_terminal::index::Point;
 pub type AlacCell = alacritty_terminal::term::cell::Cell;
@@ -401,7 +512,7 @@ pub fn make_content(term: &Term<TerminalListener>, last_content: &Content) -> Co
 
     Content {
         cells,
-        // mode: terminal_modes_from_alacritty(content.mode),
+        mode:  Modes(1) ,
         display_offset: content.display_offset,
         // selection_text,
         // selection: content
@@ -449,61 +560,27 @@ fn convert_lf_to_crlf(bytes: &[u8], previous_byte_was_cr: &mut bool) -> Vec<u8> 
     converted
 }
 #[derive(Clone)]
-struct TerminalListener {
-    tab_id: String,
-    backend: std::sync::Arc<std::sync::Mutex<BackendTx>>,
-    events: std::sync::mpsc::Sender<SystemEvent>,
-}
+struct TerminalListener(UnboundedSender<PtyEvent>);
 
 impl EventListener for TerminalListener {
     fn send_event(&self, event: Event) {
-        match event {
-            Event::PtyWrite(output) => {
-                if let Ok(backend) = self.backend.lock() {
-                    backend.send(SshMessage::Input(output.into_bytes()));
-                }
-            }
-            Event::TextAreaSizeRequest(format) => {
-                let size = alacritty_terminal::event::WindowSize {
-                    num_lines: 30,
-                    num_cols: 100,
-                    cell_width: 8,
-                    cell_height: 16,
-                };
-                if let Ok(backend) = self.backend.lock() {
-                    backend.send(SshMessage::Input(format(size).into_bytes()));
-                }
-            }
-            Event::Title(title) => {
-                let _ = self.events.send(SystemEvent::TitleUpdate {
-                    tab_id: self.tab_id.clone(),
-                    title,
-                });
-            }
-            _ => {}
-        }
+          self.0.unbounded_send(PtyEvent::Event(event.into())).ok();
     }
 }
 
 fn new_term(
-    cols: u16,
-    rows: u16,
-    backend: std::sync::Arc<std::sync::Mutex<BackendTx>>,
-    tab_id: String,
-    events: std::sync::mpsc::Sender<SystemEvent>,
-) -> Term<TerminalListener> {
-    Term::new(
+     terminal_bounds: TerminalBounds,
+  events_tx: UnboundedSender<PtyEvent>,
+) -> Arc<FairMutex<Term<TerminalListener>>> {
+   let term= Term::new(
         Config {
             scrolling_history: 2000,
             ..Config::default()
         },
-        &TerminalSize::new(cols, rows),
-        TerminalListener {
-            tab_id,
-            backend,
-            events,
-        },
-    )
+        &terminal_bounds,
+        TerminalListener(events_tx),
+    );
+    Arc::new(FairMutex::new(term))
 }
 pub struct TerminalSize {
     cols: usize,
@@ -671,6 +748,23 @@ pub struct TerminalBounds {
     pub bounds: Bounds<Pixels>,
 }
 
+impl Dimensions for TerminalBounds {
+    /// Note: this is supposed to be for the back buffer's length,
+    /// but we exclusively use it to resize the terminal, which does not
+    /// use this method. We still have to implement it for the trait though,
+    /// hence, this comment.
+    fn total_lines(&self) -> usize {
+        self.screen_lines()
+    }
+
+    fn screen_lines(&self) -> usize {
+        self.num_lines()
+    }
+
+    fn columns(&self) -> usize {
+        self.num_columns()
+    }
+}
 impl TerminalBounds {
     pub fn new(line_height: Pixels, cell_width: Pixels, bounds: Bounds<Pixels>) -> Self {
         TerminalBounds {
@@ -777,7 +871,7 @@ impl SelectionRange {
 #[derive(Clone)]
 pub struct Content {
     pub cells: Vec<IndexedCell>,
-    // pub mode: Modes,
+    pub mode: Modes,
     pub display_offset: usize,
     // pub selection_text: Option<String>,
     // pub selection: Option<SelectionRange>,
@@ -801,7 +895,7 @@ impl Default for Content {
     fn default() -> Self {
         Content {
             cells: Default::default(),
-            // mode: Default::default(),
+            mode: Default::default(),
             display_offset: Default::default(),
             // selection_text: Default::default(),
             // selection: Default::default(),
@@ -1514,4 +1608,104 @@ fn modifier_code(keystroke: &Keystroke) -> u32 {
         modifier_code |= 1 << 2;
     }
     modifier_code + 1
+}
+
+pub struct TerminalBuilder {
+    terminal: Terminal,
+    events_rx: UnboundedReceiver<PtyEvent>,
+}
+ 
+
+impl TerminalBuilder {
+
+    pub fn new_terminal(terminal_bounds: TerminalBounds,)->Self{
+        let terminal_bounds = normalize_terminal_bounds(terminal_bounds);
+                let (events_tx, events_rx) = unbounded();
+        let term = new_term( terminal_bounds , events_tx.clone() ); 
+        let terminal = Terminal {         
+            term,
+            event_loop_task: Task::ready(Ok(())),
+            id: String::new(),
+            title: String::new(),
+            dynamic_title: String::new(),
+            status: String::new(),
+            connected: false,
+            last_content: Content {  terminal_bounds, ..Default::default()},
+            disconnected_reason: None,
+            backend_generation: 0,
+            backend_initialized: false,
+            output_processor:  Processor::<StdSyncHandler>::new(),
+            events: VecDeque::with_capacity(10),  
+            keyboard_input_sent: false ,
+            init_command_startup_marker: None,
+            init_command_startup_tx: None,
+           
+            scroll_pixel_y: todo!(),
+            backend: todo!(),
+        };
+        Self { terminal , events_rx }
+    }
+
+
+
+    pub fn subscribe(mut self, cx: &Context<Terminal>) -> Terminal {
+   
+
+        //Event loop
+        self.terminal.event_loop_task = cx.spawn(async move |terminal, cx| {
+            while let Some(event) = self.events_rx.next().await {
+                terminal.update(cx, |terminal, cx| {
+                    //Process the first event immediately for lowered latency
+                    terminal.process_pty_event(event, cx);
+                })?;
+
+                'outer: loop {
+                    let mut events = Vec::new();
+
+        
+
+                    let mut wakeup = false;
+                    loop {
+                        futures::select_biased! {
+                           
+                            event = self.events_rx.next() => {
+                                if let Some(event) = event {
+                                    if matches!(event, PtyEvent::Event(TerminalBackendEvent::Wakeup))
+                                    {
+                                        wakeup = true;
+                                    } else {
+                                        events.push(event);
+                                    }
+
+                                    if events.len() > 100 {
+                                        break;
+                                    }
+                                } else {
+                                    break;
+                                }
+                            },
+                        }
+                    }
+
+                    if events.is_empty() && !wakeup {
+                        yield_now().await;
+                        break 'outer;
+                    }
+
+                    terminal.update(cx, |this, cx| {
+                        if wakeup {
+                            this.process_event(TerminalBackendEvent::Wakeup, cx);
+                        }
+
+                        for event in events {
+                            this.process_pty_event(event, cx);
+                        }
+                    })?;
+                    yield_now().await;
+                }
+            }
+            anyhow::Ok(())
+        });
+        self.terminal
+    }
 }

@@ -1,14 +1,17 @@
+use std::time::{SystemTime, UNIX_EPOCH};
 use std::{mem, rc::Rc, time::Instant};
 
 use crate::TerminalView;
 use gpui::{
-    AbsoluteLength, App, AvailableSpace, Bounds, ContentMask, DefiniteLength, DispatchPhase,
-    Element, Entity, FocusHandle, Font, FontFeatures, FontStyle, FontWeight, HighlightStyle,
-    Hitbox, HitboxBehavior, Hsla, Interactivity, IntoElement, KeyDownEvent, Keystroke,
-    ModifiersChangedEvent, MouseButton, MouseMoveEvent, Pixels, Point as GpuiPoint,
-    StrikethroughStyle, TextAlign, TextRun, TextStyle, UnderlineStyle, WhiteSpace, Window, div,
-    fill, hsla, point, px, relative, size,
+    AbsoluteLength, AnyElement, App, AvailableSpace, Bounds, ContentMask, DefiniteLength,
+    DispatchPhase, Element, Entity, FocusHandle, Font, FontFeatures, FontStyle, FontWeight,
+    HighlightStyle, Hitbox, HitboxBehavior, Hsla, InputHandler, InteractiveElement, Interactivity,
+    IntoElement, KeyDownEvent, Keystroke, ModifiersChangedEvent, MouseButton, MouseMoveEvent,
+    ParentElement, Pixels, Point as GpuiPoint, ShapedLine, StrikethroughStyle, TextAlign, TextRun,
+    TextStyle, UTF16Selection, UnderlineStyle, WhiteSpace, Window, div, fill, font, hsla, point,
+    px, relative, size,
 };
+use itertools::Itertools;
 use terminal::{
     BASE_REM_SIZE_IN_PX, BlockContext, BlockProperties, Cell, Content, CursorShape, DisplayCursor,
     IndexedCell, Modes, Point, Range, is_blank,
@@ -1015,7 +1018,7 @@ impl Element for TerminalElement {
                     ime_cursor_bounds,
                     background_color,
                     dimensions,
-                    mode: Modes(0),
+                    mode: Modes::empty(),
                     display_offset: 0,
                     hyperlink_tooltip: None,
                     block_below_cursor_element: block_below_cursor_element,
@@ -1114,7 +1117,7 @@ impl Element for TerminalElement {
                                 window.prevent_default();
                                 cx.stop_propagation();
                                 terminal.update(cx, |terminal, cx| {
-                                    terminal.write_input(input);
+                                    // terminal.write_input(input);
                                     cx.notify();
                                 });
                             }
@@ -1367,6 +1370,32 @@ impl InputHandler for TerminalInputHandler {
             Some(marked_len)
         }
     }
+}
+
+fn slice_utf16(text: &str, range: std::ops::Range<usize>) -> String {
+    let mut start_byte = text.len();
+    let mut end_byte = text.len();
+    let mut utf16_index = 0;
+
+    for (byte_index, character) in text.char_indices() {
+        if utf16_index == range.start {
+            start_byte = byte_index;
+        }
+        if utf16_index == range.end {
+            end_byte = byte_index;
+            break;
+        }
+        utf16_index += character.len_utf16();
+    }
+
+    if range.start == utf16_index {
+        start_byte = text.len();
+    }
+    if range.end == utf16_index {
+        end_byte = text.len();
+    }
+
+    text[start_byte..end_byte].to_string()
 }
 pub struct MyPaintState {
     // ... 你的数据，比如字符网格、颜色等

@@ -1,19 +1,24 @@
-use std::ops::Range as StdRange;
-// pub mod blink_manager;
-pub mod Blink_manager;
+use std::{ops::Range as StdRange, time::Duration};
+
+pub mod blink_manager;
 pub mod terminal_element;
+use gpui::Action;
 use gpui::*;
 use gpui_rsx::rsx;
-use terminal::{terminal_settings::TerminalSettings, CursorShape, Terminal, TerminalBounds};
+use serde::Deserialize;
+use settings::Settings;
+use settings_content::terminal::TerminalBlink;
+use terminal::{CursorShape, Terminal, TerminalBounds, terminal_settings::TerminalSettings};
 
-use crate::{terminal_element::TerminalElement, Blink_manager::BlinkManager};
+use crate::{blink_manager::BlinkManager, terminal_element::TerminalElement};
 
 pub struct ImeState {
     pub marked_text: String,
 }
 pub struct TerminalView {
-    // hostname: Entity<InputState>,
-    // port: Entity<InputState>,
+    cursor_shape: CursorShape,
+    blink_manager: Entity<BlinkManager>,
+
     terminal: Entity<Terminal>,
     // lable: Entity<InputState>,
     focus_handle: FocusHandle,
@@ -22,6 +27,8 @@ pub struct TerminalView {
     pub ime_state: Option<ImeState>,
     pub scroll_top: Pixels,
 }
+
+const CURSOR_BLINK_INTERVAL: Duration = Duration::from_millis(500);
 impl TerminalView {
     pub fn new(
         terminal: Entity<Terminal>,
@@ -30,15 +37,27 @@ impl TerminalView {
         // config_manager: Entity<AppState>,
     ) -> Self {
         let focus_handle = cx.focus_handle();
+        let cursor_shape = TerminalSettings::get_global(cx).cursor_shape;
+        let blink_manager = cx.new(|cx| {
+            BlinkManager::new(
+                CURSOR_BLINK_INTERVAL,
+                |cx| {
+                    !matches!(
+                        TerminalSettings::get_global(cx).blinking,
+                        TerminalBlink::Off
+                    )
+                },
+                cx,
+            )
+        });
         Self {
-            // hostname: cx.new(|cx| InputState::new(window, cx)),
-            // port: cx.new(|cx| InputState::new(window, cx)),
-            // lable: cx.new(|cx| InputState::new(window, cx)),
             scroll_top: Pixels::ZERO,
-            // config: config_manager,
+
             terminal,
             ime_state: None,
             focus_handle,
+            cursor_shape: cursor_shape.into(),
+            blink_manager,
         }
     }
     pub(crate) fn marked_text_range(&self) -> Option<StdRange<usize>> {
@@ -64,13 +83,13 @@ impl TerminalView {
         self.clear_marked_text(cx);
         if !text.is_empty() {
             self.terminal.update(cx, |terminal, cx| {
-                terminal.write_input(text.as_bytes().to_vec());
+                // terminal.write_input(text.as_bytes().to_vec());
                 cx.notify();
             });
         }
     }
     pub fn clear_bell(&mut self, cx: &mut Context<TerminalView>) {
-        self.has_bell = false;
+        // self.has_bell = false;
         // cx.emit(Event::Wakeup);
     }
     pub fn pause_cursor_blinking(&mut self, _window: &mut Window, cx: &mut Context<Self>) {
@@ -90,7 +109,8 @@ impl TerminalView {
         let (handled, vi_mode_enabled) = self.terminal.update(cx, |term, cx| {
             (
                 term.try_keystroke(keystroke, TerminalSettings::get_global(cx).option_as_meta),
-                term.vi_mode_enabled(),
+                // term.vi_mode_enabled(),
+                true,
             )
         });
 
@@ -111,15 +131,15 @@ impl TerminalView {
     }
 
     fn focus_in(&mut self, window: &mut Window, cx: &mut Context<Self>) {
-        self.terminal.update(cx, |terminal, _| {
-            terminal.set_cursor_shape(self.cursor_shape);
-            terminal.focus_in();
-        });
+        // self.terminal.update(cx, |terminal, _| {
+        //     terminal.set_cursor_shape(self.cursor_shape);
+        //     terminal.focus_in();
+        // });
 
         let should_blink = match TerminalSettings::get_global(cx).blinking {
             TerminalBlink::Off => false,
             TerminalBlink::On => true,
-            TerminalBlink::TerminalControlled => self.blinking_terminal_enabled,
+            TerminalBlink::TerminalControlled => true,
         };
 
         if should_blink {
@@ -127,7 +147,7 @@ impl TerminalView {
         }
 
         window.invalidate_character_coordinates();
-        cx.notify();
+        // cx.notify();
     }
     fn send_text(&mut self, text: &SendText, _: &mut Window, cx: &mut Context<Self>) {
         self.clear_bell(cx);
@@ -140,12 +160,20 @@ impl TerminalView {
     fn focus_out(&mut self, _window: &mut Window, cx: &mut Context<Self>) {
         self.blink_manager.update(cx, BlinkManager::disable);
         self.terminal.update(cx, |terminal, _| {
-            terminal.focus_out();
-            terminal.set_cursor_shape(CursorShape::Hollow);
+            // terminal.focus_out();
+            // terminal.set_cursor_shape(CursorShape::Hollow);
         });
         cx.notify();
     }
 }
+/// Sends the specified text directly to the terminal.
+#[derive(Clone, Debug, Default, Deserialize, PartialEq, Action, private::schemars::JsonSchema)]
+
+pub struct SendText(String);
+/// Sends a keystroke sequence to the terminal.
+#[derive(Clone, Debug, Default, Deserialize, PartialEq, Action, private::schemars::JsonSchema)]
+
+pub struct SendKeystroke(String);
 impl Render for TerminalView {
     fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         let terminal_handle = self.terminal.clone();
@@ -174,15 +202,4 @@ impl Render for TerminalView {
             </div>
         }
     }
-}
-#[derive(Copy, Clone, Debug, PartialEq, Eq)]
-// #[serde(rename_all = "snake_case")]
-pub enum TerminalBlink {
-    /// Never blink the cursor, ignoring the terminal mode.
-    Off,
-    /// Default the cursor blink to off, but allow the terminal to
-    /// set blinking.
-    TerminalControlled,
-    /// Always blink the cursor, ignoring the terminal mode.
-    On,
 }
