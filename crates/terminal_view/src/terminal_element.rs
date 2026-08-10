@@ -12,6 +12,7 @@ use gpui::{
     px, relative, size,
 };
 use itertools::Itertools;
+use settings::Settings;
 use terminal::{
     BASE_REM_SIZE_IN_PX, BlockContext, BlockProperties, Cell, Content, CursorShape, DisplayCursor,
     IndexedCell, Modes, Point, Range, is_blank,
@@ -512,33 +513,33 @@ impl TerminalElement {
         Some(buffer_font_size * rem_size_scale)
     }
 
-    fn input_for_keystroke(keystroke: &Keystroke) -> Option<Vec<u8>> {
-        let modifiers = &keystroke.modifiers;
-        let key = keystroke.key.as_str();
+    // fn input_for_keystroke(keystroke: &Keystroke) -> Option<Vec<u8>> {
+    //     let modifiers = &keystroke.modifiers;
+    //     let key = keystroke.key.as_str();
 
-        let mut input = if modifiers.control {
-            control_input_for_key(key)
-        } else {
-            special_input_for_key(key)
-                .map(str::as_bytes)
-                .map(ToOwned::to_owned)
-        };
+    //     let mut input = if modifiers.control {
+    //         // control_input_for_key(key)
+    //     } else {
+    //         // special_input_for_key(key)
+    //         //     .map(str::as_bytes)
+    //         //     .map(ToOwned::to_owned)
+    //     };
 
-        if input.is_none() && (modifiers.alt || modifiers.function) {
-            input = keystroke
-                .key_char
-                .as_ref()
-                .filter(|text| !text.is_empty())
-                .map(|text| {
-                    let mut bytes = Vec::with_capacity(text.len() + 1);
-                    bytes.push(0x1b);
-                    bytes.extend_from_slice(text.as_bytes());
-                    bytes
-                });
-        }
+    //     if input.is_none() && (modifiers.alt || modifiers.function) {
+    //         input = keystroke
+    //             .key_char
+    //             .as_ref()
+    //             .filter(|text| !text.is_empty())
+    //             .map(|text| {
+    //                 let mut bytes = Vec::with_capacity(text.len() + 1);
+    //                 bytes.push(0x1b);
+    //                 bytes.extend_from_slice(text.as_bytes());
+    //                 bytes
+    //             });
+    //     }
 
-        input
-    }
+    //     input
+    // }
 }
 
 impl IntoElement for TerminalElement {
@@ -1110,17 +1111,17 @@ impl Element for TerminalElement {
                                 event.keystroke.key,
                                 event.keystroke.modifiers
                             );
-                            if let Some(input) =
-                                TerminalElement::input_for_keystroke(&event.keystroke)
-                            {
-                                log::debug!("Converted key to input: {:?}", input);
-                                window.prevent_default();
-                                cx.stop_propagation();
-                                terminal.update(cx, |terminal, cx| {
-                                    // terminal.write_input(input);
-                                    cx.notify();
-                                });
-                            }
+                            // if let Some(input) =
+                            // TerminalElement::input_for_keystroke(&event.keystroke)
+                            // {
+                            //     log::debug!("Converted key to input: {:?}", input);
+                            //     window.prevent_default();
+                            //     cx.stop_propagation();
+                            //     terminal.update(cx, |terminal, cx| {
+                            //         // terminal.write_input(input);
+                            //         cx.notify();
+                            //     });
+                            // }
                         }
                     });
 

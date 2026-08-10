@@ -649,7 +649,7 @@ pub struct DisplayCursor {
 }
 
 impl DisplayCursor {
-    fn from(cursor_point: Point, display_offset: usize) -> Self {
+    pub fn from(cursor_point: Point, display_offset: usize) -> Self {
         Self {
             line: cursor_point.line + display_offset as i32,
             col: cursor_point.column,

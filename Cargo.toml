@@ -46,13 +46,12 @@ protocol = { path = "crates/protocol" }
 # Workspace member crates
 #
 
-gpui = { git = "https://github.com/zed-industries/zed", rev = "1d217ee39d381ac101b7cf49d3d22451ac1093fe" }
-gpui_platform = { git = "https://github.com/zed-industries/zed", rev = "1d217ee39d381ac101b7cf49d3d22451ac1093fe", features = [
+gpui = { git = "https://github.com/zed-industries/zed", rev = "492acd6c" }
+gpui_platform = { git = "https://github.com/zed-industries/zed", rev = "492acd6c", features = [
     "font-kit",
 ] }
-# gpui-component = { git = "https://github.com/longbridge/gpui-component" }
-# 可选：使用内置默认资源
-# gpui-component-assets = { git = "https://github.com/longbridge/gpui-component" }
+gpui-component = { git = "https://github.com/longbridge/gpui-component", rev = "424f2457" }
+gpui-component-assets = { git = "https://github.com/longbridge/gpui-component", rev = "424f2457" } # 可选：使用内置默认资源
 anyhow = "1.0"
 log = "0.4.33"
 env_logger = "0.11.11"

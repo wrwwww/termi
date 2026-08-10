@@ -1,1 +1,297 @@
+//! `WorkspaceView` — the root three-pane layout of the main window.
+//!
+//! ```text
+//! ┌─────────────────────────────────────────────────────┐
+//! │                 Header (38 px)                      │
+//! ├──────────┬─────────────────────────────┬──────────┤
+//! │          │   Tabs (36 px)              │          │
+//! │ Sidebar  ├─────────────────────────────┤  Files   │
+//! │ (256 px) │                             │ (280 px) │
+//! │          │     Terminal area            │          │
+//! │          │                             │          │
+//! ├──────────┴─────────────────────────────┴──────────┤
+//! │                 Status bar (28 px)                │
+//! └─────────────────────────────────────────────────────┘
+//! ```
+pub mod connection_dialog;
+pub mod files;
+pub mod monitor;
+pub mod settings;
+pub mod sidebar;
+pub mod state;
+pub mod statusbar;
+pub mod tabs;
+pub mod terminal;
+pub mod theme;
+use std::cmp::min;
 
+use crate::{
+    connection_dialog::ConnectionDialog,
+    files::FilesPane,
+    monitor::MonitorPanel,
+    settings::SettingsView,
+    sidebar::Sidebar,
+    state::{ActiveView, AppState},
+    statusbar::StatusBar,
+    tabs::TabsBar,
+    terminal::TerminalPane,
+    theme::active,
+};
+use gpui::{prelude::FluentBuilder, *};
+use gpui_component::IconName;
+use gpui_rsx::rsx;
+use log::info;
+use theme::rgba;
+pub struct WorkspaceView {
+    state: Entity<AppState>,
+
+    sidebar: Entity<crate::sidebar::Sidebar>,
+    tabsbar: Entity<TabsBar>,
+    terminal_pane: Entity<TerminalPane>,
+    files_pane: Entity<FilesPane>,
+    connection_dialog: Entity<ConnectionDialog>,
+    settings_view: Entity<SettingsView>,
+    status_bar: Entity<StatusBar>,
+
+    monitor_panel: Entity<MonitorPanel>,
+}
+
+impl WorkspaceView {
+    pub fn new(state: Entity<AppState>, cx: &mut Context<Self>) -> Self {
+        // Subscribe so any state changes re-render the chrome.
+        cx.observe(&state, |_, _, cx| cx.notify()).detach();
+        let sidebar = cx.new(|cx| Sidebar::new(state.clone()));
+        let tabsbar = cx.new(|cx| TabsBar::new(state.clone()));
+        let terminal_pane = cx.new(|cx| TerminalPane::new(state.clone()));
+        let files_pane = cx.new(|cx| FilesPane::new(state.clone()));
+        let connection_dialog = cx.new(|cx| ConnectionDialog::new(state.clone()));
+        let settings_view = cx.new(|cx| SettingsView::new(state.clone()));
+        let status_bar = cx.new(|cx| StatusBar::new(state.clone()));
+        let monitor_panel = cx.new(|cx| MonitorPanel::new(state.clone()));
+
+        Self {
+            state,
+
+            sidebar,
+            tabsbar,
+            terminal_pane,
+            files_pane,
+            connection_dialog,
+            settings_view,
+            status_bar,
+            monitor_panel,
+        }
+    }
+}
+
+impl Render for WorkspaceView {
+    fn render(&mut self, windows: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
+        let t = active(cx).clone();
+        let view_mode = self.state.read(cx).active_view;
+
+        // Choose the central canvas based on active_view.
+        let canvas: AnyElement = match view_mode {
+            ActiveView::Workspace => div()
+                .flex()
+                .flex_row()
+                .flex_1()
+                .min_h_0()
+                .child(self.sidebar.clone())
+                .child(
+                    div()
+                        .flex()
+                        .flex_col()
+                        .flex_1()
+                        .min_w_0()
+                        .min_h_0()
+                        .bg(t.surfaces.bg)
+                        .child(self.tabsbar.clone())
+                        .child(self.terminal_pane.clone()),
+                )
+                .child(self.files_pane.clone())
+                .into_any_element(),
+            ActiveView::NewConnection => div()
+                .flex()
+                .flex_1()
+                .min_h_0()
+                .child(self.connection_dialog.clone())
+                .into_any_element(),
+            ActiveView::Settings => div()
+                .flex()
+                .flex_1()
+                .min_h_0()
+                .child(self.settings_view.clone())
+                .into_any_element(),
+        };
+
+        div()
+            .id("lumen-workspace")
+            .flex()
+            .flex_col()
+            .size_full()
+            .bg(t.surfaces.bg)
+            // ============== HEADER ==============
+            .child(TitleBar::new())
+            // .child(render_header(&t, windows, cx))
+            // ============== CANVAS ==============
+            .child(canvas)
+            // ============== MONITOR (workspace mode only) ==============
+            .when(view_mode == ActiveView::Workspace, |d| {
+                d.child(self.monitor_panel.clone())
+            })
+            // ============== STATUS BAR ==============
+            .child(self.status_bar.clone())
+    }
+}
+struct TitleBarState {
+    should_move: bool,
+}
+impl Render for TitleBarState {
+    fn render(&mut self, _: &mut Window, _: &mut Context<Self>) -> impl IntoElement {
+        div()
+    }
+}
+
+fn menu_button(label: &'static str, t: &crate::theme::Theme) -> impl IntoElement {
+    div()
+        // .id(("menu", label))
+        .px(px(10.0))
+        .py(px(4.0))
+        .rounded(px(4.0))
+        .text_color(t.text.text_muted)
+        .text_size(px(12.0))
+        .cursor_pointer()
+        .hover(|s| s.bg(t.surfaces.surface_2).text_color(t.text.text))
+        .child(label)
+}
+
+fn header_icon_button(t: &crate::theme::Theme) -> impl IntoElement {
+    div()
+        .size(px(28.0))
+        .flex()
+        .items_center()
+        .justify_center()
+        .rounded(px(4.0))
+        .text_color(t.text.text_muted)
+        .cursor_pointer()
+        .hover(|s| s.bg(t.surfaces.surface_2).text_color(t.text.text))
+        // placeholder dot — replace with svg::path()
+        .child(
+            div()
+                .size(px(14.0))
+                .rounded_full()
+                .border_1()
+                .border_color(t.border.border_strong),
+        )
+}
+#[derive(IntoElement)]
+pub struct TitleBar {}
+impl TitleBar {
+    pub fn new() -> Self {
+        Self {}
+    }
+}
+impl RenderOnce for TitleBar {
+    fn render(self, window: &mut Window, cx: &mut App) -> impl IntoElement {
+        let t = active(cx).clone();
+
+        let state = window.use_state(cx, |_, _| TitleBarState { should_move: false });
+        div()
+            .flex()
+            .flex_row()
+            .items_center()
+            .h(px(t.layout.header_height))
+            .px(px(16.0))
+            .bg(t.surfaces.surface)
+            .border_b_1()
+            .border_color(t.border.border)
+            .on_mouse_down_out(window.listener_for(&state, |state, _, _, _| {
+                state.should_move = false;
+                info!("down out");
+            }))
+            .on_mouse_down(
+                MouseButton::Left,
+                window.listener_for(&state, |state, _, _, _| {
+                    state.should_move = true;
+
+                    info!("mouse down");
+                }),
+            )
+            .on_mouse_up(
+                MouseButton::Left,
+                window.listener_for(&state, |state, _, window: &mut Window, _| {
+                    state.should_move = false;
+
+                    info!("mouse up");
+                }),
+            )
+            .on_mouse_move(window.listener_for(&state, |state, _, window, _| {
+                if state.should_move {
+                    state.should_move = false;
+                    window.start_window_move();
+
+                    info!("move");
+                }
+            }))
+            // brand
+            .child(
+                div()
+                    .flex()
+                    .items_center()
+                    .gap(px(8.0))
+                    .ml(px(16.0))
+                    .text_color(t.text.text)
+                    .font_weight(FontWeight::SEMIBOLD)
+                    .child(
+                        // logo glyph (>) — replace with SVG path in production
+                        div().text_color(t.accent.accent).child(">"),
+                    )
+                    .child("Lumen"),
+            )
+            // top-level menu
+            .child(
+                div()
+                    .flex()
+                    .gap(px(2.0))
+                    .ml(px(24.0))
+                    .child(menu_button("File", &t))
+                    .child(menu_button("Edit", &t))
+                    .child(menu_button("View", &t))
+                    .child(menu_button("Window", &t))
+                    .child(menu_button("Help", &t)),
+            )
+            // spacer
+            .child(
+                div()
+                    .flex_1()
+                    .h_full()
+                    .window_control_area(WindowControlArea::Drag),
+            ) // header actions (right-aligned)
+            .child(
+                div()
+                    .flex()
+                    .items_center()
+                    .gap(px(8.0))
+                    .child(
+                        div()
+                            .child(IconName::Inbox)
+                            .on_mouse_down(MouseButton::Left, |_, window, _| {
+                                window.minimize_window()
+                            }),
+                    )
+                    .child(
+                        div()
+                            .child(IconName::Inbox)
+                            .on_mouse_down(MouseButton::Left, |_, window: &mut Window, _| {
+                                window.zoom_window()
+                            }),
+                    )
+                    .child(div().child(IconName::Inbox).on_mouse_down(
+                        MouseButton::Left,
+                        |_, window: &mut Window, _| {
+                            window.remove_window();
+                        },
+                    )),
+            )
+    }
+}

@@ -23,3 +23,5 @@ settings.workspace = true
 workspace.workspace = true
 terminal.workspace = true
 # terminal_view.workspace = true
+gpui-component-assets.workspace = true
+gpui-component.workspace = true
