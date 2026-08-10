@@ -23,7 +23,6 @@ pub mod statusbar;
 pub mod tabs;
 pub mod terminal;
 pub mod theme;
-use std::cmp::min;
 
 use crate::{
     connection_dialog::ConnectionDialog,
@@ -38,7 +37,7 @@ use crate::{
     theme::active,
 };
 use gpui::{prelude::FluentBuilder, *};
-use gpui_component::IconName;
+use gpui_component::{IconName, TitleBar, menu::AppMenuBar};
 use gpui_rsx::rsx;
 use log::info;
 use theme::rgba;
@@ -131,7 +130,48 @@ impl Render for WorkspaceView {
             .size_full()
             .bg(t.surfaces.bg)
             // ============== HEADER ==============
-            .child(TitleBar::new())
+            .child(
+                TitleBar::new().bg(t.surfaces.bg).child(
+                    div().flex().items_center().gap_3().child(
+                        div()
+                            .flex()
+                            .flex_row()
+                            .items_center()
+                            .h(px(t.layout.header_height))
+                            .px(px(16.0))
+                            .bg(t.surfaces.surface)
+                            .border_b_1()
+                            .border_color(t.border.border)
+                            // brand
+                            .child(
+                                div()
+                                    .flex()
+                                    .items_center()
+                                    .gap(px(8.0))
+                                    .ml(px(16.0))
+                                    .text_color(t.text.text)
+                                    .font_weight(FontWeight::SEMIBOLD)
+                                    .child(
+                                        // logo glyph (>) — replace with SVG path in production
+                                        div().text_color(t.accent.accent).child(">"),
+                                    )
+                                    .child("Lumen"),
+                            )
+                            // top-level menu
+                            .child(
+                                div()
+                                    .flex()
+                                    .gap(px(2.0))
+                                    .ml(px(24.0))
+                                    .child(menu_button("File", &t))
+                                    .child(menu_button("Edit", &t))
+                                    .child(menu_button("View", &t))
+                                    .child(menu_button("Window", &t))
+                                    .child(menu_button("Help", &t)),
+                            ),
+                    ),
+                ),
+            )
             // .child(render_header(&t, windows, cx))
             // ============== CANVAS ==============
             .child(canvas)
@@ -184,114 +224,54 @@ fn header_icon_button(t: &crate::theme::Theme) -> impl IntoElement {
                 .border_color(t.border.border_strong),
         )
 }
-#[derive(IntoElement)]
-pub struct TitleBar {}
-impl TitleBar {
-    pub fn new() -> Self {
-        Self {}
-    }
-}
-impl RenderOnce for TitleBar {
-    fn render(self, window: &mut Window, cx: &mut App) -> impl IntoElement {
-        let t = active(cx).clone();
 
-        let state = window.use_state(cx, |_, _| TitleBarState { should_move: false });
-        div()
-            .flex()
-            .flex_row()
-            .items_center()
-            .h(px(t.layout.header_height))
-            .px(px(16.0))
-            .bg(t.surfaces.surface)
-            .border_b_1()
-            .border_color(t.border.border)
-            .on_mouse_down_out(window.listener_for(&state, |state, _, _, _| {
-                state.should_move = false;
-                info!("down out");
-            }))
-            .on_mouse_down(
-                MouseButton::Left,
-                window.listener_for(&state, |state, _, _, _| {
-                    state.should_move = true;
+// impl RenderOnce for TitleBar {
+//     fn render(self, window: &mut Window, cx: &mut App) -> impl IntoElement {
+//         let t = active(cx).clone();
 
-                    info!("mouse down");
-                }),
-            )
-            .on_mouse_up(
-                MouseButton::Left,
-                window.listener_for(&state, |state, _, window: &mut Window, _| {
-                    state.should_move = false;
-
-                    info!("mouse up");
-                }),
-            )
-            .on_mouse_move(window.listener_for(&state, |state, _, window, _| {
-                if state.should_move {
-                    state.should_move = false;
-                    window.start_window_move();
-
-                    info!("move");
-                }
-            }))
-            // brand
-            .child(
-                div()
-                    .flex()
-                    .items_center()
-                    .gap(px(8.0))
-                    .ml(px(16.0))
-                    .text_color(t.text.text)
-                    .font_weight(FontWeight::SEMIBOLD)
-                    .child(
-                        // logo glyph (>) — replace with SVG path in production
-                        div().text_color(t.accent.accent).child(">"),
-                    )
-                    .child("Lumen"),
-            )
-            // top-level menu
-            .child(
-                div()
-                    .flex()
-                    .gap(px(2.0))
-                    .ml(px(24.0))
-                    .child(menu_button("File", &t))
-                    .child(menu_button("Edit", &t))
-                    .child(menu_button("View", &t))
-                    .child(menu_button("Window", &t))
-                    .child(menu_button("Help", &t)),
-            )
-            // spacer
-            .child(
-                div()
-                    .flex_1()
-                    .h_full()
-                    .window_control_area(WindowControlArea::Drag),
-            ) // header actions (right-aligned)
-            .child(
-                div()
-                    .flex()
-                    .items_center()
-                    .gap(px(8.0))
-                    .child(
-                        div()
-                            .child(IconName::Inbox)
-                            .on_mouse_down(MouseButton::Left, |_, window, _| {
-                                window.minimize_window()
-                            }),
-                    )
-                    .child(
-                        div()
-                            .child(IconName::Inbox)
-                            .on_mouse_down(MouseButton::Left, |_, window: &mut Window, _| {
-                                window.zoom_window()
-                            }),
-                    )
-                    .child(div().child(IconName::Inbox).on_mouse_down(
-                        MouseButton::Left,
-                        |_, window: &mut Window, _| {
-                            window.remove_window();
-                        },
-                    )),
-            )
-    }
-}
+//         div()
+//             .flex()
+//             .flex_row()
+//             .items_center()
+//             .h(px(t.layout.header_height))
+//             .px(px(16.0))
+//             .bg(t.surfaces.surface)
+//             .border_b_1()
+//             .border_color(t.border.border)
+//             // brand
+//             .child(
+//                 div()
+//                     .flex()
+//                     .items_center()
+//                     .gap(px(8.0))
+//                     .ml(px(16.0))
+//                     .text_color(t.text.text)
+//                     .font_weight(FontWeight::SEMIBOLD)
+//                     .child(
+//                         // logo glyph (>) — replace with SVG path in production
+//                         div().text_color(t.accent.accent).child(">"),
+//                     )
+//                     .child("Lumen"),
+//             )
+//             // top-level menu
+//             .child(
+//                 div()
+//                     .flex()
+//                     .gap(px(2.0))
+//                     .ml(px(24.0))
+//                     .child(menu_button("File", &t))
+//                     .child(menu_button("Edit", &t))
+//                     .child(menu_button("View", &t))
+//                     .child(menu_button("Window", &t))
+//                     .child(menu_button("Help", &t)),
+//             )
+//             // spacer
+//             .child(
+//                 div()
+//                     .flex_1()
+//                     .h_full()
+//                     .window_control_area(WindowControlArea::Drag),
+//             ) // header actions (right-aligned)
+//             .child(AppMenuBar::new(cx))
+//     }
+// }

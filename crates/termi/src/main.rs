@@ -4,6 +4,7 @@ use assets::Assets;
 use gpui::{
     App, AppContext, Application, Bounds, TitlebarOptions, WindowBounds, WindowOptions, px, size,
 };
+use gpui_component::TitleBar;
 use gpui_platform;
 use workspace::WorkspaceView;
 fn build_application() -> Application {
@@ -58,7 +59,7 @@ fn load_embedded_fonts(cx: &App) {
 fn open_window(cx: &mut App) {
     workspace::theme::install(cx);
     // cx.run(move |cx| {
-    // gpui_component::init(cx);
+    gpui_component::init(cx);
     // crate::settings::init(cx);
     // crate::ui::theme::init(LoadThemes::JustBase, cx);
 
@@ -69,11 +70,7 @@ fn open_window(cx: &mut App) {
         cx.open_window(
             WindowOptions {
                 window_bounds: Some(WindowBounds::Windowed(bounds)),
-                titlebar: Some(TitlebarOptions {
-                    title: None,
-                    appears_transparent: true,
-                    traffic_light_position: None,
-                }),
+                titlebar: Some(TitleBar::title_bar_options()),
                 ..Default::default()
             },
             |window, cx| {

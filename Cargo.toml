@@ -46,8 +46,8 @@ protocol = { path = "crates/protocol" }
 # Workspace member crates
 #
 
-gpui = { git = "https://github.com/zed-industries/zed", rev = "492acd6c" }
-gpui_platform = { git = "https://github.com/zed-industries/zed", rev = "492acd6c", features = [
+gpui = { git = "https://github.com/zed-industries/zed" }
+gpui_platform = { git = "https://github.com/zed-industries/zed", features = [
     "font-kit",
 ] }
 gpui-component = { git = "https://github.com/longbridge/gpui-component", rev = "424f2457" }
