@@ -314,6 +314,15 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "330a5ed07fa54e4702c9d6c4174f74427fc0ef6e214bbd677ae50a5099946470"
 
 [[package]]
+name = "approx"
+version = "0.5.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "cab112f0a86d568ea0e627cc1d6be74a1e9cd55214684db5561995f6dad897c6"
+dependencies = [
+ "num-traits",
+]
+
+[[package]]
 name = "ar_archive_writer"
 version = "0.5.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -944,6 +953,12 @@ name = "bumpalo"
 version = "3.20.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "72f5acc6cb2ba439de613abc23857ec3d78374d8ed5ac84e9d11336e87da8649"
+
+[[package]]
+name = "by_address"
+version = "1.2.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "64fa3c856b712db6612c019f14756e64e4bcea13337a6b33b696333a9eaa2d06"
 
 [[package]]
 name = "bytemuck"
@@ -1739,6 +1754,15 @@ dependencies = [
  "rustc_version",
  "syn 2.0.119",
  "unicode-xid",
+]
+
+[[package]]
+name = "derive_refineable"
+version = "0.1.0"
+dependencies = [
+ "proc-macro2",
+ "quote",
+ "syn 2.0.119",
 ]
 
 [[package]]
@@ -2775,7 +2799,7 @@ dependencies = [
  "profiling",
  "rand 0.9.5",
  "raw-window-handle",
- "refineable",
+ "refineable 0.1.0 (git+https://github.com/zed-industries/zed)",
  "regex",
  "resvg 0.46.0",
  "scheduler",
@@ -5171,6 +5195,35 @@ dependencies = [
 ]
 
 [[package]]
+name = "palette"
+version = "0.7.7"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "ddeed8580d347d2abf3dcf06a5f0b3dc020258338526b277847cd4248a70fc64"
+dependencies = [
+ "approx",
+ "palette_derive",
+ "palette_math",
+]
+
+[[package]]
+name = "palette_derive"
+version = "0.7.7"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "88537020289b719d81be994ccf1bbf4990f477e2f69ee52fe3e45f43a02e56be"
+dependencies = [
+ "by_address",
+ "proc-macro2",
+ "quote",
+ "syn 2.0.119",
+]
+
+[[package]]
+name = "palette_math"
+version = "0.7.7"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "6e6eb142958d64335fb0e345c5b9ead2ecd6fc438c307e9d7d3c4fd428dbaf12"
+
+[[package]]
 name = "parking"
 version = "2.2.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -6128,9 +6181,16 @@ dependencies = [
 [[package]]
 name = "refineable"
 version = "0.1.0"
+dependencies = [
+ "derive_refineable 0.1.0",
+]
+
+[[package]]
+name = "refineable"
+version = "0.1.0"
 source = "git+https://github.com/zed-industries/zed#4e8057d74db3570b3bd419ff296eb84c35b3a5a3"
 dependencies = [
- "derive_refineable",
+ "derive_refineable 0.1.0 (git+https://github.com/zed-industries/zed)",
 ]
 
 [[package]]
@@ -7738,6 +7798,7 @@ dependencies = [
  "gpui-component-assets",
  "gpui_platform",
  "log",
+ "palette",
  "settings",
  "terminal",
  "theme",
@@ -7789,9 +7850,11 @@ name = "theme"
 version = "0.1.0"
 dependencies = [
  "anyhow",
+ "derive_refineable 0.1.0",
  "gpui",
  "log",
  "parking_lot",
+ "refineable 0.1.0",
  "serde",
  "strum 0.28.0",
  "thiserror 2.0.20",
@@ -7802,8 +7865,11 @@ name = "theme_settings"
 version = "0.1.0"
 dependencies = [
  "anyhow",
+ "derive_refineable 0.1.0",
  "gpui",
  "log",
+ "palette",
+ "refineable 0.1.0",
  "serde",
  "serde_json",
  "serde_json_lenient",

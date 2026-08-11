@@ -1,9 +1,6 @@
 //! `SettingsView` — two-column preferences page (nav + content).
 
-use crate::{
-    state::{AppState, ThemeMode},
-    theme::active,
-};
+use crate::state::{AppState, ThemeMode};
 use gpui::*;
 
 pub struct SettingsView {
@@ -47,7 +44,7 @@ impl Render for SettingsView {
 // // ---------------------------------------------------------------------------
 
 // fn nav(
-//     t: &crate::theme::Theme,
+//     t: &Theme,
 //     active_section: SettingsSection,
 //     cx: &mut Context<SettingsView>,
 // ) -> impl IntoElement {
@@ -121,7 +118,7 @@ impl Render for SettingsView {
 // // ---------------------------------------------------------------------------
 
 // fn render_section(
-//     t: &crate::theme::Theme,
+//     t: &Theme,
 //     section: SettingsSection,
 //     state: &Entity<AppState>,
 //     _cx: &mut Context<SettingsView>,
@@ -140,7 +137,7 @@ impl Render for SettingsView {
 //         })
 // }
 
-// fn placeholder_panel(t: &crate::theme::Theme, section: SettingsSection) -> AnyElement {
+// fn placeholder_panel(t: &Theme, section: SettingsSection) -> AnyElement {
 //     let title = match section {
 //         SettingsSection::Appearance => "Appearance",
 //         SettingsSection::Terminal => "Terminal",
@@ -160,7 +157,7 @@ impl Render for SettingsView {
 //         .into_any_element()
 // }
 
-// fn appearance_panel(t: &crate::theme::Theme, state: &Entity<AppState>) -> AnyElement {
+// fn appearance_panel(t: &Theme, state: &Entity<AppState>) -> AnyElement {
 //     div()
 //         .flex()
 //         .flex_col()
@@ -252,7 +249,7 @@ impl Render for SettingsView {
 // // Row / control helpers
 // // ---------------------------------------------------------------------------
 
-// fn panel_title(t: &crate::theme::Theme, s: &str) -> impl IntoElement {
+// fn panel_title(t: &Theme, s: &str) -> impl IntoElement {
 //     div()
 //         .text_size(px(22.0))
 //         .font_weight(FontWeight::SEMIBOLD)
@@ -261,7 +258,7 @@ impl Render for SettingsView {
 //         .child(s)
 // }
 
-// fn panel_lead(t: &crate::theme::Theme, s: &str) -> impl IntoElement {
+// fn panel_lead(t: &Theme, s: &str) -> impl IntoElement {
 //     div()
 //         .mt(px(8.0))
 //         .text_size(px(13.0))
@@ -269,7 +266,7 @@ impl Render for SettingsView {
 //         .child(s)
 // }
 
-// fn group(t: &crate::theme::Theme, title: &str, rows: Vec<AnyElement>) -> impl IntoElement {
+// fn group(t: &Theme, title: &str, rows: Vec<AnyElement>) -> impl IntoElement {
 //     div()
 //         .flex()
 //         .flex_col()
@@ -286,7 +283,7 @@ impl Render for SettingsView {
 // }
 
 // fn row_layout(
-//     t: &crate::theme::Theme,
+//     t: &Theme,
 //     label: &str,
 //     desc: &str,
 //     control: AnyElement,
@@ -321,7 +318,7 @@ impl Render for SettingsView {
 // }
 
 // fn row_select<M: Copy>(
-//     t: &crate::theme::Theme,
+//     t: &Theme,
 //     label: &str,
 //     desc: &str,
 //     state: &Entity<AppState>,
@@ -366,7 +363,7 @@ impl Render for SettingsView {
 // }
 
 // fn row_droplist(
-//     t: &crate::theme::Theme,
+//     t: &Theme,
 //     label: &str,
 //     desc: &str,
 //     options: &[&str],
@@ -387,7 +384,7 @@ impl Render for SettingsView {
 //     row_layout(t, label, desc, body.into_any_element()).into_any_element()
 // }
 
-// fn row_number(t: &crate::theme::Theme, label: &str, desc: &str, value: i64) -> AnyElement {
+// fn row_number(t: &Theme, label: &str, desc: &str, value: i64) -> AnyElement {
 //     let body = div()
 //         .w(px(80.0))
 //         .px(px(10.0))
@@ -403,7 +400,7 @@ impl Render for SettingsView {
 //     row_layout(t, label, desc, body.into_any_element()).into_any_element()
 // }
 
-// fn row_checkbox(t: &crate::theme::Theme, label: &str, desc: &str, checked: bool) -> AnyElement {
+// fn row_checkbox(t: &Theme, label: &str, desc: &str, checked: bool) -> AnyElement {
 //     let bg = if checked {
 //         t.accent.accent_strong
 //     } else {

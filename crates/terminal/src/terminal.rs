@@ -1,13 +1,23 @@
 pub mod alacritty;
 pub mod terminal_settings;
 use futures::{
-    FutureExt, SinkExt, StreamExt, channel::mpsc::{UnboundedReceiver, UnboundedSender, unbounded},
+    FutureExt, SinkExt, StreamExt,
+    channel::mpsc::{UnboundedReceiver, UnboundedSender, unbounded},
 };
 use log::info;
-use tokio::task::yield_now;
 use std::{
-    borrow::Cow, cmp, collections::{VecDeque, vec_deque}, fmt::{self, Formatter}, mem, ops::{BitOr, BitOrAssign, Deref, Range as StdRange}, process::ExitStatus, rc::Rc, sync::{Arc, atomic::AtomicU64, mpsc::Sender}, time::{Instant, SystemTime, UNIX_EPOCH},
+    borrow::Cow,
+    cmp,
+    collections::{VecDeque, vec_deque},
+    fmt::{self, Formatter},
+    mem,
+    ops::{BitOr, BitOrAssign, Deref, Range as StdRange},
+    process::ExitStatus,
+    rc::Rc,
+    sync::{Arc, atomic::AtomicU64, mpsc::Sender},
+    time::{Instant, SystemTime, UNIX_EPOCH},
 };
+use tokio::task::yield_now;
 
 use alacritty_terminal::{
     Term,
@@ -19,7 +29,14 @@ use alacritty_terminal::{
 };
 
 use gpui::{
-    AbsoluteLength, AnyElement, App, AvailableSpace, Background, BorderStyle, Bounds, ClipboardItem, ContentMask, Context, Corners, DefiniteLength, DispatchPhase, Edges, Element, Entity, EventEmitter, FocusHandle, Font, FontFeatures, FontStyle, FontWeight, HighlightStyle, Hitbox, HitboxBehavior, Hsla, InputHandler, InteractiveElement, Interactivity, IntoElement, KeyDownEvent, Keystroke, Modifiers, ModifiersChangedEvent, MouseButton, MouseMoveEvent, PaintQuad, ParentElement, Pixels, Point as GpuiPoint, ShapedLine, Size, StrikethroughStyle, Task, TextAlign, TextRun, TextStyle, UTF16Selection, UnderlineStyle, WeakEntity, WhiteSpace, Window, accesskit::Uuid, div, fill, font, hsla, point, px, relative, rgba, size,
+    AbsoluteLength, AnyElement, App, AvailableSpace, Background, BorderStyle, Bounds,
+    ClipboardItem, ContentMask, Context, Corners, DefiniteLength, DispatchPhase, Edges, Element,
+    Entity, EventEmitter, FocusHandle, Font, FontFeatures, FontStyle, FontWeight, HighlightStyle,
+    Hitbox, HitboxBehavior, Hsla, InputHandler, InteractiveElement, Interactivity, IntoElement,
+    KeyDownEvent, Keystroke, Modifiers, ModifiersChangedEvent, MouseButton, MouseMoveEvent,
+    PaintQuad, ParentElement, Pixels, Point as GpuiPoint, ShapedLine, Size, StrikethroughStyle,
+    Task, TextAlign, TextRun, TextStyle, UTF16Selection, UnderlineStyle, WeakEntity, WhiteSpace,
+    Window, accesskit::Uuid, div, fill, font, hsla, point, px, relative, rgba, size,
 };
 use itertools::Itertools;
 use protocol::{BackendTx, SshMessage, SystemEvent};
@@ -50,7 +67,7 @@ pub struct Terminal {
     keyboard_input_sent: bool,
     init_command_startup_marker: Option<String>,
     init_command_startup_tx: Option<Sender<()>>,
- 
+
     event_loop_task: Task<Result<(), anyhow::Error>>,
     // pub backend: std::sync::Arc<std::sync::Mutex<BackendTx>>,
     pub scroll_pixel_y: f32,
@@ -106,18 +123,26 @@ impl fmt::Debug for TerminalBackendEvent {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
         match self {
             Self::MouseCursorDirty => f.write_str("MouseCursorDirty"),
-            Self::Title(title) => write!(f, "Title({title})"),
+            Self::Title(title) => {
+                write!(f, "Title({title})")
+            }
             Self::ResetTitle => f.write_str("ResetTitle"),
             Self::ClipboardStore(data) => write!(f, "ClipboardStore({data})"),
             Self::ClipboardLoad(_) => f.write_str("ClipboardLoad"),
-            Self::ColorRequest(index, _) => write!(f, "ColorRequest({index})"),
-            Self::PtyWrite(output) => write!(f, "PtyWrite({output})"),
+            Self::ColorRequest(index, _) => {
+                write!(f, "ColorRequest({index})")
+            }
+            Self::PtyWrite(output) => {
+                write!(f, "PtyWrite({output})")
+            }
             Self::TextAreaSizeRequest(_) => f.write_str("TextAreaSizeRequest"),
             Self::CursorBlinkingChange => f.write_str("CursorBlinkingChange"),
             Self::Wakeup => f.write_str("Wakeup"),
             Self::Bell => f.write_str("Bell"),
             Self::Exit => f.write_str("Exit"),
-            Self::ChildExit(status) => write!(f, "ChildExit({status})"),
+            Self::ChildExit(status) => {
+                write!(f, "ChildExit({status})")
+            }
         }
     }
 }
@@ -264,13 +289,9 @@ impl Terminal {
     fn process_event(&mut self, event: TerminalBackendEvent, cx: &mut Context<Self>) {
         match event {
             TerminalBackendEvent::Title(title) => {
-      
-
-             
                 cx.emit(TerminalEvent::BreadcrumbsChanged);
             }
             TerminalBackendEvent::ResetTitle => {
-              
                 cx.emit(TerminalEvent::BreadcrumbsChanged);
             }
             TerminalBackendEvent::ClipboardStore(data) => {
@@ -298,9 +319,7 @@ impl Terminal {
             TerminalBackendEvent::Bell => {
                 cx.emit(TerminalEvent::Bell);
             }
-            TerminalBackendEvent::Exit => {
-
-            },
+            TerminalBackendEvent::Exit => {}
             TerminalBackendEvent::MouseCursorDirty => {
                 //NOOP, Handled in render
             }
@@ -338,7 +357,7 @@ impl Terminal {
 
         //Note that the ordering of events matters for event processing
         while let Some(e) = self.events.pop_front() {
-            self.process_terminal_event(&e,  &mut terminal, window, cx)
+            self.process_terminal_event(&e, &mut terminal, window, cx)
         }
 
         self.last_content = make_content(&terminal, &self.last_content);
@@ -347,41 +366,22 @@ impl Terminal {
     fn process_terminal_event(
         &mut self,
         event: &InternalEvent,
-        term: &mut Term<TerminalListener> ,
+        term: &mut Term<TerminalListener>,
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
         match event {
-            &InternalEvent::Resize(new_bounds) => {
-      
-            }
-            InternalEvent::Clear => {
-               
-            }
-            InternalEvent::Scroll(scroll) => {
-              
-            }
-            InternalEvent::SetSelection(selection) => {
-            
-            }
-            InternalEvent::UpdateSelection(position) => {
-            
-            }
+            &InternalEvent::Resize(new_bounds) => {}
+            InternalEvent::Clear => {}
+            InternalEvent::Scroll(scroll) => {}
+            InternalEvent::SetSelection(selection) => {}
+            InternalEvent::UpdateSelection(position) => {}
 
-            InternalEvent::Copy(keep_selection) => {
-                
-            }
-            
-            InternalEvent::ToggleViMode => {
-           
-            }
-            InternalEvent::ViMotion(motion) => {
-               
-            }
-            InternalEvent::FindHyperlink(position, open) => {
-               
-            }
-         
+            InternalEvent::Copy(keep_selection) => {}
+
+            InternalEvent::ToggleViMode => {}
+            InternalEvent::ViMotion(motion) => {}
+            InternalEvent::FindHyperlink(position, open) => {}
         }
     }
     pub fn try_modifiers_change(
@@ -439,7 +439,6 @@ impl Terminal {
 
         self.events.push_back(InternalEvent::Scroll(Scroll::Bottom));
         self.events.push_back(InternalEvent::SetSelection(None));
-
 
         self.write_to_pty(input);
     }
@@ -512,7 +511,7 @@ pub fn make_content(term: &Term<TerminalListener>, last_content: &Content) -> Co
 
     Content {
         cells,
-        mode:  Modes(1) ,
+        mode: Modes(1),
         display_offset: content.display_offset,
         // selection_text,
         // selection: content
@@ -564,15 +563,15 @@ struct TerminalListener(UnboundedSender<PtyEvent>);
 
 impl EventListener for TerminalListener {
     fn send_event(&self, event: Event) {
-          self.0.unbounded_send(PtyEvent::Event(event.into())).ok();
+        self.0.unbounded_send(PtyEvent::Event(event.into())).ok();
     }
 }
 
 fn new_term(
-     terminal_bounds: TerminalBounds,
-  events_tx: UnboundedSender<PtyEvent>,
+    terminal_bounds: TerminalBounds,
+    events_tx: UnboundedSender<PtyEvent>,
 ) -> Arc<FairMutex<Term<TerminalListener>>> {
-   let term= Term::new(
+    let term = Term::new(
         Config {
             scrolling_history: 2000,
             ..Config::default()
@@ -1614,15 +1613,13 @@ pub struct TerminalBuilder {
     terminal: Terminal,
     events_rx: UnboundedReceiver<PtyEvent>,
 }
- 
 
 impl TerminalBuilder {
-
-    pub fn new_terminal(terminal_bounds: TerminalBounds,)->Self{
+    pub fn new_terminal(terminal_bounds: TerminalBounds) -> Self {
         let terminal_bounds = normalize_terminal_bounds(terminal_bounds);
-                let (events_tx, events_rx) = unbounded();
-        let term = new_term( terminal_bounds , events_tx.clone() ); 
-        let terminal = Terminal {         
+        let (events_tx, events_rx) = unbounded();
+        let term = new_term(terminal_bounds, events_tx.clone());
+        let terminal = Terminal {
             term,
             event_loop_task: Task::ready(Ok(())),
             id: String::new(),
@@ -1630,27 +1627,29 @@ impl TerminalBuilder {
             dynamic_title: String::new(),
             status: String::new(),
             connected: false,
-            last_content: Content {  terminal_bounds, ..Default::default()},
+            last_content: Content {
+                terminal_bounds,
+                ..Default::default()
+            },
             disconnected_reason: None,
             backend_generation: 0,
             backend_initialized: false,
-            output_processor:  Processor::<StdSyncHandler>::new(),
-            events: VecDeque::with_capacity(10),  
-            keyboard_input_sent: false ,
+            output_processor: Processor::<StdSyncHandler>::new(),
+            events: VecDeque::with_capacity(10),
+            keyboard_input_sent: false,
             init_command_startup_marker: None,
             init_command_startup_tx: None,
-           
+
             scroll_pixel_y: todo!(),
             backend: todo!(),
         };
-        Self { terminal , events_rx }
+        Self {
+            terminal,
+            events_rx,
+        }
     }
 
-
-
     pub fn subscribe(mut self, cx: &Context<Terminal>) -> Terminal {
-   
-
         //Event loop
         self.terminal.event_loop_task = cx.spawn(async move |terminal, cx| {
             while let Some(event) = self.events_rx.next().await {

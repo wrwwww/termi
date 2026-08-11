@@ -4,8 +4,9 @@ use assets::Assets;
 use gpui::{
     App, AppContext, Application, Bounds, TitlebarOptions, WindowBounds, WindowOptions, px, size,
 };
-use gpui_component::TitleBar;
+use gpui_component::{Theme, ThemeMode, TitleBar};
 use gpui_platform;
+
 use workspace::WorkspaceView;
 fn build_application() -> Application {
     let platform = gpui_platform::current_platform(false);
@@ -25,8 +26,13 @@ fn main() {
     app.run(move |cx| {
         // settings::init(cx);
         // extension::init(cx);
-        // theme_settings::init(theme::LoadThemes::All(Box::new(Assets)), cx);
-        // load_embedded_fonts(cx);
+        theme_settings::init(theme::LoadThemes::All(Box::new(Assets)), cx);
+        load_embedded_fonts(cx);
+        workspace::theme::install(cx);
+        gpui_component::init(cx);
+        // 在应用初始化时，将主题模式切换为 Dark
+        Theme::change(ThemeMode::Dark, None, cx);
+
         // terminal_view::init(cx);
         // theme_selector::init(cx);
         open_window(cx);
@@ -57,12 +63,6 @@ fn load_embedded_fonts(cx: &App) {
 }
 
 fn open_window(cx: &mut App) {
-    workspace::theme::install(cx);
-    // cx.run(move |cx| {
-    gpui_component::init(cx);
-    // crate::settings::init(cx);
-    // crate::ui::theme::init(LoadThemes::JustBase, cx);
-
     let bounds = Bounds::centered(None, size(px(1200.), px(600.0)), cx);
     cx.spawn(async move |cx| {
         let state = cx.new(|cx| workspace::state::AppState::load());

@@ -4,11 +4,11 @@
 //! the connection form on the right. The card model is purely visual;
 //! the actual field state lives in `AppState` once the user saves.
 
-use crate::{
-    state::{ActiveView, AppState},
-    theme::active,
-};
+use std::sync::Arc;
+
+use crate::state::{ActiveView, AppState};
 use gpui::*;
+use theme::{ActiveTheme, Theme};
 
 pub struct ConnectionDialog {
     state: Entity<AppState>,
@@ -22,14 +22,14 @@ impl ConnectionDialog {
 
 impl Render for ConnectionDialog {
     fn render(&mut self, windows: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
-        let t = active(cx).clone();
+        let t = cx.theme();
         let state = self.state.clone();
 
         div()
             .id("lumen-newconn")
             .flex()
             .flex_1()
-            .bg(t.surfaces.bg)
+            .bg(t.colors().background)
             .items_center()
             .justify_center()
             .p(px(32.0))
@@ -47,7 +47,7 @@ impl Render for ConnectionDialog {
     }
 }
 
-fn render_hero(t: &crate::theme::Theme) -> impl IntoElement {
+fn render_hero(t: &Theme) -> impl IntoElement {
     div()
         .flex()
         .flex_col()
@@ -57,7 +57,7 @@ fn render_hero(t: &crate::theme::Theme) -> impl IntoElement {
                 .mt(px(8.0))
                 .text_size(px(32.0))
                 .font_weight(FontWeight::BOLD)
-                .text_color(t.text.text)
+                .text_color(t.colors().text)
                 .line_height(px(36.8))
                 .child("A new way to remote in."),
         )
@@ -65,32 +65,32 @@ fn render_hero(t: &crate::theme::Theme) -> impl IntoElement {
             div()
                 .mt(px(16.0))
                 .text_size(px(14.0))
-                .text_color(t.text.text_muted)
+                .text_color(t.colors().text_muted)
                 .line_height(px(23.1))
                 .child("Save your servers, keys and connection preferences once. Connect with a single click — across SSH, Mosh, or local shell."),
         )
-        .child(feature(&t, "First-class key management", "Ed25519, RSA, ECDSA, PuTTY .ppk — auto-detected from ~/.ssh", "🔐", t.accent.accent, t.accent.accent_soft))
-        .child(feature(&t, "Port forwarding", "Local, remote, dynamic — all set per-session", "↔", t.semantic.amber, amber_bg()))
-        .child(feature(&t, "Snippets & macros", "Save commands, bind hotkeys, replay with one keystroke", "↻", t.semantic.green, green_bg()))
+        // .child(feature(&t, "First-class key management", "Ed25519, RSA, ECDSA, PuTTY .ppk — auto-detected from ~/.ssh", "🔐", t.accent.accent, t.accent.accent_soft))
+        // .child(feature(&t, "Port forwarding", "Local, remote, dynamic — all set per-session", "↔", t.semantic.amber, amber_bg()))
+        // .child(feature(&t, "Snippets & macros", "Save commands, bind hotkeys, replay with one keystroke", "↻", t.semantic.green, green_bg()))
         .child(
             div()
                 .mt(px(32.0))
                 .text_size(px(11.0))
-                .text_color(t.text.text_subtle)
+                .text_color(t.colors().text_muted)
                 .child("Tip — paste any ssh:// URL above; we'll parse it for you."),
         )
 }
 
-fn eyebrow(t: &crate::theme::Theme, label: &str) -> impl IntoElement {
+fn eyebrow(t: &Theme, label: &str) -> impl IntoElement {
     div()
         .text_size(px(11.0))
         .font_weight(FontWeight::SEMIBOLD)
-        .text_color(t.text.text_subtle)
+        .text_color(t.colors().text_muted)
         .child(text!(label))
 }
 
 fn feature(
-    t: &crate::theme::Theme,
+    t: &Theme,
     title: &str,
     desc: &str,
     icon: &str,
@@ -108,8 +108,8 @@ fn feature(
             div()
                 .flex()
                 .flex_col()
-                .child(title_line(&t.text.text, title))
-                .child(desc_line(&t.text.text_subtle, desc)),
+                .child(title_line(&t.colors().text, title))
+                .child(desc_line(&t.colors().text_muted, desc)),
         )
 }
 
@@ -144,16 +144,16 @@ fn desc_line(color: &Hsla, text: &str) -> impl IntoElement {
 }
 
 fn render_form_card(
-    t: &crate::theme::Theme,
+    t: &Arc<Theme>,
     state: Entity<AppState>,
     cx: &mut Context<ConnectionDialog>,
 ) -> impl IntoElement {
     div()
         .flex()
         .flex_col()
-        .bg(t.surfaces.surface)
+        .bg(t.colors().background)
         .border_1()
-        .border_color(t.border.border)
+        .border_color(t.colors().border)
         .rounded(px(12.0))
         .shadow_md()
         .overflow_hidden()
@@ -162,7 +162,7 @@ fn render_form_card(
         .child(card_footer(t, state, cx))
 }
 
-fn card_header(t: &crate::theme::Theme) -> impl IntoElement {
+fn card_header(t: &Theme) -> impl IntoElement {
     div()
         .flex()
         .flex_row()
@@ -171,28 +171,32 @@ fn card_header(t: &crate::theme::Theme) -> impl IntoElement {
         .px(px(24.0))
         .py(px(20.0))
         .border_b_1()
-        .border_color(t.border.border)
-        .child(icon_tile(t.accent.accent, t.accent.accent_soft, "⌒"))
+        .border_color(t.colors().border)
+        .child(icon_tile(
+            t.colors().icon_accent,
+            t.colors().icon_accent,
+            "⌒",
+        ))
         .child(
             div()
                 .flex()
                 .flex_col()
-                .child(title_line(&t.text.text, "Connection details"))
+                .child(title_line(&t.colors().text, "Connection details"))
                 .child(desc_line(
-                    &t.text.text_subtle,
+                    &t.colors().text_muted,
                     "All fields can be edited later.",
                 )),
         )
         .child(div().flex_1())
-        .child(div().text_color(t.text.text_muted).child("⋯"))
+        .child(div().text_color(t.colors().text_muted).child("⋯"))
 }
 
-fn card_body(t: &crate::theme::Theme) -> impl IntoElement {
+fn card_body(t: &Theme) -> impl IntoElement {
     let row_label = |label: &str| -> AnyElement {
         div()
             .w(px(130.0))
             .text_size(px(12.5))
-            .text_color(t.text.text_muted)
+            .text_color(t.colors().text_muted)
             .text_align(TextAlign::Right)
             .child(text!(label))
             .into_any_element()
@@ -231,7 +235,7 @@ fn card_body(t: &crate::theme::Theme) -> impl IntoElement {
 }
 
 fn card_footer(
-    t: &crate::theme::Theme,
+    t: &Theme,
     state: Entity<AppState>,
     cx: &mut Context<ConnectionDialog>,
 ) -> impl IntoElement {
@@ -243,12 +247,12 @@ fn card_footer(
         .px(px(24.0))
         .py(px(16.0))
         .border_t_1()
-        .border_color(t.border.border)
-        .bg(t.surfaces.surface_2)
+        .border_color(t.colors().border)
+        .bg(t.colors().background)
         .child(
             div()
                 .text_size(px(11.0))
-                .text_color(t.text.text_subtle)
+                .text_color(t.colors().text_muted)
                 .child("⌘S Save · ⌘↩ Connect"),
         )
         .child(
@@ -291,39 +295,39 @@ fn field_row(label: AnyElement, control: AnyElement) -> impl IntoElement {
         .child(div().flex_1().child(control))
 }
 
-fn input(t: &crate::theme::Theme, value: &str, mono: bool) -> AnyElement {
+fn input(t: &Theme, value: &str, mono: bool) -> AnyElement {
     let mut d = div()
         .flex_1()
         .px(px(10.0))
         .py(px(7.0))
         .rounded(px(6.0))
-        .bg(t.surfaces.surface_2)
+        .bg(t.colors().background)
         .border_1()
-        .border_color(t.border.border_strong)
+        .border_color(t.colors().border)
         .text_size(px(12.5))
-        .text_color(t.text.text);
+        .text_color(t.colors().text);
     if mono {
-        d = d.font_family(t.font.mono);
+        // d = d.font_family(t.font.mono);
     }
     d.child(text!(value)).into_any_element()
 }
 
-fn select_dd(t: &crate::theme::Theme, options: &[&str]) -> AnyElement {
+fn select_dd(t: &Theme, options: &[&str]) -> AnyElement {
     div()
         .flex_1()
         .px(px(10.0))
         .py(px(7.0))
         .rounded(px(6.0))
-        .bg(t.surfaces.surface_2)
+        .bg(t.colors().background)
         .border_1()
-        .border_color(t.border.border_strong)
+        .border_color(t.colors().border)
         .text_size(px(12.5))
-        .text_color(t.text.text)
+        .text_color(t.colors().text)
         .child(text!(options.first().copied().unwrap_or("")))
         .into_any_element()
 }
 
-fn radio_row(t: &crate::theme::Theme, options: &[&str], active_idx: usize) -> AnyElement {
+fn radio_row(t: &Theme, options: &[&str], active_idx: usize) -> AnyElement {
     div()
         .flex()
         .flex_row()
@@ -336,16 +340,16 @@ fn radio_row(t: &crate::theme::Theme, options: &[&str], active_idx: usize) -> An
                 .items_center()
                 .gap(px(6.0))
                 .text_size(px(12.5))
-                .text_color(t.text.text)
+                .text_color(t.colors().text)
                 .child(
                     div()
                         .size(px(14.0))
                         .rounded_full()
                         .border_1()
                         .border_color(if active {
-                            t.accent.accent
+                            t.colors().icon_accent
                         } else {
-                            t.border.border_strong
+                            t.colors().border
                         })
                         .flex()
                         .items_center()
@@ -354,7 +358,7 @@ fn radio_row(t: &crate::theme::Theme, options: &[&str], active_idx: usize) -> An
                             div()
                                 .size(px(7.0))
                                 .rounded_full()
-                                .bg(t.accent.accent)
+                                .bg(t.colors().icon_accent)
                                 .into_any_element()
                         } else {
                             div().into_any_element()
@@ -365,7 +369,7 @@ fn radio_row(t: &crate::theme::Theme, options: &[&str], active_idx: usize) -> An
         .into_any_element()
 }
 
-fn file_input(t: &crate::theme::Theme) -> AnyElement {
+fn file_input(t: &Theme) -> AnyElement {
     div()
         .flex()
         .flex_row()
@@ -378,12 +382,12 @@ fn file_input(t: &crate::theme::Theme) -> AnyElement {
                 .px(px(10.0))
                 .py(px(7.0))
                 .rounded(px(6.0))
-                .bg(t.surfaces.surface_2)
+                .bg(t.colors().background)
                 .border_1()
-                .border_color(t.border.border_strong)
-                .font_family(t.font.mono)
+                .border_color(t.colors().border)
+                // .font_family(t.font.mono)
                 .text_size(px(12.5))
-                .text_color(t.text.text)
+                .text_color(t.colors().text)
                 .child("~/.ssh/id_ed25519"),
         )
         .child(
@@ -391,10 +395,10 @@ fn file_input(t: &crate::theme::Theme) -> AnyElement {
                 .px(px(8.0))
                 .py(px(4.0))
                 .rounded(px(6.0))
-                .bg(t.surfaces.surface_3)
+                .bg(t.colors().background)
                 .border_1()
-                .border_color(t.border.border_strong)
-                .text_color(t.text.text)
+                .border_color(t.colors().border)
+                .text_color(t.colors().text)
                 .text_size(px(12.0))
                 .child("Browse…"),
         )
@@ -408,15 +412,19 @@ enum ButtonKind {
     Ghost,
 }
 
-fn button(t: &crate::theme::Theme, kind: ButtonKind, label: &str) -> Div {
+fn button(t: &Theme, kind: ButtonKind, label: &str) -> Div {
     let (bg, fg, border) = match kind {
         ButtonKind::Primary => (
-            t.accent.accent_strong,
+            t.colors().icon_accent,
             hsla(0., 0., 0.97, 1.),
             transparent_hsla(),
         ),
-        ButtonKind::Secondary => (t.surfaces.surface_3, t.text.text, t.border.border_strong),
-        ButtonKind::Ghost => (transparent_hsla(), t.text.text_muted, transparent_hsla()),
+        ButtonKind::Secondary => (t.colors().background, t.colors().text, t.colors().border),
+        ButtonKind::Ghost => (
+            transparent_hsla(),
+            t.colors().text_muted,
+            transparent_hsla(),
+        ),
     };
     div()
         // .id(("btn", label))

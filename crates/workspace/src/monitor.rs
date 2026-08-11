@@ -23,6 +23,7 @@ use crate::{
     theme::active,
 };
 use gpui::*;
+use theme::Theme;
 
 pub struct MonitorPanel {
     state: Entity<AppState>,
@@ -92,7 +93,7 @@ impl Render for MonitorPanel {
 // ---------------------------------------------------------------------------
 
 fn render_header(
-    t: &crate::theme::Theme,
+    t: &Theme,
     tab: MonitorTab,
     paused: bool,
     collapsed: bool,
@@ -177,7 +178,7 @@ fn render_header(
 }
 
 fn tab_btn(
-    t: &crate::theme::Theme,
+    t: &Theme,
     label: &str,
     active: bool,
     tab: MonitorTab,
@@ -206,7 +207,7 @@ fn tab_btn(
 }
 
 fn action_btn(
-    t: &crate::theme::Theme,
+    t: &Theme,
     glyph: &str,
     label: &'static str,
     // on_click: F,
@@ -233,7 +234,7 @@ fn action_btn(
 // Card builders
 // ---------------------------------------------------------------------------
 
-fn cpu_card(t: &crate::theme::Theme, metric: Option<&Metric>, window: MonitorWindow) -> AnyElement {
+fn cpu_card(t: &Theme, metric: Option<&Metric>, window: MonitorWindow) -> AnyElement {
     let empty = Metric {
         current: 0.0,
         unit: "%".into(),
@@ -248,11 +249,7 @@ fn cpu_card(t: &crate::theme::Theme, metric: Option<&Metric>, window: MonitorWin
     })
 }
 
-fn memory_card(
-    t: &crate::theme::Theme,
-    metric: Option<&Metric>,
-    window: MonitorWindow,
-) -> AnyElement {
+fn memory_card(t: &Theme, metric: Option<&Metric>, window: MonitorWindow) -> AnyElement {
     let empty = Metric {
         current: 0.0,
         unit: "%".into(),
@@ -267,11 +264,7 @@ fn memory_card(
     })
 }
 
-fn disk_card(
-    t: &crate::theme::Theme,
-    metric: Option<&Metric>,
-    window: MonitorWindow,
-) -> AnyElement {
+fn disk_card(t: &Theme, metric: Option<&Metric>, window: MonitorWindow) -> AnyElement {
     let empty = Metric {
         current: 0.0,
         unit: "%".into(),
@@ -286,11 +279,7 @@ fn disk_card(
     })
 }
 
-fn network_card(
-    t: &crate::theme::Theme,
-    metric: Option<&NetMetric>,
-    window: MonitorWindow,
-) -> AnyElement {
+fn network_card(t: &Theme, metric: Option<&NetMetric>, window: MonitorWindow) -> AnyElement {
     let empty = NetMetric {
         up_kbps: 0.0,
         down_kbps: 0.0,
@@ -376,7 +365,7 @@ enum MetricVisual {
 }
 
 fn metric_card<F>(
-    t: &crate::theme::Theme,
+    t: &Theme,
     title: &str,
     m: &Metric,
     visual: MetricVisual,
@@ -470,21 +459,11 @@ where
 // Building blocks shared by cards
 // ---------------------------------------------------------------------------
 
-fn card_head(
-    t: &crate::theme::Theme,
-    title: &str,
-    delta: &str,
-    status: MetricStatus,
-) -> impl IntoElement {
+fn card_head(t: &Theme, title: &str, delta: &str, status: MetricStatus) -> impl IntoElement {
     card_head_color(t, title, delta, status_color(t, status))
 }
 
-fn card_head_color(
-    t: &crate::theme::Theme,
-    title: &str,
-    delta: &str,
-    delta_color: Hsla,
-) -> impl IntoElement {
+fn card_head_color(t: &Theme, title: &str, delta: &str, delta_color: Hsla) -> impl IntoElement {
     div()
         .flex()
         .flex_row()
@@ -509,7 +488,7 @@ fn card_head_color(
         )
 }
 
-fn status_dot(t: &crate::theme::Theme, status: MetricStatus) -> impl IntoElement {
+fn status_dot(t: &Theme, status: MetricStatus) -> impl IntoElement {
     let (color, _glow) = match status {
         MetricStatus::Healthy => (t.semantic.green, "rgba(134,239,172,.5)"),
         MetricStatus::Warn => (t.semantic.amber, "rgba(251,191,36,.5)"),
@@ -518,7 +497,7 @@ fn status_dot(t: &crate::theme::Theme, status: MetricStatus) -> impl IntoElement
     div().size(px(6.0)).rounded_full().bg(color).shadow_md()
 }
 
-fn status_color(t: &crate::theme::Theme, status: MetricStatus) -> Hsla {
+fn status_color(t: &Theme, status: MetricStatus) -> Hsla {
     match status {
         MetricStatus::Healthy => t.text.text_subtle,
         MetricStatus::Warn => t.semantic.amber,
@@ -526,7 +505,7 @@ fn status_color(t: &crate::theme::Theme, status: MetricStatus) -> Hsla {
     }
 }
 
-fn sub_row(t: &crate::theme::Theme, label: &str, value: &str) -> impl IntoElement {
+fn sub_row(t: &Theme, label: &str, value: &str) -> impl IntoElement {
     div()
         .flex()
         .flex_row()
@@ -538,7 +517,7 @@ fn sub_row(t: &crate::theme::Theme, label: &str, value: &str) -> impl IntoElemen
         .child(div().text_color(t.text.text).child(text!(value)))
 }
 
-fn time_buttons(t: &crate::theme::Theme, current: MonitorWindow) -> impl IntoElement {
+fn time_buttons(t: &Theme, current: MonitorWindow) -> impl IntoElement {
     div()
         .flex()
         .flex_row()
@@ -549,7 +528,7 @@ fn time_buttons(t: &crate::theme::Theme, current: MonitorWindow) -> impl IntoEle
         .child(time_btn(t, "15m", current == MonitorWindow::FifteenMin))
 }
 
-fn time_btn(t: &crate::theme::Theme, label: &str, active: bool) -> impl IntoElement {
+fn time_btn(t: &Theme, label: &str, active: bool) -> impl IntoElement {
     let (color, border) = if active {
         (t.accent.accent, t.accent.accent)
     } else {
@@ -579,7 +558,7 @@ fn time_btn(t: &crate::theme::Theme, label: &str, active: bool) -> impl IntoElem
 // SVG charts — built with Path::from_svg(...) so GPUI renders them natively.
 // ---------------------------------------------------------------------------
 
-// fn line_chart(t: &crate::theme::Theme, samples: &[f32], amber: bool) -> impl IntoElement {
+// fn line_chart(t: &Theme, samples: &[f32], amber: bool) -> impl IntoElement {
 //     let (line_color, area_color) = if amber {
 //         (t.semantic.amber, t.semantic.amber)
 //     } else {
@@ -617,7 +596,7 @@ fn time_btn(t: &crate::theme::Theme, label: &str, active: bool) -> impl IntoElem
 //     )
 // }
 
-// fn dual_chart(t: &crate::theme::Theme, up: &[f32], down: &[f32]) -> impl IntoElement {
+// fn dual_chart(t: &Theme, up: &[f32], down: &[f32]) -> impl IntoElement {
 //     let (up_line, up_area) = build_path(up, 200.0, 56.0);
 //     let (down_line, down_area) = build_path(down, 200.0, 56.0);
 

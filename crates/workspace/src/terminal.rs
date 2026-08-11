@@ -48,7 +48,7 @@ impl Render for TerminalPane {
 }
 
 /// Sample lines that approximate what a real shell session looks like.
-fn sample_lines(t: &crate::theme::Theme, _session: Option<&str>) -> Vec<AnyElement> {
+fn sample_lines(t: &Theme, _session: Option<&str>) -> Vec<AnyElement> {
     use crate::theme::TerminalPalette;
     let pal = &t.terminal;
 
@@ -185,3 +185,4 @@ fn sample_lines(t: &crate::theme::Theme, _session: Option<&str>) -> Vec<AnyEleme
 
 // Import Hsla trait so `.text_color()` accepts our token types.
 use gpui::Hsla;
+use theme::Theme;

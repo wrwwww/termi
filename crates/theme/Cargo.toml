@@ -18,3 +18,5 @@ thiserror.workspace = true
 strum.workspace = true
 log.workspace = true
 serde.workspace = true
+refineable.workspace=true
+derive_refineable.workspace=true

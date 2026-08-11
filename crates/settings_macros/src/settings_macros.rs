@@ -27,37 +27,39 @@ pub fn derive_merge_from(input: TokenStream) -> TokenStream {
     let (impl_generics, ty_generics, where_clause) = input.generics.split_for_impl();
 
     let merge_body = match &input.data {
-        Data::Struct(data_struct) => match &data_struct.fields {
-            Fields::Named(fields) => {
-                let field_merges = fields.named.iter().map(|field| {
-                    let field_name = &field.ident;
-                    quote! {
-                        self.#field_name.merge_from(&other.#field_name);
-                    }
-                });
+        Data::Struct(data_struct) => {
+            match &data_struct.fields {
+                Fields::Named(fields) => {
+                    let field_merges = fields.named.iter().map(|field| {
+                        let field_name = &field.ident;
+                        quote! {
+                            self.#field_name.merge_from(&other.#field_name);
+                        }
+                    });
 
-                quote! {
-                    #(#field_merges)*
-                }
-            }
-            Fields::Unnamed(fields) => {
-                let field_merges = fields.unnamed.iter().enumerate().map(|(i, _)| {
-                    let field_index = syn::Index::from(i);
                     quote! {
-                        self.#field_index.merge_from(&other.#field_index);
+                        #(#field_merges)*
                     }
-                });
+                }
+                Fields::Unnamed(fields) => {
+                    let field_merges = fields.unnamed.iter().enumerate().map(|(i, _)| {
+                        let field_index = syn::Index::from(i);
+                        quote! {
+                            self.#field_index.merge_from(&other.#field_index);
+                        }
+                    });
 
-                quote! {
-                    #(#field_merges)*
+                    quote! {
+                        #(#field_merges)*
+                    }
+                }
+                Fields::Unit => {
+                    quote! {
+                        // No fields to merge for unit structs
+                    }
                 }
             }
-            Fields::Unit => {
-                quote! {
-                    // No fields to merge for unit structs
-                }
-            }
-        },
+        }
         Data::Enum(_) => {
             quote! {
                 *self = other.clone();

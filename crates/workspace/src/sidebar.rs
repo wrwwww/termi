@@ -8,6 +8,7 @@ use crate::{
     theme::active,
 };
 use gpui::*;
+use theme::Theme;
 
 pub struct Sidebar {
     state: Entity<AppState>,
@@ -139,7 +140,7 @@ fn render_group(
     sessions: Vec<crate::state::Session>,
     collapsed: bool,
     active_id: Option<String>,
-    t: &crate::theme::Theme,
+    t: &Theme,
     cx: &mut Context<Sidebar>,
 ) -> impl IntoElement {
     let chevron_rot = if collapsed { "›" } else { "⌄" };
@@ -190,7 +191,7 @@ fn render_group(
 fn render_session_item(
     session: crate::state::Session,
     is_active: bool,
-    t: &crate::theme::Theme,
+    t: &Theme,
     cx: &mut Context<Sidebar>,
 ) -> impl IntoElement {
     let id = session.id.clone();
@@ -254,7 +255,7 @@ fn render_session_item(
         )
 }
 
-fn icon_button(t: &crate::theme::Theme, glyph: &'static str) -> impl IntoElement {
+fn icon_button(t: &Theme, glyph: &'static str) -> impl IntoElement {
     div()
         .size(px(24.0))
         .flex()

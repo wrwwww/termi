@@ -2,6 +2,7 @@
 
 use crate::{state::AppState, theme::active};
 use gpui::*;
+use theme::Theme;
 
 pub struct TabsBar {
     state: Entity<AppState>,
@@ -56,7 +57,7 @@ impl Render for TabsBar {
 fn render_tab(
     session: &crate::state::Session,
     is_active: bool,
-    t: &crate::theme::Theme,
+    t: &Theme,
     _cx: &mut Context<TabsBar>,
 ) -> impl IntoElement {
     div()
@@ -96,7 +97,7 @@ fn render_tab(
         )
 }
 
-fn render_new_tab_btn(t: &crate::theme::Theme) -> impl IntoElement {
+fn render_new_tab_btn(t: &Theme) -> impl IntoElement {
     div()
         .id("tab-new")
         .px(px(12.0))

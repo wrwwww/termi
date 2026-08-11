@@ -12,6 +12,7 @@ use gpui::{
     App, AssetSource, Hsla, Pixels, SharedString, Styled, Tiling, WindowAppearance,
     WindowBackgroundAppearance, px,
 };
+use log::info;
 use serde::Deserialize;
 use serde::Serialize;
 
@@ -91,11 +92,12 @@ pub enum AppearanceContent {
 /// Which themes should be loaded. This is used primarily for testing.
 pub enum LoadThemes {
     /// Only load the base theme.
-    ///
+    /// 仅加载基础主题没提供用户更换主题的功能
     /// No user themes will be loaded.
     JustBase,
 
     /// Load all of the built-in themes.
+    /// 加载所有主题
     All(Box<dyn AssetSource>),
 }
 
@@ -110,10 +112,13 @@ pub fn init(themes_to_load: LoadThemes, cx: &mut App) {
         LoadThemes::JustBase => Box::new(()) as Box<dyn AssetSource>,
         LoadThemes::All(assets) => assets,
     };
+    // 初始化全局的主题注册中心
     ThemeRegistry::set_global(assets, cx);
+    // 初始化全局字体管理中心
     FontFamilyCache::init_global(cx);
 
     let themes = ThemeRegistry::default_global(cx);
+    // 加载默认主题，并且使用主题中心第一个做兜底
     let theme = themes.get(DEFAULT_DARK_THEME).unwrap_or_else(|_| {
         themes
             .list()
@@ -122,6 +127,7 @@ pub fn init(themes_to_load: LoadThemes, cx: &mut App) {
             .map(|m| themes.get(&m.name).unwrap())
             .unwrap()
     });
+
     // let icon_theme = themes.default_icon_theme().unwrap();
     cx.set_global(GlobalTheme { theme });
 }

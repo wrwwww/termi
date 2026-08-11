@@ -22,7 +22,7 @@ pub mod state;
 pub mod statusbar;
 pub mod tabs;
 pub mod terminal;
-pub mod theme;
+// pub mod theme;
 
 use crate::{
     connection_dialog::ConnectionDialog,
@@ -34,13 +34,11 @@ use crate::{
     statusbar::StatusBar,
     tabs::TabsBar,
     terminal::TerminalPane,
-    theme::active,
 };
+use ::theme::{ActiveTheme, Theme};
 use gpui::{prelude::FluentBuilder, *};
-use gpui_component::{IconName, TitleBar, menu::AppMenuBar};
-use gpui_rsx::rsx;
-use log::info;
-use theme::rgba;
+use gpui_component::{TitleBar, white};
+
 pub struct WorkspaceView {
     state: Entity<AppState>,
 
@@ -85,7 +83,7 @@ impl WorkspaceView {
 
 impl Render for WorkspaceView {
     fn render(&mut self, windows: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
-        let t = active(cx).clone();
+        let t = cx.theme();
         let view_mode = self.state.read(cx).active_view;
 
         // Choose the central canvas based on active_view.
@@ -103,7 +101,7 @@ impl Render for WorkspaceView {
                         .flex_1()
                         .min_w_0()
                         .min_h_0()
-                        .bg(t.surfaces.bg)
+                        .bg(t.colors().background)
                         .child(self.tabsbar.clone())
                         .child(self.terminal_pane.clone()),
                 )
@@ -128,49 +126,56 @@ impl Render for WorkspaceView {
             .flex()
             .flex_col()
             .size_full()
-            .bg(t.surfaces.bg)
+            .bg(t.colors().background)
             // ============== HEADER ==============
             .child(
-                TitleBar::new().bg(t.surfaces.bg).child(
-                    div().flex().items_center().gap_3().child(
-                        div()
-                            .flex()
-                            .flex_row()
-                            .items_center()
-                            .h(px(t.layout.header_height))
-                            .px(px(16.0))
-                            .bg(t.surfaces.surface)
-                            .border_b_1()
-                            .border_color(t.border.border)
-                            // brand
-                            .child(
-                                div()
-                                    .flex()
-                                    .items_center()
-                                    .gap(px(8.0))
-                                    .ml(px(16.0))
-                                    .text_color(t.text.text)
-                                    .font_weight(FontWeight::SEMIBOLD)
-                                    .child(
-                                        // logo glyph (>) — replace with SVG path in production
-                                        div().text_color(t.accent.accent).child(">"),
-                                    )
-                                    .child("Lumen"),
-                            )
-                            // top-level menu
-                            .child(
-                                div()
-                                    .flex()
-                                    .gap(px(2.0))
-                                    .ml(px(24.0))
-                                    .child(menu_button("File", &t))
-                                    .child(menu_button("Edit", &t))
-                                    .child(menu_button("View", &t))
-                                    .child(menu_button("Window", &t))
-                                    .child(menu_button("Help", &t)),
-                            ),
+                TitleBar::new()
+                    .bg(t.colors().background)
+                    .border_color(t.colors().border)
+                    .text_color(white())
+                    .child(
+                        div().flex().items_center().gap_3().child(
+                            div()
+                                .flex()
+                                .flex_row()
+                                .items_center()
+                                .h_full()
+                                // .h(px(t.layout.header_height))
+                                .px(px(16.0))
+                                .bg(t.colors().background)
+                                .border_b_1()
+                                .border_color(t.colors().border)
+                                // brand
+                                .child(
+                                    div()
+                                        .flex()
+                                        .items_center()
+                                        .gap(px(8.0))
+                                        // .ml(px(16.0))
+                                        .text_color(t.colors().text)
+                                        .font_weight(FontWeight::SEMIBOLD)
+                                        .child(
+                                            // logo glyph (>) — replace with SVG path in production
+                                            div()
+                                                .text_color(t.styles.colors.icon_accent)
+                                                .child(">"),
+                                        )
+                                        .child("Termi"),
+                                )
+                                // top-level menu
+                                .child(
+                                    div()
+                                        .flex()
+                                        .gap(px(2.0))
+                                        .ml(px(24.0))
+                                        .child(menu_button("File", &t))
+                                        .child(menu_button("Edit", &t))
+                                        .child(menu_button("View", &t))
+                                        .child(menu_button("Window", &t))
+                                        .child(menu_button("Help", &t)),
+                                ),
+                        ),
                     ),
-                ),
             )
             // .child(render_header(&t, windows, cx))
             // ============== CANVAS ==============
@@ -192,38 +197,38 @@ impl Render for TitleBarState {
     }
 }
 
-fn menu_button(label: &'static str, t: &crate::theme::Theme) -> impl IntoElement {
+fn menu_button(label: &'static str, t: &Theme) -> impl IntoElement {
     div()
         // .id(("menu", label))
         .px(px(10.0))
         .py(px(4.0))
         .rounded(px(4.0))
-        .text_color(t.text.text_muted)
+        // .text_color(t)
         .text_size(px(12.0))
         .cursor_pointer()
-        .hover(|s| s.bg(t.surfaces.surface_2).text_color(t.text.text))
+        .hover(|s| s.bg(t.colors().background).text_color(t.colors().text))
         .child(label)
 }
 
-fn header_icon_button(t: &crate::theme::Theme) -> impl IntoElement {
-    div()
-        .size(px(28.0))
-        .flex()
-        .items_center()
-        .justify_center()
-        .rounded(px(4.0))
-        .text_color(t.text.text_muted)
-        .cursor_pointer()
-        .hover(|s| s.bg(t.surfaces.surface_2).text_color(t.text.text))
-        // placeholder dot — replace with svg::path()
-        .child(
-            div()
-                .size(px(14.0))
-                .rounded_full()
-                .border_1()
-                .border_color(t.border.border_strong),
-        )
-}
+// fn header_icon_button(t: &Theme) -> impl IntoElement {
+//     div()
+//         .size(px(28.0))
+//         .flex()
+//         .items_center()
+//         .justify_center()
+//         .rounded(px(4.0))
+//         .text_color(t.text.text_muted)
+//         .cursor_pointer()
+//         .hover(|s| s.bg(t.surfaces.surface_2).text_color(t.text.text))
+//         // placeholder dot — replace with svg::path()
+//         .child(
+//             div()
+//                 .size(px(14.0))
+//                 .rounded_full()
+//                 .border_1()
+//                 .border_color(t.colors().border_variant),
+//         )
+// }
 
 // impl RenderOnce for TitleBar {
 //     fn render(self, window: &mut Window, cx: &mut App) -> impl IntoElement {
@@ -237,7 +242,7 @@ fn header_icon_button(t: &crate::theme::Theme) -> impl IntoElement {
 //             .px(px(16.0))
 //             .bg(t.surfaces.surface)
 //             .border_b_1()
-//             .border_color(t.border.border)
+//             .border_color(t.colors().border.border)
 //             // brand
 //             .child(
 //                 div()

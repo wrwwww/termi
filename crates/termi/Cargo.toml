@@ -25,3 +25,4 @@ terminal.workspace = true
 # terminal_view.workspace = true
 gpui-component-assets.workspace = true
 gpui-component.workspace = true
+palette = { workspace = true, features = ["std"] }

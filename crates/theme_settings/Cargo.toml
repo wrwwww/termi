@@ -22,3 +22,6 @@ settings_content.workspace = true
 log.workspace = true
 serde_json_lenient.workspace = true
 uuid.workspace = true
+palette.workspace=true
+derive_refineable.workspace=true
+refineable.workspace=true

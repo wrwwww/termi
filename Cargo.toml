@@ -35,7 +35,8 @@ settings = { path = "crates/settings" }
 settings_macros = { path = "crates/settings_macros" }
 settings_content = { path = "crates/settings_content" }
 settings_ui = { path = "crates/settings_ui" }
-
+refineable = { path = "crates/refineable" }
+derive_refineable = { path = "crates/refineable/derive_refineable" }
 theme = { path = "crates/theme" }
 theme_settings = { path = "crates/theme_settings" }
 terminal = { path = "crates/terminal" }
@@ -63,7 +64,7 @@ vte = "0.15.0"
 #termion = "4.0.6"
 regex = "1.12.4"
 dirs = "6.0.0"
-palette = "0.7.6"
+palette = {version="0.7.6",default-features = false,features=["std"]}
 toml = "1.1.2"
 # ssh2 = "0.9.6"
 notify = "8.2.0"

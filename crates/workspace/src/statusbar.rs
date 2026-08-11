@@ -6,6 +6,7 @@
 use crate::state::{AppState, SessionStatus};
 use crate::theme::active;
 use gpui::*;
+use theme::Theme;
 
 pub struct StatusBar {
     state: Entity<AppState>,
@@ -126,7 +127,7 @@ impl Render for StatusBar {
     }
 }
 
-fn group<F>(t: &crate::theme::Theme, f: F, with_border: bool) -> impl IntoElement
+fn group<F>(t: &Theme, f: F, with_border: bool) -> impl IntoElement
 where
     F: FnOnce(Div) -> Div,
 {
@@ -142,14 +143,14 @@ where
     f(d)
 }
 
-fn pill(t: &crate::theme::Theme, label: &str) -> impl IntoElement {
+fn pill(t: &Theme, label: &str) -> impl IntoElement {
     div()
         .text_color(t.text.text_muted)
         .text_size(px(11.5))
         .child(text!(label))
 }
 
-fn render_theme_toggle(t: &crate::theme::Theme) -> impl IntoElement {
+fn render_theme_toggle(t: &Theme) -> impl IntoElement {
     div()
         .flex()
         .items_center()
@@ -163,7 +164,7 @@ fn render_theme_toggle(t: &crate::theme::Theme) -> impl IntoElement {
         .child(theme_pill_btn(t, "System", false))
 }
 
-fn theme_pill_btn(t: &crate::theme::Theme, label: &str, active: bool) -> impl IntoElement {
+fn theme_pill_btn(t: &Theme, label: &str, active: bool) -> impl IntoElement {
     let (bg, color) = if active {
         (t.surfaces.surface, t.text.text)
     } else {

@@ -2,6 +2,7 @@
 
 use crate::{state::AppState, theme::active};
 use gpui::*;
+use theme::Theme;
 
 pub struct FilesPane {
     state: Entity<AppState>,
@@ -92,13 +93,7 @@ impl Render for FilesPane {
     }
 }
 
-fn row(
-    t: &crate::theme::Theme,
-    name: &str,
-    perms: &str,
-    size: &str,
-    is_dir: bool,
-) -> impl IntoElement {
+fn row(t: &Theme, name: &str, perms: &str, size: &str, is_dir: bool) -> impl IntoElement {
     let icon = if is_dir { "▸" } else { "·" };
     let icon_color = if is_dir {
         t.semantic.amber
@@ -142,7 +137,7 @@ fn row(
         .child(div().text_color(t.text.text_subtle).child(text!(size)))
 }
 
-fn icon_btn(t: &crate::theme::Theme, glyph: &'static str) -> impl IntoElement {
+fn icon_btn(t: &Theme, glyph: &'static str) -> impl IntoElement {
     div()
         .size(px(24.0))
         .flex()

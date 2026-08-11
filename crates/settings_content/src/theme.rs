@@ -286,8 +286,8 @@ pub enum ThemeSelection {
     },
 }
 
-pub const DEFAULT_LIGHT_THEME: &'static str = "One Light";
-pub const DEFAULT_DARK_THEME: &'static str = "One Dark";
+pub const DEFAULT_LIGHT_THEME: &'static str = "Light";
+pub const DEFAULT_DARK_THEME: &'static str = "Dark";
 
 impl Default for ThemeSelection {
     fn default() -> Self {
@@ -461,10 +461,9 @@ pub struct ThemeStyleContent {
 
     #[serde(default)]
     pub players: Vec<PlayerColorContent>,
-
-    /// The styles for syntax nodes.
-    #[serde(default)]
-    pub syntax: IndexMap<String, HighlightStyleContent>,
+    //  The styles for syntax nodes.
+    // #[serde(default)]
+    // pub syntax: IndexMap<String, HighlightStyleContent>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
@@ -1015,14 +1014,6 @@ pub struct ThemeColorsContent {
     /// Background color for row highlights of "theirs" regions in merge conflicts.
     #[serde(rename = "version_control.conflict_marker.theirs")]
     pub version_control_conflict_marker_theirs: Option<ThemeColor>,
-
-    /// Deprecated in favor of `version_control_conflict_marker_ours`.
-    #[deprecated]
-    pub version_control_conflict_ours_background: Option<ThemeColor>,
-
-    /// Deprecated in favor of `version_control_conflict_marker_theirs`.
-    #[deprecated]
-    pub version_control_conflict_theirs_background: Option<ThemeColor>,
 
     /// Background color for Vim Normal mode indicator.
     #[serde(rename = "vim.normal.background")]

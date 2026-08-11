@@ -2,26 +2,85 @@ pub mod schema;
 use std::{collections::HashMap, sync::Arc};
 
 use anyhow::{Context, Result};
-use gpui::{App, Font, FontFallbacks, FontStyle, Global, Pixels, SharedString, Window, px};
+use gpui::{App, Font, FontFallbacks, FontStyle, Global, Hsla, Pixels, SharedString, Window, px};
+use palette::convert::FromColorUnclamped;
+use refineable::Refineable;
 use serde::{Deserialize, Serialize};
 use settings::{Settings, content_into_gpui::IntoGpui, settings_store::SettingsStore};
 use settings_content::{
     SettingsContent,
     theme::{
-        BufferLineHeight, DEFAULT_DARK_THEME, DEFAULT_LIGHT_THEME, FontFamilyName,
-        ThemeAppearanceMode, ThemeName, ThemeStyleContent,
+        AccentContent, BufferLineHeight, DEFAULT_DARK_THEME, DEFAULT_LIGHT_THEME, FontFamilyName,
+        StatusColorsContent, ThemeAppearanceMode, ThemeColorsContent, ThemeName, ThemeStyleContent,
     },
 };
 use settings_macros::RegisterSetting;
 use theme::{
     Appearance, AppearanceContent, GlobalTheme, LoadThemes, SystemAppearance, Theme, ThemeFamily,
-    colors::{StatusColors, ThemeColors, ThemeStyles},
+    colors::{
+        AccentColors, StatusColors, StatusColorsRefinement, ThemeColors, ThemeColorsRefinement,
+        ThemeStyles,
+    },
     default_colors::{SystemColors, default_color_scales},
     registry::ThemeRegistry,
 };
 
 use crate::schema::{ThemeContent, ThemeFamilyContent};
+pub trait ThemeSettingsProvider: Send + Sync + 'static {
+    /// Returns the font used for UI elements.
+    fn ui_font<'a>(&'a self, cx: &'a App) -> &'a Font;
 
+    /// Returns the font used for buffers and the terminal.
+    fn buffer_font<'a>(&'a self, cx: &'a App) -> &'a Font;
+
+    /// Returns the UI font size in pixels.
+    fn ui_font_size(&self, cx: &App) -> Pixels;
+
+    /// Returns the buffer font size in pixels.
+    fn buffer_font_size(&self, cx: &App) -> Pixels;
+
+    // Returns the current UI density setting.
+    // fn ui_density(&self, cx: &App) -> UiDensity;
+}
+
+struct GlobalThemeSettingsProvider(Box<dyn ThemeSettingsProvider>);
+
+impl Global for GlobalThemeSettingsProvider {}
+
+/// Registers the global [`ThemeSettingsProvider`] implementation.
+///
+/// This should be called during application initialization by the crate
+/// that owns the concrete theme settings (e.g. `theme_settings`).
+pub fn set_theme_settings_provider(provider: Box<dyn ThemeSettingsProvider>, cx: &mut App) {
+    cx.set_global(GlobalThemeSettingsProvider(provider));
+}
+
+/// Returns the global [`ThemeSettingsProvider`].
+///
+/// Panics if no provider has been registered via [`set_theme_settings_provider`].
+pub fn theme_settings(cx: &App) -> &dyn ThemeSettingsProvider {
+    &*cx.global::<GlobalThemeSettingsProvider>().0
+}
+
+struct ThemeSettingsProviderImpl;
+
+impl ThemeSettingsProvider for ThemeSettingsProviderImpl {
+    fn ui_font<'a>(&'a self, cx: &'a App) -> &'a Font {
+        &ThemeSettings::get_global(cx).ui_font
+    }
+
+    fn buffer_font<'a>(&'a self, cx: &'a App) -> &'a Font {
+        &ThemeSettings::get_global(cx).buffer_font
+    }
+
+    fn ui_font_size(&self, cx: &App) -> Pixels {
+        ThemeSettings::get_global(cx).ui_font_size(cx)
+    }
+
+    fn buffer_font_size(&self, cx: &App) -> Pixels {
+        ThemeSettings::get_global(cx).buffer_font_size(cx)
+    }
+}
 /// Initialize the theme system with settings integration.
 ///
 /// This is the full initialization for the application. It calls [`theme::init`]
@@ -30,7 +89,7 @@ pub fn init(themes_to_load: LoadThemes, cx: &mut App) {
     let load_user_themes = matches!(&themes_to_load, LoadThemes::All(_));
 
     theme::init(themes_to_load, cx);
-    // theme::set_theme_settings_provider(Box::new(ThemeSettingsProviderImpl), cx);
+    set_theme_settings_provider(Box::new(ThemeSettingsProviderImpl), cx);
 
     if load_user_themes {
         let registry = ThemeRegistry::global(cx);
@@ -42,46 +101,46 @@ pub fn init(themes_to_load: LoadThemes, cx: &mut App) {
     GlobalTheme::update_theme(cx, theme);
     // GlobalTheme::update_icon_theme(cx, icon_theme);
 
-    let settings = ThemeSettings::get_global(cx);
+    // let settings = ThemeSettings::get_global(cx);
 
-    let mut prev_buffer_font_size_settings = settings.buffer_font_size_settings();
-    let mut prev_ui_font_size_settings = settings.ui_font_size_settings();
-    let mut prev_theme_name = settings.theme.name(SystemAppearance::global(cx).0);
-    // let mut prev_icon_theme_name = settings.icon_theme.name(SystemAppearance::global(cx).0);
-    let mut prev_theme_overrides = (
-        settings.experimental_theme_overrides.clone(),
-        settings.theme_overrides.clone(),
-    );
+    // let mut prev_buffer_font_size_settings = settings.buffer_font_size_settings();
+    // let mut prev_ui_font_size_settings = settings.ui_font_size_settings();
+    // let mut prev_theme_name = settings.theme.name(SystemAppearance::global(cx).0);
+    // // let mut prev_icon_theme_name = settings.icon_theme.name(SystemAppearance::global(cx).0);
+    // let mut prev_theme_overrides = (
+    //     settings.experimental_theme_overrides.clone(),
+    //     settings.theme_overrides.clone(),
+    // );
 
-    cx.observe_global::<SettingsStore>(move |cx| {
-        let settings = ThemeSettings::get_global(cx);
+    // cx.observe_global::<SettingsStore>(move |cx| {
+    //     let settings = ThemeSettings::get_global(cx);
 
-        let buffer_font_size_settings = settings.buffer_font_size_settings();
-        let ui_font_size_settings = settings.ui_font_size_settings();
-        let theme_name = settings.theme.name(SystemAppearance::global(cx).0);
-        // let icon_theme_name = settings.icon_theme.name(SystemAppearance::global(cx).0);
-        let theme_overrides = (
-            settings.experimental_theme_overrides.clone(),
-            settings.theme_overrides.clone(),
-        );
+    //     let buffer_font_size_settings = settings.buffer_font_size_settings();
+    //     let ui_font_size_settings = settings.ui_font_size_settings();
+    //     let theme_name = settings.theme.name(SystemAppearance::global(cx).0);
+    //     // let icon_theme_name = settings.icon_theme.name(SystemAppearance::global(cx).0);
+    //     let theme_overrides = (
+    //         settings.experimental_theme_overrides.clone(),
+    //         settings.theme_overrides.clone(),
+    //     );
 
-        if buffer_font_size_settings != prev_buffer_font_size_settings {
-            prev_buffer_font_size_settings = buffer_font_size_settings;
-            reset_buffer_font_size(cx);
-        }
+    //     if buffer_font_size_settings != prev_buffer_font_size_settings {
+    //         prev_buffer_font_size_settings = buffer_font_size_settings;
+    //         reset_buffer_font_size(cx);
+    //     }
 
-        if ui_font_size_settings != prev_ui_font_size_settings {
-            prev_ui_font_size_settings = ui_font_size_settings;
-            reset_ui_font_size(cx);
-        }
+    //     if ui_font_size_settings != prev_ui_font_size_settings {
+    //         prev_ui_font_size_settings = ui_font_size_settings;
+    //         reset_ui_font_size(cx);
+    //     }
 
-        if theme_name != prev_theme_name || theme_overrides != prev_theme_overrides {
-            prev_theme_name = theme_name;
-            prev_theme_overrides = theme_overrides;
-            reload_theme(cx);
-        }
-    })
-    .detach();
+    //     if theme_name != prev_theme_name || theme_overrides != prev_theme_overrides {
+    //         prev_theme_name = theme_name;
+    //         prev_theme_overrides = theme_overrides;
+    //         reload_theme(cx);
+    //     }
+    // })
+    // .detach();
 }
 
 /// Gets the font size, adjusted by the difference between the current buffer font size and the one set in the settings.
@@ -163,6 +222,7 @@ fn font_fallbacks_from_settings(fallbacks: Option<Vec<FontFamilyName>>) -> Optio
 }
 
 /// Loads the themes bundled with the Zed binary into the registry.
+/// 从二进制文件中加载内置主题
 pub fn load_bundled_themes(registry: &ThemeRegistry) {
     let theme_paths = registry
         .assets()
@@ -244,10 +304,31 @@ pub fn refine_theme(theme: &ThemeContent) -> Theme {
         AppearanceContent::Dark => Appearance::Dark,
     };
 
+    let mut refined_status_colors = match theme.appearance {
+        AppearanceContent::Light => StatusColors::light(),
+        AppearanceContent::Dark => StatusColors::dark(),
+    };
+    let mut status_colors_refinement = status_colors_refinement(&theme.style.status);
+    apply_status_color_defaults(&mut status_colors_refinement);
+    refined_status_colors.refine(&status_colors_refinement);
+
     let mut refined_theme_colors = match theme.appearance {
         AppearanceContent::Light => ThemeColors::light(),
         AppearanceContent::Dark => ThemeColors::dark(),
     };
+    let mut theme_colors_refinement = theme_colors_refinement(
+        &theme.style.colors,
+        &status_colors_refinement,
+        theme.appearance == AppearanceContent::Light,
+    );
+    // theme::apply_theme_color_defaults(&mut theme_colors_refinement, &refined_player_colors);
+    refined_theme_colors.refine(&theme_colors_refinement);
+
+    let mut refined_accent_colors = match theme.appearance {
+        AppearanceContent::Light => AccentColors::light(),
+        AppearanceContent::Dark => AccentColors::dark(),
+    };
+    merge_accent_colors(&mut refined_accent_colors, &theme.style.accents);
 
     let window_background_appearance = theme
         .style
@@ -262,9 +343,10 @@ pub fn refine_theme(theme: &ThemeContent) -> Theme {
         styles: ThemeStyles {
             system: SystemColors::default(),
             window_background_appearance,
-
-            colors: refined_theme_colors.clone(),
-            status: StatusColors::dark(),
+            accents: refined_accent_colors,
+            colors: refined_theme_colors,
+            status: refined_status_colors,
+            // player: refined_player_colors,
         },
     }
 }
@@ -276,12 +358,13 @@ pub fn reload_theme(cx: &mut App) {
 }
 fn configured_theme(cx: &mut App) -> Arc<Theme> {
     let themes = ThemeRegistry::default_global(cx);
-    let theme_settings = ThemeSettings::get_global(cx);
+    // let theme_settings = ThemeSettings::get_global(cx);
     let system_appearance = SystemAppearance::global(cx);
 
-    let theme_name = theme_settings.theme.name(*system_appearance);
+    // let theme_name = theme_settings.theme.name(*system_appearance);
+    let theme_name = "default".to_string();
 
-    let theme = match themes.get(&theme_name.0) {
+    let theme = match themes.get(&theme_name) {
         Ok(theme) => theme,
         Err(err) => {
             if themes.extensions_loaded() {
@@ -292,7 +375,8 @@ fn configured_theme(cx: &mut App) -> Arc<Theme> {
                 .unwrap_or_else(|_| themes.get(DEFAULT_DARK_THEME).unwrap())
         }
     };
-    theme_settings.apply_theme_overrides(theme)
+    theme
+    // theme_settings.apply_theme_overrides(theme)
 }
 
 #[derive(Clone, PartialEq, RegisterSetting)]
@@ -647,13 +731,1772 @@ pub struct AgentBufferFontSize(Pixels);
 
 impl Global for AgentBufferFontSize {}
 
-#[derive(Default)]
-pub struct GitCommitBufferFontSize(Pixels);
-
-impl Global for GitCommitBufferFontSize {}
-
 /// In-memory override for the markdown preview font size.
 #[derive(Default)]
 pub struct MarkdownPreviewFontSize(Pixels);
 
 impl Global for MarkdownPreviewFontSize {}
+
+mod test {
+
+    use std::fs;
+
+    use settings_content::theme::{
+        AccentContent, PlayerColorContent, StatusColorsContent, ThemeColorsContent,
+        ThemeStyleContent,
+    };
+
+    use crate::schema::{ThemeContent, ThemeFamilyContent};
+
+    fn build_theme(name: &str, author: &str, themes: Vec<ThemeContent>) -> ThemeFamilyContent {
+        let theme_family = ThemeFamilyContent {
+            name: name.into(),
+            author: author.into(),
+            themes,
+        };
+        return theme_family;
+    }
+    #[test]
+    fn foo() {
+        let dark = ThemeContent {
+            name: "dark".into(),
+            appearance: theme::AppearanceContent::Dark,
+            style: ThemeStyleContent {
+                window_background_appearance: Some(
+                    settings_content::theme::WindowBackgroundContent::Transparent,
+                ),
+                accents: vec![AccentContent(Some(
+                    settings_content::theme::ThemeColor::from("#0a0a0a"),
+                ))],
+                colors: ThemeColorsContent {
+                    // ============ 背景和表面颜色 ============
+                    background: Some(settings_content::theme::ThemeColor::from("#0a0a0a")),
+                    surface_background: Some(settings_content::theme::ThemeColor::from("#0f1115")),
+                    elevated_surface_background: Some(settings_content::theme::ThemeColor::from(
+                        "#16181d",
+                    )),
+                    element_background: Some(settings_content::theme::ThemeColor::from("#1c1f26")),
+
+                    // ============ 文本颜色 ============
+                    text: Some(settings_content::theme::ThemeColor::from("#e6e8eb")),
+                    text_muted: Some(settings_content::theme::ThemeColor::from("#9aa3af")),
+                    // text_subtle: Some(settings_content::theme::ThemeColor::from("#6b7280")),
+                    text_placeholder: Some(settings_content::theme::ThemeColor::from("#6b7280")),
+                    text_disabled: Some(settings_content::theme::ThemeColor::from("#6b728080")),
+
+                    // ============ 边框颜色 ============
+                    border: Some(settings_content::theme::ThemeColor::from("#1f2228")),
+                    // border_strong: Some(settings_content::theme::ThemeColor::from("#2a2e36")),
+                    border_variant: Some(settings_content::theme::ThemeColor::from("#1f2228")),
+                    border_focused: Some(settings_content::theme::ThemeColor::from("#7dd3fc")),
+                    border_selected: Some(settings_content::theme::ThemeColor::from("#38bdf8")),
+                    border_transparent: Some(settings_content::theme::ThemeColor::from(
+                        "#1f222880",
+                    )),
+                    border_disabled: Some(settings_content::theme::ThemeColor::from("#1f22284d")),
+
+                    // ============ 强调色 ============
+                    text_accent: Some(settings_content::theme::ThemeColor::from("#7dd3fc")),
+                    icon_accent: Some(settings_content::theme::ThemeColor::from("#7dd3fc")),
+
+                    // ============ 元素颜色 ============
+                    element_hover: Some(settings_content::theme::ThemeColor::from("#1c1f26")),
+                    element_active: Some(settings_content::theme::ThemeColor::from("#2a2e36")),
+                    element_selected: Some(settings_content::theme::ThemeColor::from("#2a2e36")),
+                    element_disabled: Some(settings_content::theme::ThemeColor::from("#1c1f2680")),
+                    element_selection_background: Some(settings_content::theme::ThemeColor::from(
+                        "#7dd3fc26",
+                    )),
+
+                    // ============ Ghost 元素 ============
+                    ghost_element_background: Some(settings_content::theme::ThemeColor::from(
+                        "#7dd3fc0d",
+                    )),
+                    ghost_element_hover: Some(settings_content::theme::ThemeColor::from(
+                        "#7dd3fc1a",
+                    )),
+                    ghost_element_active: Some(settings_content::theme::ThemeColor::from(
+                        "#7dd3fc26",
+                    )),
+                    ghost_element_selected: Some(settings_content::theme::ThemeColor::from(
+                        "#7dd3fc33",
+                    )),
+                    ghost_element_disabled: Some(settings_content::theme::ThemeColor::from(
+                        "#7dd3fc0d",
+                    )),
+
+                    // ============ 图标颜色 ============
+                    icon: Some(settings_content::theme::ThemeColor::from("#e6e8eb")),
+                    icon_muted: Some(settings_content::theme::ThemeColor::from("#9aa3af")),
+                    icon_disabled: Some(settings_content::theme::ThemeColor::from("#9aa3af4d")),
+                    icon_placeholder: Some(settings_content::theme::ThemeColor::from("#6b7280")),
+
+                    // ============ 编辑器颜色 ============
+                    editor_background: Some(settings_content::theme::ThemeColor::from("#0a0a0a")),
+                    editor_foreground: Some(settings_content::theme::ThemeColor::from("#e6e8eb")),
+                    editor_line_number: Some(settings_content::theme::ThemeColor::from("#6b7280")),
+                    editor_active_line_number: Some(settings_content::theme::ThemeColor::from(
+                        "#e6e8eb",
+                    )),
+                    editor_hover_line_number: Some(settings_content::theme::ThemeColor::from(
+                        "#9aa3af",
+                    )),
+                    editor_active_line_background: Some(settings_content::theme::ThemeColor::from(
+                        "#1c1f26",
+                    )),
+                    editor_gutter_background: Some(settings_content::theme::ThemeColor::from(
+                        "#0f1115",
+                    )),
+                    editor_subheader_background: Some(settings_content::theme::ThemeColor::from(
+                        "#0f1115",
+                    )),
+                    editor_highlighted_line_background: Some(
+                        settings_content::theme::ThemeColor::from("#7dd3fc0d"),
+                    ),
+                    editor_debugger_active_line_background: Some(
+                        settings_content::theme::ThemeColor::from("#7dd3fc14"),
+                    ),
+                    editor_invisible: Some(settings_content::theme::ThemeColor::from("#1f222880")),
+
+                    // ============ 编辑器缩进和换行引导 ============
+                    editor_indent_guide: Some(settings_content::theme::ThemeColor::from("#1f2228")),
+                    editor_indent_guide_active: Some(settings_content::theme::ThemeColor::from(
+                        "#2a2e36",
+                    )),
+                    editor_wrap_guide: Some(settings_content::theme::ThemeColor::from("#1f2228")),
+                    editor_active_wrap_guide: Some(settings_content::theme::ThemeColor::from(
+                        "#2a2e36",
+                    )),
+
+                    // ============ 编辑器高亮 ============
+                    editor_document_highlight_read_background: Some(
+                        settings_content::theme::ThemeColor::from("#7dd3fc1a"),
+                    ),
+                    editor_document_highlight_write_background: Some(
+                        settings_content::theme::ThemeColor::from("#7dd3fc26"),
+                    ),
+                    editor_document_highlight_bracket_background: Some(
+                        settings_content::theme::ThemeColor::from("#7dd3fc1f"),
+                    ),
+
+                    // ============ Diff 颜色 ============
+                    editor_diff_hunk_added_background: Some(
+                        settings_content::theme::ThemeColor::from("#86efac1a"),
+                    ),
+                    editor_diff_hunk_added_hollow_background: Some(
+                        settings_content::theme::ThemeColor::from("#86efac0d"),
+                    ),
+                    editor_diff_hunk_added_hollow_border: Some(
+                        settings_content::theme::ThemeColor::from("#86efac4d"),
+                    ),
+                    editor_diff_hunk_deleted_background: Some(
+                        settings_content::theme::ThemeColor::from("#fca5a51a"),
+                    ),
+                    editor_diff_hunk_deleted_hollow_background: Some(
+                        settings_content::theme::ThemeColor::from("#fca5a50d"),
+                    ),
+                    editor_diff_hunk_deleted_hollow_border: Some(
+                        settings_content::theme::ThemeColor::from("#fca5a54d"),
+                    ),
+
+                    // ============ 面板颜色 ============
+                    panel_background: Some(settings_content::theme::ThemeColor::from("#0f1115")),
+                    panel_focused_border: Some(settings_content::theme::ThemeColor::from(
+                        "#7dd3fc",
+                    )),
+                    panel_indent_guide: Some(settings_content::theme::ThemeColor::from("#1f2228")),
+                    panel_indent_guide_hover: Some(settings_content::theme::ThemeColor::from(
+                        "#2a2e36",
+                    )),
+                    panel_indent_guide_active: Some(settings_content::theme::ThemeColor::from(
+                        "#2a2e36",
+                    )),
+                    panel_overlay_background: Some(settings_content::theme::ThemeColor::from(
+                        "#0f1115e6",
+                    )),
+                    panel_overlay_hover: Some(settings_content::theme::ThemeColor::from(
+                        "#1c1f26e6",
+                    )),
+
+                    // ============ 窗口/面板边框 ============
+                    pane_focused_border: Some(settings_content::theme::ThemeColor::from("#7dd3fc")),
+                    pane_group_border: Some(settings_content::theme::ThemeColor::from("#1f2228")),
+
+                    // ============ 状态栏/标题栏/工具栏 ============
+                    status_bar_background: Some(settings_content::theme::ThemeColor::from(
+                        "#0f1115",
+                    )),
+                    title_bar_background: Some(settings_content::theme::ThemeColor::from(
+                        "#0a0a0a",
+                    )),
+                    title_bar_inactive_background: Some(settings_content::theme::ThemeColor::from(
+                        "#0a0a0a",
+                    )),
+                    toolbar_background: Some(settings_content::theme::ThemeColor::from("#0f1115")),
+
+                    // ============ 标签栏 ============
+                    tab_bar_background: Some(settings_content::theme::ThemeColor::from("#0f1115")),
+                    tab_active_background: Some(settings_content::theme::ThemeColor::from(
+                        "#1c1f26",
+                    )),
+                    tab_inactive_background: Some(settings_content::theme::ThemeColor::from(
+                        "#0a0a0a",
+                    )),
+
+                    // ============ 搜索匹配 ============
+                    search_match_background: Some(settings_content::theme::ThemeColor::from(
+                        "#7dd3fc26",
+                    )),
+                    search_active_match_background: Some(
+                        settings_content::theme::ThemeColor::from("#7dd3fc4d"),
+                    ),
+
+                    // ============ 滚动条 ============
+                    deprecated_scrollbar_thumb_background: Some(
+                        settings_content::theme::ThemeColor::from("#2a2e36"),
+                    ),
+                    scrollbar_thumb_background: Some(settings_content::theme::ThemeColor::from(
+                        "#2a2e36",
+                    )),
+                    scrollbar_thumb_hover_background: Some(
+                        settings_content::theme::ThemeColor::from("#3a3f4a"),
+                    ),
+                    scrollbar_thumb_active_background: Some(
+                        settings_content::theme::ThemeColor::from("#4a4f5a"),
+                    ),
+                    scrollbar_thumb_border: Some(settings_content::theme::ThemeColor::from(
+                        "#1f2228",
+                    )),
+                    scrollbar_track_background: Some(settings_content::theme::ThemeColor::from(
+                        "#0f1115",
+                    )),
+                    scrollbar_track_border: Some(settings_content::theme::ThemeColor::from(
+                        "#1f2228",
+                    )),
+
+                    // ============ 小地图 ============
+                    minimap_thumb_background: Some(settings_content::theme::ThemeColor::from(
+                        "#2a2e3699",
+                    )),
+                    minimap_thumb_hover_background: Some(
+                        settings_content::theme::ThemeColor::from("#2a2e36cc"),
+                    ),
+                    minimap_thumb_active_background: Some(
+                        settings_content::theme::ThemeColor::from("#2a2e36e6"),
+                    ),
+                    minimap_thumb_border: Some(settings_content::theme::ThemeColor::from(
+                        "#1f2228",
+                    )),
+
+                    // ============ Drop Target ============
+                    drop_target_background: Some(settings_content::theme::ThemeColor::from(
+                        "#7dd3fc1a",
+                    )),
+                    drop_target_border: Some(settings_content::theme::ThemeColor::from("#7dd3fc")),
+
+                    // ============ Debugger ============
+                    debugger_accent: Some(settings_content::theme::ThemeColor::from("#7dd3fc")),
+
+                    // ============ 链接 ============
+                    link_text_hover: Some(settings_content::theme::ThemeColor::from("#38bdf8")),
+
+                    // ============ 版本控制 ============
+                    version_control_added: Some(settings_content::theme::ThemeColor::from(
+                        "#86efac",
+                    )),
+                    version_control_deleted: Some(settings_content::theme::ThemeColor::from(
+                        "#fca5a5",
+                    )),
+                    version_control_modified: Some(settings_content::theme::ThemeColor::from(
+                        "#fbbf24",
+                    )),
+                    version_control_renamed: Some(settings_content::theme::ThemeColor::from(
+                        "#7dd3fc",
+                    )),
+                    version_control_conflict: Some(settings_content::theme::ThemeColor::from(
+                        "#c4b5fd",
+                    )),
+                    version_control_ignored: Some(settings_content::theme::ThemeColor::from(
+                        "#6b7280",
+                    )),
+                    version_control_word_added: Some(settings_content::theme::ThemeColor::from(
+                        "#86efac4d",
+                    )),
+                    version_control_word_deleted: Some(settings_content::theme::ThemeColor::from(
+                        "#fca5a54d",
+                    )),
+                    version_control_conflict_marker_ours: Some(
+                        settings_content::theme::ThemeColor::from("#7dd3fc"),
+                    ),
+                    version_control_conflict_marker_theirs: Some(
+                        settings_content::theme::ThemeColor::from("#c4b5fd"),
+                    ),
+
+                    // ============ Vim 模式 ============
+                    vim_normal_background: Some(settings_content::theme::ThemeColor::from(
+                        "#1c1f26",
+                    )),
+                    vim_insert_background: Some(settings_content::theme::ThemeColor::from(
+                        "#0f1115",
+                    )),
+                    vim_replace_background: Some(settings_content::theme::ThemeColor::from(
+                        "#2a2e36",
+                    )),
+                    vim_visual_background: Some(settings_content::theme::ThemeColor::from(
+                        "#7dd3fc26",
+                    )),
+                    vim_visual_line_background: Some(settings_content::theme::ThemeColor::from(
+                        "#7dd3fc26",
+                    )),
+                    vim_visual_block_background: Some(settings_content::theme::ThemeColor::from(
+                        "#7dd3fc1a",
+                    )),
+                    vim_yank_background: Some(settings_content::theme::ThemeColor::from(
+                        "#7dd3fc33",
+                    )),
+                    vim_helix_jump_label_foreground: Some(
+                        settings_content::theme::ThemeColor::from("#0a0a0a"),
+                    ),
+                    vim_helix_normal_background: Some(settings_content::theme::ThemeColor::from(
+                        "#1c1f26",
+                    )),
+                    vim_helix_select_background: Some(settings_content::theme::ThemeColor::from(
+                        "#7dd3fc",
+                    )),
+                    vim_normal_foreground: Some(settings_content::theme::ThemeColor::from(
+                        "#e6e8eb",
+                    )),
+                    vim_insert_foreground: Some(settings_content::theme::ThemeColor::from(
+                        "#e6e8eb",
+                    )),
+                    vim_replace_foreground: Some(settings_content::theme::ThemeColor::from(
+                        "#e6e8eb",
+                    )),
+                    vim_visual_foreground: Some(settings_content::theme::ThemeColor::from(
+                        "#0a0a0a",
+                    )),
+                    vim_visual_line_foreground: Some(settings_content::theme::ThemeColor::from(
+                        "#0a0a0a",
+                    )),
+                    vim_visual_block_foreground: Some(settings_content::theme::ThemeColor::from(
+                        "#0a0a0a",
+                    )),
+                    vim_helix_normal_foreground: Some(settings_content::theme::ThemeColor::from(
+                        "#e6e8eb",
+                    )),
+                    vim_helix_select_foreground: Some(settings_content::theme::ThemeColor::from(
+                        "#0a0a0a",
+                    )),
+
+                    // ============ 终端颜色 ============
+                    terminal_background: Some(settings_content::theme::ThemeColor::from("#0c0d10")),
+                    terminal_foreground: Some(settings_content::theme::ThemeColor::from("#d4d4d4")),
+                    terminal_bright_foreground: Some(settings_content::theme::ThemeColor::from(
+                        "#e6e8eb",
+                    )),
+                    terminal_dim_foreground: Some(settings_content::theme::ThemeColor::from(
+                        "#6b7280",
+                    )),
+                    terminal_ansi_background: Some(settings_content::theme::ThemeColor::from(
+                        "#0c0d10",
+                    )),
+
+                    // ANSI 标准色
+                    terminal_ansi_black: Some(settings_content::theme::ThemeColor::from("#0c0d10")),
+                    terminal_ansi_red: Some(settings_content::theme::ThemeColor::from("#fca5a5")),
+                    terminal_ansi_green: Some(settings_content::theme::ThemeColor::from("#86efac")),
+                    terminal_ansi_yellow: Some(settings_content::theme::ThemeColor::from(
+                        "#fbbf24",
+                    )),
+                    terminal_ansi_blue: Some(settings_content::theme::ThemeColor::from("#7dd3fc")),
+                    terminal_ansi_magenta: Some(settings_content::theme::ThemeColor::from(
+                        "#c4b5fd",
+                    )),
+                    terminal_ansi_cyan: Some(settings_content::theme::ThemeColor::from("#7dd3fc")),
+                    terminal_ansi_white: Some(settings_content::theme::ThemeColor::from("#d4d4d4")),
+
+                    // ANSI 亮色
+                    terminal_ansi_bright_black: Some(settings_content::theme::ThemeColor::from(
+                        "#6b7280",
+                    )),
+                    terminal_ansi_bright_red: Some(settings_content::theme::ThemeColor::from(
+                        "#fca5a5",
+                    )),
+                    terminal_ansi_bright_green: Some(settings_content::theme::ThemeColor::from(
+                        "#86efac",
+                    )),
+                    terminal_ansi_bright_yellow: Some(settings_content::theme::ThemeColor::from(
+                        "#fbbf24",
+                    )),
+                    terminal_ansi_bright_blue: Some(settings_content::theme::ThemeColor::from(
+                        "#7dd3fc",
+                    )),
+                    terminal_ansi_bright_magenta: Some(settings_content::theme::ThemeColor::from(
+                        "#c4b5fd",
+                    )),
+                    terminal_ansi_bright_cyan: Some(settings_content::theme::ThemeColor::from(
+                        "#7dd3fc",
+                    )),
+                    terminal_ansi_bright_white: Some(settings_content::theme::ThemeColor::from(
+                        "#e6e8eb",
+                    )),
+
+                    // ANSI 暗色（半透明）
+                    terminal_ansi_dim_black: Some(settings_content::theme::ThemeColor::from(
+                        "#0c0d1080",
+                    )),
+                    terminal_ansi_dim_red: Some(settings_content::theme::ThemeColor::from(
+                        "#fca5a580",
+                    )),
+                    terminal_ansi_dim_green: Some(settings_content::theme::ThemeColor::from(
+                        "#86efac80",
+                    )),
+                    terminal_ansi_dim_yellow: Some(settings_content::theme::ThemeColor::from(
+                        "#fbbf2480",
+                    )),
+                    terminal_ansi_dim_blue: Some(settings_content::theme::ThemeColor::from(
+                        "#7dd3fc80",
+                    )),
+                    terminal_ansi_dim_magenta: Some(settings_content::theme::ThemeColor::from(
+                        "#c4b5fd80",
+                    )),
+                    terminal_ansi_dim_cyan: Some(settings_content::theme::ThemeColor::from(
+                        "#7dd3fc80",
+                    )),
+                    terminal_ansi_dim_white: Some(settings_content::theme::ThemeColor::from(
+                        "#d4d4d480",
+                    )),
+                },
+                status: StatusColorsContent {
+                    // ============ 冲突 ============
+                    conflict: Some(settings_content::theme::ThemeColor::from("#c4b5fd")),
+                    conflict_background: Some(settings_content::theme::ThemeColor::from(
+                        "#c4b5fd1a",
+                    )),
+                    conflict_border: Some(settings_content::theme::ThemeColor::from("#c4b5fd4d")),
+
+                    // ============ 创建 ============
+                    created: Some(settings_content::theme::ThemeColor::from("#86efac")),
+                    created_background: Some(settings_content::theme::ThemeColor::from(
+                        "#86efac1a",
+                    )),
+                    created_border: Some(settings_content::theme::ThemeColor::from("#86efac4d")),
+
+                    // ============ 删除 ============
+                    deleted: Some(settings_content::theme::ThemeColor::from("#fca5a5")),
+                    deleted_background: Some(settings_content::theme::ThemeColor::from(
+                        "#fca5a51a",
+                    )),
+                    deleted_border: Some(settings_content::theme::ThemeColor::from("#fca5a54d")),
+
+                    // ============ 错误 ============
+                    error: Some(settings_content::theme::ThemeColor::from("#fca5a5")),
+                    error_background: Some(settings_content::theme::ThemeColor::from("#fca5a51a")),
+                    error_border: Some(settings_content::theme::ThemeColor::from("#fca5a54d")),
+
+                    // ============ 隐藏 ============
+                    hidden: Some(settings_content::theme::ThemeColor::from("#6b7280")),
+                    hidden_background: Some(settings_content::theme::ThemeColor::from("#6b72801a")),
+                    hidden_border: Some(settings_content::theme::ThemeColor::from("#6b72804d")),
+
+                    // ============ 提示 ============
+                    hint: Some(settings_content::theme::ThemeColor::from("#7dd3fc")),
+                    hint_background: Some(settings_content::theme::ThemeColor::from("#7dd3fc1a")),
+                    hint_border: Some(settings_content::theme::ThemeColor::from("#7dd3fc4d")),
+
+                    // ============ 忽略 ============
+                    ignored: Some(settings_content::theme::ThemeColor::from("#6b7280")),
+                    ignored_background: Some(settings_content::theme::ThemeColor::from(
+                        "#6b72801a",
+                    )),
+                    ignored_border: Some(settings_content::theme::ThemeColor::from("#6b72804d")),
+
+                    // ============ 信息 ============
+                    info: Some(settings_content::theme::ThemeColor::from("#7dd3fc")),
+                    info_background: Some(settings_content::theme::ThemeColor::from("#7dd3fc1a")),
+                    info_border: Some(settings_content::theme::ThemeColor::from("#7dd3fc4d")),
+
+                    // ============ 修改 ============
+                    modified: Some(settings_content::theme::ThemeColor::from("#fbbf24")),
+                    modified_background: Some(settings_content::theme::ThemeColor::from(
+                        "#fbbf241a",
+                    )),
+                    modified_border: Some(settings_content::theme::ThemeColor::from("#fbbf244d")),
+
+                    // ============ 预测 ============
+                    predictive: Some(settings_content::theme::ThemeColor::from("#7dd3fc")),
+                    predictive_background: Some(settings_content::theme::ThemeColor::from(
+                        "#7dd3fc0d",
+                    )),
+                    predictive_border: Some(settings_content::theme::ThemeColor::from("#7dd3fc33")),
+
+                    // ============ 重命名 ============
+                    renamed: Some(settings_content::theme::ThemeColor::from("#7dd3fc")),
+                    renamed_background: Some(settings_content::theme::ThemeColor::from(
+                        "#7dd3fc1a",
+                    )),
+                    renamed_border: Some(settings_content::theme::ThemeColor::from("#7dd3fc4d")),
+
+                    // ============ 成功 ============
+                    success: Some(settings_content::theme::ThemeColor::from("#86efac")),
+                    success_background: Some(settings_content::theme::ThemeColor::from(
+                        "#86efac1a",
+                    )),
+                    success_border: Some(settings_content::theme::ThemeColor::from("#86efac4d")),
+
+                    // ============ 不可达 ============
+                    unreachable: Some(settings_content::theme::ThemeColor::from("#6b7280")),
+                    unreachable_background: Some(settings_content::theme::ThemeColor::from(
+                        "#6b72801a",
+                    )),
+                    unreachable_border: Some(settings_content::theme::ThemeColor::from(
+                        "#6b72804d",
+                    )),
+
+                    // ============ 警告 ============
+                    warning: Some(settings_content::theme::ThemeColor::from("#fbbf24")),
+                    warning_background: Some(settings_content::theme::ThemeColor::from(
+                        "#fbbf241a",
+                    )),
+                    warning_border: Some(settings_content::theme::ThemeColor::from("#fbbf244d")),
+                },
+                players: vec![PlayerColorContent {
+                    cursor: Some(settings_content::theme::ThemeColor::from("#7dd3fc")),
+                    background: Some(settings_content::theme::ThemeColor::from("#7dd3fc1a")),
+                    selection: Some(settings_content::theme::ThemeColor::from("#7dd3fc26")),
+                }],
+                // syntax: IndexMap::new(),
+            },
+        };
+        let light = ThemeContent {
+            name: "light".into(),
+            appearance: theme::AppearanceContent::Light,
+            style: ThemeStyleContent {
+                window_background_appearance: Some(
+                    settings_content::theme::WindowBackgroundContent::Transparent,
+                ),
+                accents: vec![AccentContent(Some(
+                    settings_content::theme::ThemeColor::from("#0284c7"),
+                ))],
+                colors: ThemeColorsContent {
+                    // ============ 背景和表面颜色 ============
+                    background: Some(settings_content::theme::ThemeColor::from("#fafafa")),
+                    surface_background: Some(settings_content::theme::ThemeColor::from("#ffffff")),
+                    elevated_surface_background: Some(settings_content::theme::ThemeColor::from(
+                        "#f4f5f7",
+                    )),
+                    element_background: Some(settings_content::theme::ThemeColor::from("#eceef2")),
+
+                    // ============ 文本颜色 ============
+                    text: Some(settings_content::theme::ThemeColor::from("#111827")),
+                    text_muted: Some(settings_content::theme::ThemeColor::from("#4b5563")),
+                    // text_subtle: Some(settings_content::theme::ThemeColor::from("#9ca3af")),
+                    text_placeholder: Some(settings_content::theme::ThemeColor::from("#9ca3af")),
+                    text_disabled: Some(settings_content::theme::ThemeColor::from("#9ca3af80")),
+
+                    // ============ 边框颜色 ============
+                    border: Some(settings_content::theme::ThemeColor::from("#e5e7eb")),
+                    // border_strong: Some(settings_content::theme::ThemeColor::from("#d1d5db")),
+                    border_variant: Some(settings_content::theme::ThemeColor::from("#e5e7eb")),
+                    border_focused: Some(settings_content::theme::ThemeColor::from("#0284c7")),
+                    border_selected: Some(settings_content::theme::ThemeColor::from("#0369a1")),
+                    border_transparent: Some(settings_content::theme::ThemeColor::from(
+                        "#e5e7eb80",
+                    )),
+                    border_disabled: Some(settings_content::theme::ThemeColor::from("#e5e7eb4d")),
+
+                    // ============ 强调色 ============
+                    text_accent: Some(settings_content::theme::ThemeColor::from("#0284c7")),
+                    icon_accent: Some(settings_content::theme::ThemeColor::from("#0284c7")),
+
+                    // ============ 元素颜色 ============
+                    element_hover: Some(settings_content::theme::ThemeColor::from("#eceef2")),
+                    element_active: Some(settings_content::theme::ThemeColor::from("#d1d5db")),
+                    element_selected: Some(settings_content::theme::ThemeColor::from("#d1d5db")),
+                    element_disabled: Some(settings_content::theme::ThemeColor::from("#eceef280")),
+                    element_selection_background: Some(settings_content::theme::ThemeColor::from(
+                        "#0284c714",
+                    )),
+
+                    // ============ Ghost 元素 ============
+                    ghost_element_background: Some(settings_content::theme::ThemeColor::from(
+                        "#0284c70d",
+                    )),
+                    ghost_element_hover: Some(settings_content::theme::ThemeColor::from(
+                        "#0284c71a",
+                    )),
+                    ghost_element_active: Some(settings_content::theme::ThemeColor::from(
+                        "#0284c726",
+                    )),
+                    ghost_element_selected: Some(settings_content::theme::ThemeColor::from(
+                        "#0284c733",
+                    )),
+                    ghost_element_disabled: Some(settings_content::theme::ThemeColor::from(
+                        "#0284c70d",
+                    )),
+
+                    // ============ 图标颜色 ============
+                    icon: Some(settings_content::theme::ThemeColor::from("#111827")),
+                    icon_muted: Some(settings_content::theme::ThemeColor::from("#4b5563")),
+                    icon_disabled: Some(settings_content::theme::ThemeColor::from("#4b55634d")),
+                    icon_placeholder: Some(settings_content::theme::ThemeColor::from("#9ca3af")),
+
+                    // ============ 编辑器颜色 ============
+                    editor_background: Some(settings_content::theme::ThemeColor::from("#fafafa")),
+                    editor_foreground: Some(settings_content::theme::ThemeColor::from("#111827")),
+                    editor_line_number: Some(settings_content::theme::ThemeColor::from("#9ca3af")),
+                    editor_active_line_number: Some(settings_content::theme::ThemeColor::from(
+                        "#111827",
+                    )),
+                    editor_hover_line_number: Some(settings_content::theme::ThemeColor::from(
+                        "#4b5563",
+                    )),
+                    editor_active_line_background: Some(settings_content::theme::ThemeColor::from(
+                        "#eceef2",
+                    )),
+                    editor_gutter_background: Some(settings_content::theme::ThemeColor::from(
+                        "#f4f5f7",
+                    )),
+                    editor_subheader_background: Some(settings_content::theme::ThemeColor::from(
+                        "#f4f5f7",
+                    )),
+                    editor_highlighted_line_background: Some(
+                        settings_content::theme::ThemeColor::from("#0284c70d"),
+                    ),
+                    editor_debugger_active_line_background: Some(
+                        settings_content::theme::ThemeColor::from("#0284c714"),
+                    ),
+                    editor_invisible: Some(settings_content::theme::ThemeColor::from("#e5e7eb80")),
+
+                    // ============ 编辑器缩进和换行引导 ============
+                    editor_indent_guide: Some(settings_content::theme::ThemeColor::from("#e5e7eb")),
+                    editor_indent_guide_active: Some(settings_content::theme::ThemeColor::from(
+                        "#d1d5db",
+                    )),
+                    editor_wrap_guide: Some(settings_content::theme::ThemeColor::from("#e5e7eb")),
+                    editor_active_wrap_guide: Some(settings_content::theme::ThemeColor::from(
+                        "#d1d5db",
+                    )),
+
+                    // ============ 编辑器高亮 ============
+                    editor_document_highlight_read_background: Some(
+                        settings_content::theme::ThemeColor::from("#0284c71a"),
+                    ),
+                    editor_document_highlight_write_background: Some(
+                        settings_content::theme::ThemeColor::from("#0284c726"),
+                    ),
+                    editor_document_highlight_bracket_background: Some(
+                        settings_content::theme::ThemeColor::from("#0284c71f"),
+                    ),
+
+                    // ============ Diff 颜色 ============
+                    editor_diff_hunk_added_background: Some(
+                        settings_content::theme::ThemeColor::from("#15803d1a"),
+                    ),
+                    editor_diff_hunk_added_hollow_background: Some(
+                        settings_content::theme::ThemeColor::from("#15803d0d"),
+                    ),
+                    editor_diff_hunk_added_hollow_border: Some(
+                        settings_content::theme::ThemeColor::from("#15803d4d"),
+                    ),
+                    editor_diff_hunk_deleted_background: Some(
+                        settings_content::theme::ThemeColor::from("#b91c1c1a"),
+                    ),
+                    editor_diff_hunk_deleted_hollow_background: Some(
+                        settings_content::theme::ThemeColor::from("#b91c1c0d"),
+                    ),
+                    editor_diff_hunk_deleted_hollow_border: Some(
+                        settings_content::theme::ThemeColor::from("#b91c1c4d"),
+                    ),
+
+                    // ============ 面板颜色 ============
+                    panel_background: Some(settings_content::theme::ThemeColor::from("#f4f5f7")),
+                    panel_focused_border: Some(settings_content::theme::ThemeColor::from(
+                        "#0284c7",
+                    )),
+                    panel_indent_guide: Some(settings_content::theme::ThemeColor::from("#e5e7eb")),
+                    panel_indent_guide_hover: Some(settings_content::theme::ThemeColor::from(
+                        "#d1d5db",
+                    )),
+                    panel_indent_guide_active: Some(settings_content::theme::ThemeColor::from(
+                        "#d1d5db",
+                    )),
+                    panel_overlay_background: Some(settings_content::theme::ThemeColor::from(
+                        "#f4f5f7e6",
+                    )),
+                    panel_overlay_hover: Some(settings_content::theme::ThemeColor::from(
+                        "#eceef2e6",
+                    )),
+
+                    // ============ 窗口/面板边框 ============
+                    pane_focused_border: Some(settings_content::theme::ThemeColor::from("#0284c7")),
+                    pane_group_border: Some(settings_content::theme::ThemeColor::from("#e5e7eb")),
+
+                    // ============ 状态栏/标题栏/工具栏 ============
+                    status_bar_background: Some(settings_content::theme::ThemeColor::from(
+                        "#f4f5f7",
+                    )),
+                    title_bar_background: Some(settings_content::theme::ThemeColor::from(
+                        "#fafafa",
+                    )),
+                    title_bar_inactive_background: Some(settings_content::theme::ThemeColor::from(
+                        "#fafafa",
+                    )),
+                    toolbar_background: Some(settings_content::theme::ThemeColor::from("#f4f5f7")),
+
+                    // ============ 标签栏 ============
+                    tab_bar_background: Some(settings_content::theme::ThemeColor::from("#f4f5f7")),
+                    tab_active_background: Some(settings_content::theme::ThemeColor::from(
+                        "#ffffff",
+                    )),
+                    tab_inactive_background: Some(settings_content::theme::ThemeColor::from(
+                        "#fafafa",
+                    )),
+
+                    // ============ 搜索匹配 ============
+                    search_match_background: Some(settings_content::theme::ThemeColor::from(
+                        "#0284c726",
+                    )),
+                    search_active_match_background: Some(
+                        settings_content::theme::ThemeColor::from("#0284c74d"),
+                    ),
+
+                    // ============ 滚动条 ============
+                    deprecated_scrollbar_thumb_background: Some(
+                        settings_content::theme::ThemeColor::from("#d1d5db"),
+                    ),
+                    scrollbar_thumb_background: Some(settings_content::theme::ThemeColor::from(
+                        "#d1d5db",
+                    )),
+                    scrollbar_thumb_hover_background: Some(
+                        settings_content::theme::ThemeColor::from("#b0b5c0"),
+                    ),
+                    scrollbar_thumb_active_background: Some(
+                        settings_content::theme::ThemeColor::from("#9ca3af"),
+                    ),
+                    scrollbar_thumb_border: Some(settings_content::theme::ThemeColor::from(
+                        "#e5e7eb",
+                    )),
+                    scrollbar_track_background: Some(settings_content::theme::ThemeColor::from(
+                        "#f4f5f7",
+                    )),
+                    scrollbar_track_border: Some(settings_content::theme::ThemeColor::from(
+                        "#e5e7eb",
+                    )),
+
+                    // ============ 小地图 ============
+                    minimap_thumb_background: Some(settings_content::theme::ThemeColor::from(
+                        "#d1d5db99",
+                    )),
+                    minimap_thumb_hover_background: Some(
+                        settings_content::theme::ThemeColor::from("#d1d5dbcc"),
+                    ),
+                    minimap_thumb_active_background: Some(
+                        settings_content::theme::ThemeColor::from("#d1d5dbe6"),
+                    ),
+                    minimap_thumb_border: Some(settings_content::theme::ThemeColor::from(
+                        "#e5e7eb",
+                    )),
+
+                    // ============ Drop Target ============
+                    drop_target_background: Some(settings_content::theme::ThemeColor::from(
+                        "#0284c71a",
+                    )),
+                    drop_target_border: Some(settings_content::theme::ThemeColor::from("#0284c7")),
+
+                    // ============ Debugger ============
+                    debugger_accent: Some(settings_content::theme::ThemeColor::from("#0284c7")),
+
+                    // ============ 链接 ============
+                    link_text_hover: Some(settings_content::theme::ThemeColor::from("#0369a1")),
+
+                    // ============ 版本控制 ============
+                    version_control_added: Some(settings_content::theme::ThemeColor::from(
+                        "#15803d",
+                    )),
+                    version_control_deleted: Some(settings_content::theme::ThemeColor::from(
+                        "#b91c1c",
+                    )),
+                    version_control_modified: Some(settings_content::theme::ThemeColor::from(
+                        "#b45309",
+                    )),
+                    version_control_renamed: Some(settings_content::theme::ThemeColor::from(
+                        "#0284c7",
+                    )),
+                    version_control_conflict: Some(settings_content::theme::ThemeColor::from(
+                        "#7e22ce",
+                    )),
+                    version_control_ignored: Some(settings_content::theme::ThemeColor::from(
+                        "#9ca3af",
+                    )),
+                    version_control_word_added: Some(settings_content::theme::ThemeColor::from(
+                        "#15803d4d",
+                    )),
+                    version_control_word_deleted: Some(settings_content::theme::ThemeColor::from(
+                        "#b91c1c4d",
+                    )),
+                    version_control_conflict_marker_ours: Some(
+                        settings_content::theme::ThemeColor::from("#0284c7"),
+                    ),
+                    version_control_conflict_marker_theirs: Some(
+                        settings_content::theme::ThemeColor::from("#7e22ce"),
+                    ),
+
+                    // ============ Vim 模式 ============
+                    vim_normal_background: Some(settings_content::theme::ThemeColor::from(
+                        "#eceef2",
+                    )),
+                    vim_insert_background: Some(settings_content::theme::ThemeColor::from(
+                        "#f4f5f7",
+                    )),
+                    vim_replace_background: Some(settings_content::theme::ThemeColor::from(
+                        "#d1d5db",
+                    )),
+                    vim_visual_background: Some(settings_content::theme::ThemeColor::from(
+                        "#0284c726",
+                    )),
+                    vim_visual_line_background: Some(settings_content::theme::ThemeColor::from(
+                        "#0284c726",
+                    )),
+                    vim_visual_block_background: Some(settings_content::theme::ThemeColor::from(
+                        "#0284c71a",
+                    )),
+                    vim_yank_background: Some(settings_content::theme::ThemeColor::from(
+                        "#0284c733",
+                    )),
+                    vim_helix_jump_label_foreground: Some(
+                        settings_content::theme::ThemeColor::from("#fafafa"),
+                    ),
+                    vim_helix_normal_background: Some(settings_content::theme::ThemeColor::from(
+                        "#eceef2",
+                    )),
+                    vim_helix_select_background: Some(settings_content::theme::ThemeColor::from(
+                        "#0284c7",
+                    )),
+                    vim_normal_foreground: Some(settings_content::theme::ThemeColor::from(
+                        "#111827",
+                    )),
+                    vim_insert_foreground: Some(settings_content::theme::ThemeColor::from(
+                        "#111827",
+                    )),
+                    vim_replace_foreground: Some(settings_content::theme::ThemeColor::from(
+                        "#111827",
+                    )),
+                    vim_visual_foreground: Some(settings_content::theme::ThemeColor::from(
+                        "#fafafa",
+                    )),
+                    vim_visual_line_foreground: Some(settings_content::theme::ThemeColor::from(
+                        "#fafafa",
+                    )),
+                    vim_visual_block_foreground: Some(settings_content::theme::ThemeColor::from(
+                        "#fafafa",
+                    )),
+                    vim_helix_normal_foreground: Some(settings_content::theme::ThemeColor::from(
+                        "#111827",
+                    )),
+                    vim_helix_select_foreground: Some(settings_content::theme::ThemeColor::from(
+                        "#fafafa",
+                    )),
+
+                    // ============ 终端颜色 ============
+                    terminal_background: Some(settings_content::theme::ThemeColor::from("#ffffff")),
+                    terminal_foreground: Some(settings_content::theme::ThemeColor::from("#1f2937")),
+                    terminal_bright_foreground: Some(settings_content::theme::ThemeColor::from(
+                        "#111827",
+                    )),
+                    terminal_dim_foreground: Some(settings_content::theme::ThemeColor::from(
+                        "#9ca3af",
+                    )),
+                    terminal_ansi_background: Some(settings_content::theme::ThemeColor::from(
+                        "#ffffff",
+                    )),
+
+                    // ANSI 标准色
+                    terminal_ansi_black: Some(settings_content::theme::ThemeColor::from("#ffffff")),
+                    terminal_ansi_red: Some(settings_content::theme::ThemeColor::from("#b91c1c")),
+                    terminal_ansi_green: Some(settings_content::theme::ThemeColor::from("#15803d")),
+                    terminal_ansi_yellow: Some(settings_content::theme::ThemeColor::from(
+                        "#b45309",
+                    )),
+                    terminal_ansi_blue: Some(settings_content::theme::ThemeColor::from("#1d4ed8")),
+                    terminal_ansi_magenta: Some(settings_content::theme::ThemeColor::from(
+                        "#7e22ce",
+                    )),
+                    terminal_ansi_cyan: Some(settings_content::theme::ThemeColor::from("#1d4ed8")),
+                    terminal_ansi_white: Some(settings_content::theme::ThemeColor::from("#1f2937")),
+
+                    // ANSI 亮色
+                    terminal_ansi_bright_black: Some(settings_content::theme::ThemeColor::from(
+                        "#9ca3af",
+                    )),
+                    terminal_ansi_bright_red: Some(settings_content::theme::ThemeColor::from(
+                        "#b91c1c",
+                    )),
+                    terminal_ansi_bright_green: Some(settings_content::theme::ThemeColor::from(
+                        "#15803d",
+                    )),
+                    terminal_ansi_bright_yellow: Some(settings_content::theme::ThemeColor::from(
+                        "#b45309",
+                    )),
+                    terminal_ansi_bright_blue: Some(settings_content::theme::ThemeColor::from(
+                        "#1d4ed8",
+                    )),
+                    terminal_ansi_bright_magenta: Some(settings_content::theme::ThemeColor::from(
+                        "#7e22ce",
+                    )),
+                    terminal_ansi_bright_cyan: Some(settings_content::theme::ThemeColor::from(
+                        "#1d4ed8",
+                    )),
+                    terminal_ansi_bright_white: Some(settings_content::theme::ThemeColor::from(
+                        "#111827",
+                    )),
+
+                    // ANSI 暗色（半透明）
+                    terminal_ansi_dim_black: Some(settings_content::theme::ThemeColor::from(
+                        "#ffffff80",
+                    )),
+                    terminal_ansi_dim_red: Some(settings_content::theme::ThemeColor::from(
+                        "#b91c1c80",
+                    )),
+                    terminal_ansi_dim_green: Some(settings_content::theme::ThemeColor::from(
+                        "#15803d80",
+                    )),
+                    terminal_ansi_dim_yellow: Some(settings_content::theme::ThemeColor::from(
+                        "#b4530980",
+                    )),
+                    terminal_ansi_dim_blue: Some(settings_content::theme::ThemeColor::from(
+                        "#1d4ed880",
+                    )),
+                    terminal_ansi_dim_magenta: Some(settings_content::theme::ThemeColor::from(
+                        "#7e22ce80",
+                    )),
+                    terminal_ansi_dim_cyan: Some(settings_content::theme::ThemeColor::from(
+                        "#1d4ed880",
+                    )),
+                    terminal_ansi_dim_white: Some(settings_content::theme::ThemeColor::from(
+                        "#1f293780",
+                    )),
+                },
+                status: StatusColorsContent {
+                    conflict: Some(settings_content::theme::ThemeColor::from("#7e22ce")),
+                    conflict_background: Some(settings_content::theme::ThemeColor::from(
+                        "#7e22ce1a",
+                    )),
+                    conflict_border: Some(settings_content::theme::ThemeColor::from("#7e22ce4d")),
+                    created: Some(settings_content::theme::ThemeColor::from("#15803d")),
+                    created_background: Some(settings_content::theme::ThemeColor::from(
+                        "#15803d1a",
+                    )),
+                    created_border: Some(settings_content::theme::ThemeColor::from("#15803d4d")),
+                    deleted: Some(settings_content::theme::ThemeColor::from("#b91c1c")),
+                    deleted_background: Some(settings_content::theme::ThemeColor::from(
+                        "#b91c1c1a",
+                    )),
+                    deleted_border: Some(settings_content::theme::ThemeColor::from("#b91c1c4d")),
+                    error: Some(settings_content::theme::ThemeColor::from("#b91c1c")),
+                    error_background: Some(settings_content::theme::ThemeColor::from("#b91c1c1a")),
+                    error_border: Some(settings_content::theme::ThemeColor::from("#b91c1c4d")),
+                    hidden: Some(settings_content::theme::ThemeColor::from("#9ca3af")),
+                    hidden_background: Some(settings_content::theme::ThemeColor::from("#9ca3af1a")),
+                    hidden_border: Some(settings_content::theme::ThemeColor::from("#9ca3af4d")),
+                    hint: Some(settings_content::theme::ThemeColor::from("#0284c7")),
+                    hint_background: Some(settings_content::theme::ThemeColor::from("#0284c71a")),
+                    hint_border: Some(settings_content::theme::ThemeColor::from("#0284c74d")),
+                    ignored: Some(settings_content::theme::ThemeColor::from("#9ca3af")),
+                    ignored_background: Some(settings_content::theme::ThemeColor::from(
+                        "#9ca3af1a",
+                    )),
+                    ignored_border: Some(settings_content::theme::ThemeColor::from("#9ca3af4d")),
+                    info: Some(settings_content::theme::ThemeColor::from("#0284c7")),
+                    info_background: Some(settings_content::theme::ThemeColor::from("#0284c71a")),
+                    info_border: Some(settings_content::theme::ThemeColor::from("#0284c74d")),
+                    modified: Some(settings_content::theme::ThemeColor::from("#b45309")),
+                    modified_background: Some(settings_content::theme::ThemeColor::from(
+                        "#b453091a",
+                    )),
+                    modified_border: Some(settings_content::theme::ThemeColor::from("#b453094d")),
+                    predictive: Some(settings_content::theme::ThemeColor::from("#0284c7")),
+                    predictive_background: Some(settings_content::theme::ThemeColor::from(
+                        "#0284c70d",
+                    )),
+                    predictive_border: Some(settings_content::theme::ThemeColor::from("#0284c733")),
+                    renamed: Some(settings_content::theme::ThemeColor::from("#0284c7")),
+                    renamed_background: Some(settings_content::theme::ThemeColor::from(
+                        "#0284c71a",
+                    )),
+                    renamed_border: Some(settings_content::theme::ThemeColor::from("#0284c74d")),
+                    success: Some(settings_content::theme::ThemeColor::from("#15803d")),
+                    success_background: Some(settings_content::theme::ThemeColor::from(
+                        "#15803d1a",
+                    )),
+                    success_border: Some(settings_content::theme::ThemeColor::from("#15803d4d")),
+                    unreachable: Some(settings_content::theme::ThemeColor::from("#9ca3af")),
+                    unreachable_background: Some(settings_content::theme::ThemeColor::from(
+                        "#9ca3af1a",
+                    )),
+                    unreachable_border: Some(settings_content::theme::ThemeColor::from(
+                        "#9ca3af4d",
+                    )),
+                    warning: Some(settings_content::theme::ThemeColor::from("#b45309")),
+                    warning_background: Some(settings_content::theme::ThemeColor::from(
+                        "#b453091a",
+                    )),
+                    warning_border: Some(settings_content::theme::ThemeColor::from("#b453094d")),
+                },
+                players: vec![PlayerColorContent {
+                    cursor: Some(settings_content::theme::ThemeColor::from("#0284c7")),
+                    background: Some(settings_content::theme::ThemeColor::from("#0284c71a")),
+                    selection: Some(settings_content::theme::ThemeColor::from("#0284c726")),
+                }],
+                // syntax: IndexMap::new(),
+            },
+        };
+        let theme = build_theme("default", "default", vec![light, dark]);
+        let v = serde_json::to_string_pretty(&theme).unwrap();
+        fs::write("../../assets/default.json", v).unwrap();
+    }
+}
+
+pub fn status_colors_refinement(colors: &StatusColorsContent) -> StatusColorsRefinement {
+    StatusColorsRefinement {
+        conflict: colors
+            .conflict
+            .as_ref()
+            .and_then(|color| try_parse_color(color).ok()),
+        conflict_background: colors
+            .conflict_background
+            .as_ref()
+            .and_then(|color| try_parse_color(color).ok()),
+        conflict_border: colors
+            .conflict_border
+            .as_ref()
+            .and_then(|color| try_parse_color(color).ok()),
+        created: colors
+            .created
+            .as_ref()
+            .and_then(|color| try_parse_color(color).ok()),
+        created_background: colors
+            .created_background
+            .as_ref()
+            .and_then(|color| try_parse_color(color).ok()),
+        created_border: colors
+            .created_border
+            .as_ref()
+            .and_then(|color| try_parse_color(color).ok()),
+        deleted: colors
+            .deleted
+            .as_ref()
+            .and_then(|color| try_parse_color(color).ok()),
+        deleted_background: colors
+            .deleted_background
+            .as_ref()
+            .and_then(|color| try_parse_color(color).ok()),
+        deleted_border: colors
+            .deleted_border
+            .as_ref()
+            .and_then(|color| try_parse_color(color).ok()),
+        error: colors
+            .error
+            .as_ref()
+            .and_then(|color| try_parse_color(color).ok()),
+        error_background: colors
+            .error_background
+            .as_ref()
+            .and_then(|color| try_parse_color(color).ok()),
+        error_border: colors
+            .error_border
+            .as_ref()
+            .and_then(|color| try_parse_color(color).ok()),
+        hidden: colors
+            .hidden
+            .as_ref()
+            .and_then(|color| try_parse_color(color).ok()),
+        hidden_background: colors
+            .hidden_background
+            .as_ref()
+            .and_then(|color| try_parse_color(color).ok()),
+        hidden_border: colors
+            .hidden_border
+            .as_ref()
+            .and_then(|color| try_parse_color(color).ok()),
+        hint: colors
+            .hint
+            .as_ref()
+            .and_then(|color| try_parse_color(color).ok()),
+        hint_background: colors
+            .hint_background
+            .as_ref()
+            .and_then(|color| try_parse_color(color).ok()),
+        hint_border: colors
+            .hint_border
+            .as_ref()
+            .and_then(|color| try_parse_color(color).ok()),
+        ignored: colors
+            .ignored
+            .as_ref()
+            .and_then(|color| try_parse_color(color).ok()),
+        ignored_background: colors
+            .ignored_background
+            .as_ref()
+            .and_then(|color| try_parse_color(color).ok()),
+        ignored_border: colors
+            .ignored_border
+            .as_ref()
+            .and_then(|color| try_parse_color(color).ok()),
+        info: colors
+            .info
+            .as_ref()
+            .and_then(|color| try_parse_color(color).ok()),
+        info_background: colors
+            .info_background
+            .as_ref()
+            .and_then(|color| try_parse_color(color).ok()),
+        info_border: colors
+            .info_border
+            .as_ref()
+            .and_then(|color| try_parse_color(color).ok()),
+        modified: colors
+            .modified
+            .as_ref()
+            .and_then(|color| try_parse_color(color).ok()),
+        modified_background: colors
+            .modified_background
+            .as_ref()
+            .and_then(|color| try_parse_color(color).ok()),
+        modified_border: colors
+            .modified_border
+            .as_ref()
+            .and_then(|color| try_parse_color(color).ok()),
+        predictive: colors
+            .predictive
+            .as_ref()
+            .and_then(|color| try_parse_color(color).ok()),
+        predictive_background: colors
+            .predictive_background
+            .as_ref()
+            .and_then(|color| try_parse_color(color).ok()),
+        predictive_border: colors
+            .predictive_border
+            .as_ref()
+            .and_then(|color| try_parse_color(color).ok()),
+        renamed: colors
+            .renamed
+            .as_ref()
+            .and_then(|color| try_parse_color(color).ok()),
+        renamed_background: colors
+            .renamed_background
+            .as_ref()
+            .and_then(|color| try_parse_color(color).ok()),
+        renamed_border: colors
+            .renamed_border
+            .as_ref()
+            .and_then(|color| try_parse_color(color).ok()),
+        success: colors
+            .success
+            .as_ref()
+            .and_then(|color| try_parse_color(color).ok()),
+        success_background: colors
+            .success_background
+            .as_ref()
+            .and_then(|color| try_parse_color(color).ok()),
+        success_border: colors
+            .success_border
+            .as_ref()
+            .and_then(|color| try_parse_color(color).ok()),
+        unreachable: colors
+            .unreachable
+            .as_ref()
+            .and_then(|color| try_parse_color(color).ok()),
+        unreachable_background: colors
+            .unreachable_background
+            .as_ref()
+            .and_then(|color| try_parse_color(color).ok()),
+        unreachable_border: colors
+            .unreachable_border
+            .as_ref()
+            .and_then(|color| try_parse_color(color).ok()),
+        warning: colors
+            .warning
+            .as_ref()
+            .and_then(|color| try_parse_color(color).ok()),
+        warning_background: colors
+            .warning_background
+            .as_ref()
+            .and_then(|color| try_parse_color(color).ok()),
+        warning_border: colors
+            .warning_border
+            .as_ref()
+            .and_then(|color| try_parse_color(color).ok()),
+    }
+}
+
+pub fn theme_colors_refinement(
+    this: &ThemeColorsContent,
+    status_colors: &StatusColorsRefinement,
+    is_light: bool,
+) -> ThemeColorsRefinement {
+    let border = this
+        .border
+        .as_ref()
+        .and_then(|color| try_parse_color(color).ok());
+    let editor_document_highlight_read_background = this
+        .editor_document_highlight_read_background
+        .as_ref()
+        .and_then(|color| try_parse_color(color).ok());
+    let scrollbar_thumb_background = this
+        .scrollbar_thumb_background
+        .as_ref()
+        .and_then(|color| try_parse_color(color).ok())
+        .or_else(|| {
+            this.deprecated_scrollbar_thumb_background
+                .as_ref()
+                .and_then(|color| try_parse_color(color).ok())
+        });
+    let scrollbar_thumb_hover_background = this
+        .scrollbar_thumb_hover_background
+        .as_ref()
+        .and_then(|color| try_parse_color(color).ok());
+    let scrollbar_thumb_active_background = this
+        .scrollbar_thumb_active_background
+        .as_ref()
+        .and_then(|color| try_parse_color(color).ok())
+        .or(scrollbar_thumb_background);
+    let scrollbar_thumb_border = this
+        .scrollbar_thumb_border
+        .as_ref()
+        .and_then(|color| try_parse_color(color).ok());
+    let element_hover = this
+        .element_hover
+        .as_ref()
+        .and_then(|color| try_parse_color(color).ok());
+    let panel_background = this
+        .panel_background
+        .as_ref()
+        .and_then(|color| try_parse_color(color).ok());
+    let search_match_background = this
+        .search_match_background
+        .as_ref()
+        .and_then(|color| try_parse_color(color).ok());
+    let search_active_match_background = this
+        .search_active_match_background
+        .as_ref()
+        .and_then(|color| try_parse_color(color).ok())
+        .or(search_match_background);
+    let version_control_added = this
+        .version_control_added
+        .as_ref()
+        .and_then(|color| try_parse_color(color).ok())
+        .or(status_colors.created);
+    let version_control_deleted = this
+        .version_control_deleted
+        .as_ref()
+        .and_then(|color| try_parse_color(color).ok())
+        .or(status_colors.deleted);
+    let (hunk_fill, hunk_hollow_bg, hunk_hollow_border) = if is_light {
+        (
+            LIGHT_DIFF_HUNK_FILLED_OPACITY,
+            LIGHT_DIFF_HUNK_HOLLOW_BACKGROUND_OPACITY,
+            LIGHT_DIFF_HUNK_HOLLOW_BORDER_OPACITY,
+        )
+    } else {
+        (
+            DARK_DIFF_HUNK_FILLED_OPACITY,
+            DARK_DIFF_HUNK_HOLLOW_BACKGROUND_OPACITY,
+            DARK_DIFF_HUNK_HOLLOW_BORDER_OPACITY,
+        )
+    };
+    ThemeColorsRefinement {
+        border,
+        border_variant: this
+            .border_variant
+            .as_ref()
+            .and_then(|color| try_parse_color(color).ok()),
+        border_focused: this
+            .border_focused
+            .as_ref()
+            .and_then(|color| try_parse_color(color).ok()),
+        border_selected: this
+            .border_selected
+            .as_ref()
+            .and_then(|color| try_parse_color(color).ok()),
+        border_transparent: this
+            .border_transparent
+            .as_ref()
+            .and_then(|color| try_parse_color(color).ok()),
+        border_disabled: this
+            .border_disabled
+            .as_ref()
+            .and_then(|color| try_parse_color(color).ok()),
+        elevated_surface_background: this
+            .elevated_surface_background
+            .as_ref()
+            .and_then(|color| try_parse_color(color).ok()),
+        surface_background: this
+            .surface_background
+            .as_ref()
+            .and_then(|color| try_parse_color(color).ok()),
+        background: this
+            .background
+            .as_ref()
+            .and_then(|color| try_parse_color(color).ok()),
+        element_background: this
+            .element_background
+            .as_ref()
+            .and_then(|color| try_parse_color(color).ok()),
+        element_hover,
+        element_active: this
+            .element_active
+            .as_ref()
+            .and_then(|color| try_parse_color(color).ok()),
+        element_selected: this
+            .element_selected
+            .as_ref()
+            .and_then(|color| try_parse_color(color).ok()),
+        element_disabled: this
+            .element_disabled
+            .as_ref()
+            .and_then(|color| try_parse_color(color).ok()),
+        element_selection_background: this
+            .element_selection_background
+            .as_ref()
+            .and_then(|color| try_parse_color(color).ok()),
+        drop_target_background: this
+            .drop_target_background
+            .as_ref()
+            .and_then(|color| try_parse_color(color).ok()),
+        drop_target_border: this
+            .drop_target_border
+            .as_ref()
+            .and_then(|color| try_parse_color(color).ok()),
+        ghost_element_background: this
+            .ghost_element_background
+            .as_ref()
+            .and_then(|color| try_parse_color(color).ok()),
+        ghost_element_hover: this
+            .ghost_element_hover
+            .as_ref()
+            .and_then(|color| try_parse_color(color).ok()),
+        ghost_element_active: this
+            .ghost_element_active
+            .as_ref()
+            .and_then(|color| try_parse_color(color).ok()),
+        ghost_element_selected: this
+            .ghost_element_selected
+            .as_ref()
+            .and_then(|color| try_parse_color(color).ok()),
+        ghost_element_disabled: this
+            .ghost_element_disabled
+            .as_ref()
+            .and_then(|color| try_parse_color(color).ok()),
+        text: this
+            .text
+            .as_ref()
+            .and_then(|color| try_parse_color(color).ok()),
+        text_muted: this
+            .text_muted
+            .as_ref()
+            .and_then(|color| try_parse_color(color).ok()),
+        text_placeholder: this
+            .text_placeholder
+            .as_ref()
+            .and_then(|color| try_parse_color(color).ok()),
+        text_disabled: this
+            .text_disabled
+            .as_ref()
+            .and_then(|color| try_parse_color(color).ok()),
+        text_accent: this
+            .text_accent
+            .as_ref()
+            .and_then(|color| try_parse_color(color).ok()),
+        icon: this
+            .icon
+            .as_ref()
+            .and_then(|color| try_parse_color(color).ok()),
+        icon_muted: this
+            .icon_muted
+            .as_ref()
+            .and_then(|color| try_parse_color(color).ok()),
+        icon_disabled: this
+            .icon_disabled
+            .as_ref()
+            .and_then(|color| try_parse_color(color).ok()),
+        icon_placeholder: this
+            .icon_placeholder
+            .as_ref()
+            .and_then(|color| try_parse_color(color).ok()),
+        icon_accent: this
+            .icon_accent
+            .as_ref()
+            .and_then(|color| try_parse_color(color).ok()),
+        debugger_accent: this
+            .debugger_accent
+            .as_ref()
+            .and_then(|color| try_parse_color(color).ok()),
+        status_bar_background: this
+            .status_bar_background
+            .as_ref()
+            .and_then(|color| try_parse_color(color).ok()),
+        title_bar_background: this
+            .title_bar_background
+            .as_ref()
+            .and_then(|color| try_parse_color(color).ok()),
+        title_bar_inactive_background: this
+            .title_bar_inactive_background
+            .as_ref()
+            .and_then(|color| try_parse_color(color).ok()),
+        toolbar_background: this
+            .toolbar_background
+            .as_ref()
+            .and_then(|color| try_parse_color(color).ok()),
+        tab_bar_background: this
+            .tab_bar_background
+            .as_ref()
+            .and_then(|color| try_parse_color(color).ok()),
+        tab_inactive_background: this
+            .tab_inactive_background
+            .as_ref()
+            .and_then(|color| try_parse_color(color).ok()),
+        tab_active_background: this
+            .tab_active_background
+            .as_ref()
+            .and_then(|color| try_parse_color(color).ok()),
+        search_match_background,
+        search_active_match_background,
+        panel_background,
+        panel_focused_border: this
+            .panel_focused_border
+            .as_ref()
+            .and_then(|color| try_parse_color(color).ok()),
+        panel_indent_guide: this
+            .panel_indent_guide
+            .as_ref()
+            .and_then(|color| try_parse_color(color).ok()),
+        panel_indent_guide_hover: this
+            .panel_indent_guide_hover
+            .as_ref()
+            .and_then(|color| try_parse_color(color).ok()),
+        panel_indent_guide_active: this
+            .panel_indent_guide_active
+            .as_ref()
+            .and_then(|color| try_parse_color(color).ok()),
+        panel_overlay_background: this
+            .panel_overlay_background
+            .as_ref()
+            .and_then(|color| try_parse_color(color).ok())
+            .or(panel_background.map(ensure_opaque)),
+        panel_overlay_hover: this
+            .panel_overlay_hover
+            .as_ref()
+            .and_then(|color| try_parse_color(color).ok())
+            .or(panel_background
+                .zip(element_hover)
+                .map(|(panel_bg, hover_bg)| panel_bg.blend(hover_bg))
+                .map(ensure_opaque)),
+        pane_focused_border: this
+            .pane_focused_border
+            .as_ref()
+            .and_then(|color| try_parse_color(color).ok()),
+        pane_group_border: this
+            .pane_group_border
+            .as_ref()
+            .and_then(|color| try_parse_color(color).ok())
+            .or(border),
+        scrollbar_thumb_background,
+        scrollbar_thumb_hover_background,
+        scrollbar_thumb_active_background,
+        scrollbar_thumb_border,
+        scrollbar_track_background: this
+            .scrollbar_track_background
+            .as_ref()
+            .and_then(|color| try_parse_color(color).ok()),
+        scrollbar_track_border: this
+            .scrollbar_track_border
+            .as_ref()
+            .and_then(|color| try_parse_color(color).ok()),
+        minimap_thumb_background: this
+            .minimap_thumb_background
+            .as_ref()
+            .and_then(|color| try_parse_color(color).ok())
+            .or(scrollbar_thumb_background.map(ensure_non_opaque)),
+        minimap_thumb_hover_background: this
+            .minimap_thumb_hover_background
+            .as_ref()
+            .and_then(|color| try_parse_color(color).ok())
+            .or(scrollbar_thumb_hover_background.map(ensure_non_opaque)),
+        minimap_thumb_active_background: this
+            .minimap_thumb_active_background
+            .as_ref()
+            .and_then(|color| try_parse_color(color).ok())
+            .or(scrollbar_thumb_active_background.map(ensure_non_opaque)),
+        minimap_thumb_border: this
+            .minimap_thumb_border
+            .as_ref()
+            .and_then(|color| try_parse_color(color).ok())
+            .or(scrollbar_thumb_border),
+
+        terminal_background: this
+            .terminal_background
+            .as_ref()
+            .and_then(|color| try_parse_color(color).ok()),
+        terminal_ansi_background: this
+            .terminal_ansi_background
+            .as_ref()
+            .and_then(|color| try_parse_color(color).ok()),
+        terminal_foreground: this
+            .terminal_foreground
+            .as_ref()
+            .and_then(|color| try_parse_color(color).ok()),
+        terminal_bright_foreground: this
+            .terminal_bright_foreground
+            .as_ref()
+            .and_then(|color| try_parse_color(color).ok()),
+        terminal_dim_foreground: this
+            .terminal_dim_foreground
+            .as_ref()
+            .and_then(|color| try_parse_color(color).ok()),
+        terminal_ansi_black: this
+            .terminal_ansi_black
+            .as_ref()
+            .and_then(|color| try_parse_color(color).ok()),
+        terminal_ansi_bright_black: this
+            .terminal_ansi_bright_black
+            .as_ref()
+            .and_then(|color| try_parse_color(color).ok()),
+        terminal_ansi_dim_black: this
+            .terminal_ansi_dim_black
+            .as_ref()
+            .and_then(|color| try_parse_color(color).ok()),
+        terminal_ansi_red: this
+            .terminal_ansi_red
+            .as_ref()
+            .and_then(|color| try_parse_color(color).ok()),
+        terminal_ansi_bright_red: this
+            .terminal_ansi_bright_red
+            .as_ref()
+            .and_then(|color| try_parse_color(color).ok()),
+        terminal_ansi_dim_red: this
+            .terminal_ansi_dim_red
+            .as_ref()
+            .and_then(|color| try_parse_color(color).ok()),
+        terminal_ansi_green: this
+            .terminal_ansi_green
+            .as_ref()
+            .and_then(|color| try_parse_color(color).ok()),
+        terminal_ansi_bright_green: this
+            .terminal_ansi_bright_green
+            .as_ref()
+            .and_then(|color| try_parse_color(color).ok()),
+        terminal_ansi_dim_green: this
+            .terminal_ansi_dim_green
+            .as_ref()
+            .and_then(|color| try_parse_color(color).ok()),
+        terminal_ansi_yellow: this
+            .terminal_ansi_yellow
+            .as_ref()
+            .and_then(|color| try_parse_color(color).ok()),
+        terminal_ansi_bright_yellow: this
+            .terminal_ansi_bright_yellow
+            .as_ref()
+            .and_then(|color| try_parse_color(color).ok()),
+        terminal_ansi_dim_yellow: this
+            .terminal_ansi_dim_yellow
+            .as_ref()
+            .and_then(|color| try_parse_color(color).ok()),
+        terminal_ansi_blue: this
+            .terminal_ansi_blue
+            .as_ref()
+            .and_then(|color| try_parse_color(color).ok()),
+        terminal_ansi_bright_blue: this
+            .terminal_ansi_bright_blue
+            .as_ref()
+            .and_then(|color| try_parse_color(color).ok()),
+        terminal_ansi_dim_blue: this
+            .terminal_ansi_dim_blue
+            .as_ref()
+            .and_then(|color| try_parse_color(color).ok()),
+        terminal_ansi_magenta: this
+            .terminal_ansi_magenta
+            .as_ref()
+            .and_then(|color| try_parse_color(color).ok()),
+        terminal_ansi_bright_magenta: this
+            .terminal_ansi_bright_magenta
+            .as_ref()
+            .and_then(|color| try_parse_color(color).ok()),
+        terminal_ansi_dim_magenta: this
+            .terminal_ansi_dim_magenta
+            .as_ref()
+            .and_then(|color| try_parse_color(color).ok()),
+        terminal_ansi_cyan: this
+            .terminal_ansi_cyan
+            .as_ref()
+            .and_then(|color| try_parse_color(color).ok()),
+        terminal_ansi_bright_cyan: this
+            .terminal_ansi_bright_cyan
+            .as_ref()
+            .and_then(|color| try_parse_color(color).ok()),
+        terminal_ansi_dim_cyan: this
+            .terminal_ansi_dim_cyan
+            .as_ref()
+            .and_then(|color| try_parse_color(color).ok()),
+        terminal_ansi_white: this
+            .terminal_ansi_white
+            .as_ref()
+            .and_then(|color| try_parse_color(color).ok()),
+        terminal_ansi_bright_white: this
+            .terminal_ansi_bright_white
+            .as_ref()
+            .and_then(|color| try_parse_color(color).ok()),
+        terminal_ansi_dim_white: this
+            .terminal_ansi_dim_white
+            .as_ref()
+            .and_then(|color| try_parse_color(color).ok()),
+        link_text_hover: this
+            .link_text_hover
+            .as_ref()
+            .and_then(|color| try_parse_color(color).ok()),
+        vim_normal_background: this
+            .vim_normal_background
+            .as_ref()
+            .and_then(|color| try_parse_color(color).ok()),
+        vim_insert_background: this
+            .vim_insert_background
+            .as_ref()
+            .and_then(|color| try_parse_color(color).ok()),
+        vim_replace_background: this
+            .vim_replace_background
+            .as_ref()
+            .and_then(|color| try_parse_color(color).ok()),
+        vim_visual_background: this
+            .vim_visual_background
+            .as_ref()
+            .and_then(|color| try_parse_color(color).ok()),
+        vim_visual_line_background: this
+            .vim_visual_line_background
+            .as_ref()
+            .and_then(|color| try_parse_color(color).ok()),
+        vim_visual_block_background: this
+            .vim_visual_block_background
+            .as_ref()
+            .and_then(|color| try_parse_color(color).ok()),
+        vim_yank_background: this
+            .vim_yank_background
+            .as_ref()
+            .and_then(|color| try_parse_color(color).ok())
+            .or(editor_document_highlight_read_background),
+        vim_helix_jump_label_foreground: this
+            .vim_helix_jump_label_foreground
+            .as_ref()
+            .and_then(|color| try_parse_color(color).ok())
+            .or(status_colors.error),
+        vim_helix_normal_background: this
+            .vim_helix_normal_background
+            .as_ref()
+            .and_then(|color| try_parse_color(color).ok()),
+        vim_helix_select_background: this
+            .vim_helix_select_background
+            .as_ref()
+            .and_then(|color| try_parse_color(color).ok()),
+        vim_normal_foreground: this
+            .vim_normal_foreground
+            .as_ref()
+            .and_then(|color| try_parse_color(color).ok()),
+        vim_insert_foreground: this
+            .vim_insert_foreground
+            .as_ref()
+            .and_then(|color| try_parse_color(color).ok()),
+        vim_replace_foreground: this
+            .vim_replace_foreground
+            .as_ref()
+            .and_then(|color| try_parse_color(color).ok()),
+        vim_visual_foreground: this
+            .vim_visual_foreground
+            .as_ref()
+            .and_then(|color| try_parse_color(color).ok()),
+        vim_visual_line_foreground: this
+            .vim_visual_line_foreground
+            .as_ref()
+            .and_then(|color| try_parse_color(color).ok()),
+        vim_visual_block_foreground: this
+            .vim_visual_block_foreground
+            .as_ref()
+            .and_then(|color| try_parse_color(color).ok()),
+        vim_helix_normal_foreground: this
+            .vim_helix_normal_foreground
+            .as_ref()
+            .and_then(|color| try_parse_color(color).ok()),
+        vim_helix_select_foreground: this
+            .vim_helix_select_foreground
+            .as_ref()
+            .and_then(|color| try_parse_color(color).ok()),
+    }
+}
+fn try_parse_color(color: &str) -> anyhow::Result<Hsla> {
+    let rgba = gpui::Rgba::try_from(color)?;
+    let rgba = palette::rgb::Srgba::from_components((rgba.r, rgba.g, rgba.b, rgba.a));
+    let hsla = palette::Hsla::from_color_unclamped(rgba);
+
+    let hsla = gpui::hsla(
+        hsla.hue.into_positive_degrees() / 360.,
+        hsla.saturation,
+        hsla.lightness,
+        hsla.alpha,
+    );
+
+    Ok(hsla)
+}
+
+pub fn merge_accent_colors(accent_colors: &mut AccentColors, user_accent_colors: &[AccentContent]) {
+    if user_accent_colors.is_empty() {
+        return;
+    }
+
+    let colors = user_accent_colors
+        .iter()
+        .filter_map(|accent_color| {
+            accent_color
+                .0
+                .as_ref()
+                .and_then(|color| try_parse_color(color).ok())
+        })
+        .collect::<Vec<_>>();
+
+    if !colors.is_empty() {
+        accent_colors.0 = Arc::from(colors);
+    }
+}
+pub fn apply_status_color_defaults(status: &mut StatusColorsRefinement) {
+    for (fg_color, bg_color) in [
+        (&status.deleted, &mut status.deleted_background),
+        (&status.created, &mut status.created_background),
+        (&status.modified, &mut status.modified_background),
+        (&status.conflict, &mut status.conflict_background),
+        (&status.error, &mut status.error_background),
+        (&status.hidden, &mut status.hidden_background),
+    ] {
+        if bg_color.is_none()
+            && let Some(fg_color) = fg_color
+        {
+            *bg_color = Some(fg_color.opacity(0.25));
+        }
+    }
+}
+const LIGHT_DIFF_HUNK_FILLED_OPACITY: f32 = 0.16;
+const LIGHT_DIFF_HUNK_HOLLOW_BACKGROUND_OPACITY: f32 = 0.08;
+const LIGHT_DIFF_HUNK_HOLLOW_BORDER_OPACITY: f32 = 0.48;
+const DARK_DIFF_HUNK_FILLED_OPACITY: f32 = 0.12;
+const DARK_DIFF_HUNK_HOLLOW_BACKGROUND_OPACITY: f32 = 0.06;
+const DARK_DIFF_HUNK_HOLLOW_BORDER_OPACITY: f32 = 0.36;
+fn ensure_opaque(color: Hsla) -> Hsla {
+    Hsla { a: 1.0, ..color }
+}
+fn ensure_non_opaque(color: Hsla) -> Hsla {
+    const MAXIMUM_OPACITY: f32 = 0.7;
+    if color.a <= MAXIMUM_OPACITY {
+        color
+    } else {
+        Hsla {
+            a: MAXIMUM_OPACITY,
+            ..color
+        }
+    }
+}

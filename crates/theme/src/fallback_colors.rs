@@ -2,7 +2,7 @@ use gpui::{Hsla, WindowBackgroundAppearance, hsla};
 
 use crate::{
     Appearance, DEFAULT_DARK_THEME, Theme, ThemeFamily,
-    colors::{StatusColors, ThemeColors, ThemeStyles},
+    colors::{AccentColors, StatusColors, ThemeColors, ThemeStyles},
     default_colors::{self, SystemColors, default_color_scales},
 };
 
@@ -236,6 +236,7 @@ pub(crate) fn zed_default_dark() -> Theme {
                 warning_background: yellow,
                 warning_border: yellow,
             },
+            accents: AccentColors::dark(),
         },
     }
 }
