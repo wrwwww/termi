@@ -7,6 +7,9 @@ use gpui::{
 use gpui_component::{Theme, ThemeMode, TitleBar};
 use gpui_platform;
 
+use log::info;
+use settings::Settings;
+use terminal::terminal_settings::TerminalSettings;
 use workspace::WorkspaceView;
 fn build_application() -> Application {
     let platform = gpui_platform::current_platform(false);
@@ -24,14 +27,15 @@ fn main() {
         .with_assets(Assets)
         .with_assets(gpui_component_assets::Assets);
     app.run(move |cx| {
-        // settings::init(cx);
+        settings::init(cx);
         // extension::init(cx);
         theme_settings::init(theme::LoadThemes::All(Box::new(Assets)), cx);
         load_embedded_fonts(cx);
-        workspace::theme::install(cx);
+        let settings = TerminalSettings::get_global(cx);
+        info!("terminal settings {:#?}", settings);
         gpui_component::init(cx);
         // 在应用初始化时，将主题模式切换为 Dark
-        Theme::change(ThemeMode::Dark, None, cx);
+        // Theme::change(ThemeMode::Dark, None, cx);
 
         // terminal_view::init(cx);
         // theme_selector::init(cx);

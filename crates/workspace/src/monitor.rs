@@ -16,14 +16,11 @@
 //! └──────────┴──────────┴──────────┴────────────────────────────┘
 //! ```
 
-use crate::{
-    state::{
-        AppState, Metric, MetricStatus, MonitorSnapshot, MonitorTab, MonitorWindow, NetMetric,
-    },
-    theme::active,
+use crate::state::{
+    AppState, Metric, MetricStatus, MonitorSnapshot, MonitorTab, MonitorWindow, NetMetric,
 };
 use gpui::*;
-use theme::Theme;
+use theme::{ActiveTheme, Theme};
 
 pub struct MonitorPanel {
     state: Entity<AppState>,
@@ -37,7 +34,8 @@ impl MonitorPanel {
 
 impl Render for MonitorPanel {
     fn render(&mut self, windows: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
-        let t = active(cx).clone();
+        let t = cx.theme();
+
         let state = self.state.read(cx);
 
         let collapsed = state.monitor_collapsed;
@@ -47,7 +45,7 @@ impl Render for MonitorPanel {
         let snapshot = state.monitor.clone();
 
         // The header is always visible; the body hides when collapsed.
-        let header = render_header(&t, tab, paused, collapsed, &self.state, cx);
+        let header = render_header(&t, tab, paused, collapsed, &self.state);
 
         let body = if collapsed {
             div()
@@ -58,7 +56,7 @@ impl Render for MonitorPanel {
                 .grid()
                 .grid_cols(4)
                 .gap(px(1.0))
-                .bg(t.border.border)
+                .bg(t.colors().border)
                 .p(px(1.0))
                 .min_h_0()
                 .child(cpu_card(&t, snapshot.as_ref().map(|s| &s.cpu), window))
@@ -80,9 +78,9 @@ impl Render for MonitorPanel {
             .flex()
             .flex_col()
             .h(if collapsed { px(32.0) } else { px(192.0) })
-            .bg(t.surfaces.surface)
+            .bg(t.colors().background)
             .border_t_1()
-            .border_color(t.border.border)
+            .border_color(t.colors().border)
             .child(header)
             .child(body)
     }
@@ -98,7 +96,6 @@ fn render_header(
     paused: bool,
     collapsed: bool,
     state: &Entity<AppState>,
-    _cx: &mut Context<MonitorPanel>,
 ) -> impl IntoElement {
     let state_for_tabs = state.clone();
     let state_for_actions = state.clone();
@@ -112,12 +109,12 @@ fn render_header(
         .px(px(12.0))
         .gap(px(12.0))
         .border_b_1()
-        .border_color(t.border.border)
+        .border_color(t.colors().border)
         .child(
             div()
                 .text_size(px(11.0))
                 .font_weight(FontWeight::SEMIBOLD)
-                .text_color(t.text.text_subtle)
+                .text_color(t.colors().icon_accent)
                 .child("Monitor"),
         )
         // Tabs
@@ -186,9 +183,9 @@ fn tab_btn(
 ) -> impl IntoElement {
     let state = state.clone();
     let (bg, color) = if active {
-        (t.surfaces.surface_2, t.text.text)
+        (t.colors().background, t.colors().text)
     } else {
-        (transparent_hsla(), t.text.text_muted)
+        (transparent_hsla(), t.colors().text_muted)
     };
     div()
         // .id(("monitor-tab", label))
@@ -199,7 +196,7 @@ fn tab_btn(
         .text_color(color)
         .text_size(px(11.0))
         .cursor_pointer()
-        .hover(move |s| s.bg(t.surfaces.surface_2).text_color(t.text.text))
+        .hover(move |s| s.bg(t.colors().background).text_color(t.colors().text))
         // .on_click(move |_, cx| {
         //     state.update(cx, |s, _| s.monitor_tab = tab);
         // })
@@ -222,10 +219,10 @@ fn action_btn(
         .items_center()
         .justify_center()
         .rounded(px(4.0))
-        .text_color(t.text.text_muted)
+        .text_color(t.colors().text_muted)
         .text_size(px(14.0))
         .cursor_pointer()
-        .hover(move |s| s.bg(t.surfaces.surface_2).text_color(t.text.text))
+        .hover(move |s| s.bg(t.colors().background).text_color(t.colors().text))
         // .on_click(move |_, cx| on_click(cx))
         .child(text!(glyph))
 }
@@ -293,7 +290,7 @@ fn network_card(t: &Theme, metric: Option<&NetMetric>, window: MonitorWindow) ->
     div()
         .flex()
         .flex_col()
-        .bg(t.surfaces.surface)
+        .bg(t.colors().background)
         .px(px(16.0))
         .py(px(12.0))
         .gap(px(6.0))
@@ -311,8 +308,8 @@ fn network_card(t: &Theme, metric: Option<&NetMetric>, window: MonitorWindow) ->
                 .flex_row()
                 .gap(px(12.0))
                 .text_size(px(10.5))
-                .text_color(t.text.text_muted)
-                .font_family(t.font.mono)
+                .text_color(t.colors().text_muted)
+                .font_family("JetBrains Mono")
                 .child(
                     div()
                         .flex()
@@ -324,7 +321,7 @@ fn network_card(t: &Theme, metric: Option<&NetMetric>, window: MonitorWindow) ->
                                 .w(px(10.0))
                                 .h(px(2.0))
                                 .rounded(px(2.0))
-                                .bg(t.semantic.green),
+                                .bg(t.colors().icon_accent),
                         )
                         .child(format!("↑ {} KB/s", n.up_kbps.round())),
                 )
@@ -339,7 +336,7 @@ fn network_card(t: &Theme, metric: Option<&NetMetric>, window: MonitorWindow) ->
                                 .w(px(10.0))
                                 .h(px(2.0))
                                 .rounded(px(2.0))
-                                .bg(t.accent.accent),
+                                .bg(t.colors().icon_accent),
                         )
                         .child(format!("↓ {} KB/s", n.down_kbps.round())),
                 ),
@@ -386,15 +383,15 @@ where
         MetricStatus::Danger => "metric-card__delta--up",
     };
     let delta_color = match m.status {
-        MetricStatus::Healthy => t.text.text_subtle,
-        MetricStatus::Warn => t.semantic.amber,
-        MetricStatus::Danger => t.semantic.red,
+        MetricStatus::Healthy => t.colors().icon_accent,
+        MetricStatus::Warn => t.status().warning,
+        MetricStatus::Danger => t.status().error,
     };
 
     let mut card = div()
         .flex()
         .flex_col()
-        .bg(t.surfaces.surface)
+        .bg(t.colors().background)
         .px(px(16.0))
         .py(px(12.0))
         .gap(px(6.0))
@@ -409,12 +406,12 @@ where
             .flex_row()
             .items_baseline()
             .gap(px(4.0))
-            .font_family(t.font.mono)
+            .font_family("JetBrains Mono")
             .child(
                 div()
                     .text_size(px(22.0))
                     .font_weight(FontWeight::SEMIBOLD)
-                    .text_color(t.text.text)
+                    .text_color(t.colors().text)
                     // .font_variant_numerals(FontVariantNumerals::Tabular)
                     .child(format_value(m)),
             ),
@@ -422,16 +419,16 @@ where
 
     if matches!(visual, MetricVisual::BarLine | MetricVisual::BarLineAmber) {
         let (bar_color, bar_pct) = match m.status {
-            MetricStatus::Healthy => (t.accent.accent, m.current),
-            MetricStatus::Warn => (t.semantic.amber, m.current),
-            MetricStatus::Danger => (t.semantic.red, m.current),
+            MetricStatus::Healthy => (t.colors().icon_accent, m.current),
+            MetricStatus::Warn => (t.status().warning, m.current),
+            MetricStatus::Danger => (t.status().error, m.current),
         };
         card = card.child(
             div()
                 .w_full()
                 .h(px(6.0))
                 .rounded_full()
-                .bg(t.surfaces.surface_2)
+                .bg(t.colors().background)
                 .child(
                     div()
                         .h_full()
@@ -473,7 +470,7 @@ fn card_head_color(t: &Theme, title: &str, delta: &str, delta_color: Hsla) -> im
             div()
                 .text_size(px(11.0))
                 .font_weight(FontWeight::SEMIBOLD)
-                .text_color(t.text.text_subtle)
+                .text_color(t.colors().icon_accent)
                 .flex_1()
                 .child(text!(title)),
         )
@@ -482,7 +479,7 @@ fn card_head_color(t: &Theme, title: &str, delta: &str, delta_color: Hsla) -> im
             div()
                 .ml_auto()
                 .text_size(px(10.5))
-                .font_family(t.font.mono)
+                .font_family("JetBrains Mono")
                 .text_color(delta_color)
                 .child(text!(delta)),
         )
@@ -490,18 +487,18 @@ fn card_head_color(t: &Theme, title: &str, delta: &str, delta_color: Hsla) -> im
 
 fn status_dot(t: &Theme, status: MetricStatus) -> impl IntoElement {
     let (color, _glow) = match status {
-        MetricStatus::Healthy => (t.semantic.green, "rgba(134,239,172,.5)"),
-        MetricStatus::Warn => (t.semantic.amber, "rgba(251,191,36,.5)"),
-        MetricStatus::Danger => (t.semantic.red, "rgba(252,165,165,.5)"),
+        MetricStatus::Healthy => (t.colors().icon_accent, "rgba(134,239,172,.5)"),
+        MetricStatus::Warn => (t.status().warning, "rgba(251,191,36,.5)"),
+        MetricStatus::Danger => (t.status().error, "rgba(252,165,165,.5)"),
     };
     div().size(px(6.0)).rounded_full().bg(color).shadow_md()
 }
 
 fn status_color(t: &Theme, status: MetricStatus) -> Hsla {
     match status {
-        MetricStatus::Healthy => t.text.text_subtle,
-        MetricStatus::Warn => t.semantic.amber,
-        MetricStatus::Danger => t.semantic.red,
+        MetricStatus::Healthy => t.colors().icon_accent,
+        MetricStatus::Warn => t.status().warning,
+        MetricStatus::Danger => t.status().error,
     }
 }
 
@@ -511,10 +508,10 @@ fn sub_row(t: &Theme, label: &str, value: &str) -> impl IntoElement {
         .flex_row()
         .justify_between()
         .text_size(px(11.0))
-        .font_family(t.font.mono)
-        .text_color(t.text.text_muted)
+        .font_family("JetBrains Mono")
+        .text_color(t.colors().text_muted)
         .child(text!(label))
-        .child(div().text_color(t.text.text).child(text!(value)))
+        .child(div().text_color(t.colors().text).child(text!(value)))
 }
 
 fn time_buttons(t: &Theme, current: MonitorWindow) -> impl IntoElement {
@@ -530,12 +527,12 @@ fn time_buttons(t: &Theme, current: MonitorWindow) -> impl IntoElement {
 
 fn time_btn(t: &Theme, label: &str, active: bool) -> impl IntoElement {
     let (color, border) = if active {
-        (t.accent.accent, t.accent.accent)
+        (t.colors().icon_accent, t.colors().icon_accent)
     } else {
-        (t.text.text_muted, t.border.border)
+        (t.colors().text_muted, t.colors().border)
     };
     let bg = if active {
-        t.accent.accent_soft
+        t.colors().icon_accent
     } else {
         transparent_hsla()
     };
@@ -548,7 +545,7 @@ fn time_btn(t: &Theme, label: &str, active: bool) -> impl IntoElement {
         .border_1()
         .border_color(border)
         .text_size(px(10.5))
-        .font_family(t.font.mono)
+        .font_family("JetBrains Mono")
         .text_color(color)
         .cursor_pointer()
         .child(text!(label))
@@ -560,9 +557,9 @@ fn time_btn(t: &Theme, label: &str, active: bool) -> impl IntoElement {
 
 // fn line_chart(t: &Theme, samples: &[f32], amber: bool) -> impl IntoElement {
 //     let (line_color, area_color) = if amber {
-//         (t.semantic.amber, t.semantic.amber)
+//         (t.status().warning, t.status().warning)
 //     } else {
-//         (t.accent.accent, t.accent.accent)
+//         (t.colors().icon_accent, t.colors().icon_accent)
 //     };
 
 //     let (line_d, area_d) = build_path(samples, 200.0, 56.0);
@@ -576,9 +573,9 @@ fn time_btn(t: &Theme, label: &str, active: bool) -> impl IntoElement {
 //             .preserve_aspect_ratio(PreserveAspectRatio::None)
 //             .overflow_hidden()
 //             // grid lines
-//             .child(svg_line(0.0, 14.0, 200.0, 14.0, t.border.border))
-//             .child(svg_line(0.0, 28.0, 200.0, 28.0, t.border.border))
-//             .child(svg_line(0.0, 42.0, 200.0, 42.0, t.border.border))
+//             .child(svg_line(0.0, 14.0, 200.0, 14.0, t.colors().border))
+//             .child(svg_line(0.0, 28.0, 200.0, 28.0, t.colors().border))
+//             .child(svg_line(0.0, 42.0, 200.0, 42.0, t.colors().border))
 //             // area
 //             .child(
 //                 svg()
@@ -608,32 +605,32 @@ fn time_btn(t: &Theme, label: &str, active: bool) -> impl IntoElement {
 //             .view_box(0.0, 0.0, 200.0, 56.0)
 //             .preserve_aspect_ratio(PreserveAspectRatio::None)
 //             .overflow_hidden()
-//             .child(svg_line(0.0, 14.0, 200.0, 14.0, t.border.border))
-//             .child(svg_line(0.0, 28.0, 200.0, 28.0, t.border.border))
-//             .child(svg_line(0.0, 42.0, 200.0, 42.0, t.border.border))
+//             .child(svg_line(0.0, 14.0, 200.0, 14.0, t.colors().border))
+//             .child(svg_line(0.0, 28.0, 200.0, 28.0, t.colors().border))
+//             .child(svg_line(0.0, 42.0, 200.0, 42.0, t.colors().border))
 //             // up (green)
 //             .child(
 //                 svg()
-//                     .path(t.semantic.green)
+//                     .path(t.colors().icon_accent)
 //                     .absolute()
 //                     .child(gpui::Path::from_svg(&up_area).with_transparency(0.12)),
 //             )
 //             .child(
 //                 svg()
-//                     .path(t.semantic.green)
+//                     .path(t.colors().icon_accent)
 //                     .stroke_width(1.5)
 //                     .child(gpui::Path::from_svg(&up_line)),
 //             )
 //             // down (accent)
 //             .child(
 //                 svg()
-//                     .path(t.accent.accent)
+//                     .path(t.colors().icon_accent)
 //                     .absolute()
 //                     .child(gpui::Path::from_svg(&down_area).with_transparency(0.12)),
 //             )
 //             .child(
 //                 svg()
-//                     .path(t.accent.accent)
+//                     .path(t.colors().icon_accent)
 //                     .stroke_width(1.5)
 //                     .child(gpui::Path::from_svg(&down_line)),
 //             ),

@@ -123,13 +123,12 @@ impl SettingsStore {
     /// Panics if the given setting type has not been registered, or if there is no
     /// value for this setting.
     pub fn get<T: Settings>(&self, path: Option<String>) -> &T {
-        // self.setting_values
-        //     .get(&TypeId::of::<T>())
-        //     .unwrap_or_else(|| panic!("unregistered setting type {}", type_name::<T>()))
-        //     .value_for_path(path)
-        //     .downcast_ref::<T>()
-        //     .expect("no default value for setting type")
-        todo!()
+        self.setting_values
+            .get(&TypeId::of::<T>())
+            .unwrap_or_else(|| panic!("unregistered setting type {}", type_name::<T>()))
+            .value_for_path(path)
+            .downcast_ref::<T>()
+            .expect("no default value for setting type")
     }
 
     /// Get the value of a setting.

@@ -3,12 +3,9 @@
 //! Each group is collapsible. Selecting an entry sets the active session
 //! and (in the real app) brings the tab forward.
 
-use crate::{
-    state::{AppState, SessionStatus},
-    theme::active,
-};
+use crate::state::{AppState, SessionStatus};
 use gpui::*;
-use theme::Theme;
+use theme::{ActiveTheme, Theme};
 
 pub struct Sidebar {
     state: Entity<AppState>,
@@ -31,7 +28,7 @@ impl Sidebar {
 
 impl Render for Sidebar {
     fn render(&mut self, windows: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
-        let t = active(cx).clone();
+        let t = cx.theme();
         let grouped = self.state.read(cx).grouped_sessions();
         let active_id = self.state.read(cx).active_session_id.clone();
         let query = self.search_query.to_lowercase();
@@ -54,29 +51,29 @@ impl Render for Sidebar {
         div()
             .flex()
             .flex_col()
-            .w(px(t.layout.sidebar_width))
+            .w(px(256.))
             .h_full()
-            .bg(t.surfaces.surface)
+            .bg(t.colors().background)
             .border_r_1()
-            .border_color(t.border.border)
+            .border_color(t.colors().border)
             // ============ Toolbar row ============
             .child(
                 div()
                     .flex()
                     .flex_row()
                     .items_center()
-                    .h(px(t.layout.toolbar_height))
+                    .h(px(44.))
                     .px(px(12.0))
                     .gap(px(8.0))
                     .border_b_1()
-                    .border_color(t.border.border)
+                    .border_color(t.colors().border)
                     .child(
                         div()
                             .flex()
                             .flex_1()
                             .text_size(px(11.0))
                             .font_weight(FontWeight::SEMIBOLD)
-                            .text_color(t.text.text_subtle)
+                            .text_color(t.colors().icon_accent)
                             .child("SESSIONS"),
                     ), // .child(icon_button(t, "↻")) // refresh
                        // .child(icon_button(t, "+")) // new
@@ -91,10 +88,10 @@ impl Render for Sidebar {
                     .px(px(12.0))
                     .py(px(8.0))
                     .border_b_1()
-                    .border_color(t.border.border)
+                    .border_color(t.colors().border)
                     .child(
                         div()
-                            .text_color(t.text.text_subtle)
+                            .text_color(t.colors().icon_accent)
                             .text_size(px(12.0))
                             .child("⌕"),
                     )
@@ -104,14 +101,14 @@ impl Render for Sidebar {
                             .px(px(8.0))
                             .py(px(4.0))
                             .rounded(px(4.0))
-                            .bg(t.surfaces.surface_2)
+                            .bg(t.colors().background)
                             .border_1()
-                            .border_color(t.border.border)
+                            .border_color(t.colors().border)
                             .text_size(px(12.5))
-                            .text_color(t.text.text)
+                            .text_color(t.colors().text)
                             .child(if self.search_query.is_empty() {
                                 div()
-                                    .text_color(t.text.text_subtle)
+                                    .text_color(t.colors().icon_accent)
                                     .child("Search sessions…")
                                     .into_any_element()
                             } else {
@@ -159,7 +156,7 @@ fn render_group(
                 .py(px(4.0))
                 .text_size(px(11.0))
                 .font_weight(FontWeight::SEMIBOLD)
-                .text_color(t.text.text_subtle)
+                .text_color(t.colors().icon_accent)
                 .cursor_pointer()
                 .child(div().child(chevron_rot))
                 .child(
@@ -196,19 +193,19 @@ fn render_session_item(
 ) -> impl IntoElement {
     let id = session.id.clone();
     let status_color = match session.status {
-        SessionStatus::Connected => t.semantic.green,
-        SessionStatus::Idle => t.semantic.amber,
-        SessionStatus::Disconnected => t.text.text_subtle,
-        SessionStatus::Error => t.semantic.red,
+        SessionStatus::Connected => t.colors().icon_accent,
+        SessionStatus::Idle => t.status().conflict,
+        SessionStatus::Disconnected => t.colors().icon_accent,
+        SessionStatus::Error => t.status().error,
     };
 
     let bg = if is_active {
-        t.accent.accent_soft
+        t.colors().icon_accent
     } else {
         Hsla::transparent_black()
     };
     let border_left_color = if is_active {
-        t.accent.accent
+        t.colors().icon_accent
     } else {
         Hsla::transparent_black()
     };
@@ -223,7 +220,7 @@ fn render_session_item(
         .border_l_2()
         .border_color(border_left_color)
         .cursor_pointer()
-        .hover(|s| s.bg(t.surfaces.surface_2))
+        .hover(|s| s.bg(t.colors().background))
         // .on_click(cx.listener(move |this, _, _| {
         //     this.state.update(this.cx(), |s| s.set_active_session(&id));
         // }))
@@ -240,13 +237,13 @@ fn render_session_item(
                     div()
                         .text_size(px(12.5))
                         .font_weight(FontWeight::MEDIUM)
-                        .text_color(t.text.text)
+                        .text_color(t.colors().text)
                         .child(session.name),
                 )
                 .child(
                     div()
                         .text_size(px(11.0))
-                        .text_color(t.text.text_subtle)
+                        .text_color(t.colors().icon_accent)
                         .child(format!(
                             "{}:{} · {}",
                             session.host, session.port, session.username
@@ -262,9 +259,9 @@ fn icon_button(t: &Theme, glyph: &'static str) -> impl IntoElement {
         .items_center()
         .justify_center()
         .rounded(px(4.0))
-        .text_color(t.text.text_subtle)
+        .text_color(t.colors().icon_accent)
         .text_size(px(13.0))
         .cursor_pointer()
-        .hover(|s| s.bg(t.surfaces.surface_2).text_color(t.text.text))
+        .hover(|s| s.bg(t.colors().background).text_color(t.colors().text))
         .child(glyph)
 }

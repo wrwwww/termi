@@ -4,9 +4,12 @@
 //! encoding/line endings/grid · theme + agent forwarding (right).
 
 use crate::state::{AppState, SessionStatus};
-use crate::theme::active;
+
 use gpui::*;
-use theme::Theme;
+use settings::Settings;
+use settings_content::theme::ThemeAppearanceMode;
+use theme::{ActiveTheme, Theme};
+use theme_settings::ThemeSettings;
 
 pub struct StatusBar {
     state: Entity<AppState>,
@@ -16,11 +19,27 @@ impl StatusBar {
     pub fn new(state: Entity<AppState>) -> Self {
         Self { state }
     }
+    fn toggle_theme_mode(&mut self, _: &ToggleMode, _window: &mut Window, cx: &mut Context<Self>) {
+        let current_mode = ThemeSettings::get_global(cx).theme.mode();
+        let next_mode = match current_mode {
+            Some(ThemeAppearanceMode::Light) => ThemeAppearanceMode::Dark,
+            Some(ThemeAppearanceMode::Dark) => ThemeAppearanceMode::Light,
+            Some(ThemeAppearanceMode::System) | None => match cx.theme().appearance() {
+                theme::Appearance::Light => ThemeAppearanceMode::Dark,
+                theme::Appearance::Dark => ThemeAppearanceMode::Light,
+            },
+        };
+
+        let fs = self.project().read(cx).fs().clone();
+        settings::update_settings_file(fs, cx, move |settings, _cx| {
+            theme_settings::set_mode(settings, next_mode);
+        });
+    }
 }
 
 impl Render for StatusBar {
     fn render(&mut self, windows: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
-        let t = active(cx).clone();
+        let t = cx.theme();
         let state = self.state.read(cx);
         let active = state
             .active_session_id
@@ -39,25 +58,26 @@ impl Render for StatusBar {
             .unwrap_or_else(|| "No active session".into());
 
         div()
+            .on_action(cx.listener(Self::toggle_theme_mode))
             .id("lumen-statusbar")
             .flex()
             .flex_row()
             .items_center()
-            .h(px(t.layout.statusbar_height))
+            .h(px(28.))
             .px(px(12.0))
-            .bg(t.surfaces.surface)
+            .bg(t.colors().background)
             .border_t_1()
-            .border_color(t.border.border)
+            .border_color(t.colors().border)
             .text_size(px(11.5))
-            .text_color(t.text.text_muted)
+            .text_color(t.colors().text_muted)
             // group 1: connection chip
             .child(group(
                 &t,
                 |s| {
                     let dot = div().size(px(6.0)).rounded_full().bg(if connected {
-                        t.semantic.green
+                        t.colors().icon_accent
                     } else {
-                        t.text.text_subtle
+                        t.colors().icon_accent
                     });
                     s.child(dot)
                         .child(
@@ -66,12 +86,12 @@ impl Render for StatusBar {
                                 .py(px(2.0))
                                 .rounded_full()
                                 .border_1()
-                                .border_color(t.border.border)
-                                .bg(t.surfaces.surface_2)
+                                .border_color(t.colors().border)
+                                .bg(t.colors().background)
                                 .text_color(if connected {
-                                    t.semantic.green
+                                    t.colors().icon_accent
                                 } else {
-                                    t.text.text_muted
+                                    t.colors().text_muted
                                 })
                                 .child(if connected {
                                     "Connected"
@@ -79,14 +99,14 @@ impl Render for StatusBar {
                                     "Disconnected"
                                 }),
                         )
-                        .child(div().text_color(t.text.text_muted).child(latency_text))
+                        .child(div().text_color(t.colors().text_muted).child(latency_text))
                 },
                 true,
             ))
             // group 2: user@host
             .child(group(
                 &t,
-                |s| s.child(div().text_color(t.text.text_muted).child(user_host)),
+                |s| s.child(div().text_color(t.colors().text_muted).child(user_host)),
                 true,
             ))
             // group 3: encoding + dimensions
@@ -98,7 +118,7 @@ impl Render for StatusBar {
                     .px(px(12.0))
                     .h_full()
                     .border_r_1()
-                    .border_color(t.border.border)
+                    .border_color(t.colors().border)
                     .child(pill(&t, "UTF-8"))
                     .child(pill(&t, "CR/LF"))
                     .child(pill(&t, "132×40")),
@@ -119,7 +139,7 @@ impl Render for StatusBar {
                             .flex()
                             .items_center()
                             .gap(px(6.0))
-                            .text_color(t.text.text_muted)
+                            .text_color(t.colors().text_muted)
                             .child(div().child("⌑"))
                             .child("Agent forwarding"),
                     ),
@@ -138,14 +158,14 @@ where
         .px(px(12.0))
         .h_full();
     if with_border {
-        d = d.border_r_1().border_color(t.border.border);
+        d = d.border_r_1().border_color(t.colors().border);
     }
     f(d)
 }
 
 fn pill(t: &Theme, label: &str) -> impl IntoElement {
     div()
-        .text_color(t.text.text_muted)
+        .text_color(t.colors().text_muted)
         .text_size(px(11.5))
         .child(text!(label))
 }
@@ -156,9 +176,9 @@ fn render_theme_toggle(t: &Theme) -> impl IntoElement {
         .items_center()
         .p(px(2.0))
         .rounded_full()
-        .bg(t.surfaces.surface_2)
+        .bg(t.colors().background)
         .border_1()
-        .border_color(t.border.border)
+        .border_color(t.colors().border)
         .child(theme_pill_btn(t, "Dark", true))
         .child(theme_pill_btn(t, "Light", false))
         .child(theme_pill_btn(t, "System", false))
@@ -166,9 +186,9 @@ fn render_theme_toggle(t: &Theme) -> impl IntoElement {
 
 fn theme_pill_btn(t: &Theme, label: &str, active: bool) -> impl IntoElement {
     let (bg, color) = if active {
-        (t.surfaces.surface, t.text.text)
+        (t.colors().background, t.colors().text)
     } else {
-        (Hsla::transparent_black(), t.text.text_muted)
+        (Hsla::transparent_black(), t.colors().text_muted)
     };
     div()
         .px(px(10.0))

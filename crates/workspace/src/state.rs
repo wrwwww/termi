@@ -109,7 +109,7 @@ impl Default for Settings {
             theme_mode: ThemeMode::Dark,
             accent_name: "Sky".into(),
             ui_font: "Inter".into(),
-            mono_font: "JetBrains Mono".into(),
+            mono_font: "JetBrains Mono".to_string(),
             mono_font_size: 13.0,
             line_height: 1.55,
             cursor_style: CursorStyle::Block,

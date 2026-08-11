@@ -182,7 +182,7 @@ pub trait AnySettingValue: 'static + Send + Sync {
 
     fn from_settings(&self, s: &SettingsContent) -> Box<dyn Any>;
 
-    // fn value_for_path(&self, path: Option<String>) -> &dyn Any;
+    fn value_for_path(&self, path: Option<String>) -> &dyn Any;
     // fn all_local_values(&self) -> Vec<(Arc<String>, &dyn Any)>;
     fn set_global_value(&mut self, value: Box<dyn Any>);
     // fn set_local_value(&mut self, path: Arc<String>, value: Box<dyn Any>);
@@ -326,6 +326,20 @@ impl<T: Settings> AnySettingValue for SettingValue<T> {
 
     fn set_global_value(&mut self, value: Box<dyn Any>) {
         self.global_value = Some(*value.downcast().unwrap());
+    }
+
+    fn value_for_path(&self, path: Option<String>) -> &dyn Any {
+        // if let Some(SettingsLocation { worktree_id, path }) = path {
+        //     for (settings_root_id, settings_path, value) in self.local_values.iter().rev() {
+        //         if worktree_id == *settings_root_id && path.starts_with(settings_path) {
+        //             return value;
+        //         }
+        //     }
+        // }
+
+        self.global_value
+            .as_ref()
+            .unwrap_or_else(|| panic!("no default value for setting {}", self.setting_type_name()))
     }
 
     // fn set_local_value(&mut self, root_id: WorktreeId, path: Arc<RelPath>, value: Box<dyn Any>) {

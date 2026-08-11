@@ -2,6 +2,7 @@
 
 use crate::state::{AppState, ThemeMode};
 use gpui::*;
+use theme::ActiveTheme;
 
 pub struct SettingsView {
     state: Entity<AppState>,
@@ -29,9 +30,9 @@ impl SettingsView {
 
 impl Render for SettingsView {
     fn render(&mut self, windows: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
-        let t = active(cx).clone();
+        let t = cx.theme();
 
-        div().flex().flex_row().flex_1().bg(t.surfaces.bg)
+        div().flex().flex_row().flex_1().bg(t.colors().background)
         // // ===== Left nav =====
         // .child(nav(&t, self.section, cx))
         // // ===== Content area =====
@@ -59,9 +60,9 @@ impl Render for SettingsView {
 //             .py(px(7.0))
 //             .text_size(px(12.5))
 //             .text_color(if active {
-//                 t.text.text
+//                 t.colors().text
 //             } else {
-//                 t.text.text_muted
+//                 t.colors().text_muted
 //             })
 //             .font_weight(if active {
 //                 FontWeight::MEDIUM
@@ -69,27 +70,27 @@ impl Render for SettingsView {
 //                 FontWeight::NORMAL
 //             })
 //             .bg(if active {
-//                 t.accent.accent_soft
+//                 t.colors().icon_accent
 //             } else {
 //                 transparent_hsla()
 //             })
 //             .border_l_2()
 //             .border_color(if active {
-//                 t.accent.accent
+//                 t.colors().icon_accent
 //             } else {
 //                 transparent_hsla()
 //             })
 //             .cursor_pointer()
-//             .hover(|s| s.bg(t.surfaces.surface_2).text_color(t.text.text))
+//             .hover(|s| s.bg(t.colors().background).text_color(t.colors().text))
 //             .on_click(cx.listener(move |this, _, _| {
 //                 this.section = section;
 //             }))
 //             .child(
 //                 div()
 //                     .text_color(if active {
-//                         t.accent.accent
+//                         t.colors().icon_accent
 //                     } else {
-//                         t.text.text_muted
+//                         t.colors().text_muted
 //                     })
 //                     .child(icon),
 //             )
@@ -101,9 +102,9 @@ impl Render for SettingsView {
 //         .flex_col()
 //         .w(px(220.0))
 //         .h_full()
-//         .bg(t.surfaces.surface)
+//         .bg(t.colors().background)
 //         .border_r_1()
-//         .border_color(t.border.border)
+//         .border_color(t.colors().border)
 //         .py(px(12.0))
 //         .child(make_item(SettingsSection::Appearance, "Appearance", "◐"))
 //         .child(make_item(SettingsSection::Terminal, "Terminal", ">_"))
@@ -253,7 +254,7 @@ impl Render for SettingsView {
 //     div()
 //         .text_size(px(22.0))
 //         .font_weight(FontWeight::SEMIBOLD)
-//         .text_color(t.text.text)
+//         .text_color(t.colors().text)
 //         .line_height(px(26.4))
 //         .child(s)
 // }
@@ -262,7 +263,7 @@ impl Render for SettingsView {
 //     div()
 //         .mt(px(8.0))
 //         .text_size(px(13.0))
-//         .text_color(t.text.text_muted)
+//         .text_color(t.colors().text_muted)
 //         .child(s)
 // }
 
@@ -275,7 +276,7 @@ impl Render for SettingsView {
 //             div()
 //                 .text_size(px(11.0))
 //                 .font_weight(FontWeight::SEMIBOLD)
-//                 .text_color(t.text.text_subtle)
+//                 .text_color(t.colors().icon_accent)
 //                 .mb(px(12.0))
 //                 .child(title),
 //         )
@@ -295,7 +296,7 @@ impl Render for SettingsView {
 //         .gap(px(16.0))
 //         .py(px(12.0))
 //         .border_t_1()
-//         .border_color(t.border.border)
+//         .border_color(t.colors().border)
 //         .child(
 //             div()
 //                 .flex_1()
@@ -303,14 +304,14 @@ impl Render for SettingsView {
 //                     div()
 //                         .text_size(px(13.0))
 //                         .font_weight(FontWeight::MEDIUM)
-//                         .text_color(t.text.text)
+//                         .text_color(t.colors().text)
 //                         .child(label),
 //                 )
 //                 .child(
 //                     div()
 //                         .mt(px(2.0))
 //                         .text_size(px(12.0))
-//                         .text_color(t.text.text_subtle)
+//                         .text_color(t.colors().icon_accent)
 //                         .child(desc),
 //                 ),
 //         )
@@ -337,15 +338,15 @@ impl Render for SettingsView {
 //         .items_center()
 //         .p(px(2.0))
 //         .rounded_full()
-//         .bg(t.surfaces.surface_2)
+//         .bg(t.colors().background)
 //         .border_1()
-//         .border_color(t.border.border)
+//         .border_color(t.colors().border)
 //         .children(opts.iter().map(|m| {
 //             let is_active = std::mem::discriminant(*m) == std::mem::discriminant(current);
 //             let (bg, color) = if is_active {
-//                 (t.surfaces.surface, t.text.text)
+//                 (t.colors().background, t.colors().text)
 //             } else {
-//                 (transparent_hsla(), t.text.text_muted)
+//                 (transparent_hsla(), t.colors().text_muted)
 //             };
 //             div()
 //                 .id(("opt", label_of(*m)))
@@ -374,11 +375,11 @@ impl Render for SettingsView {
 //         .px(px(10.0))
 //         .py(px(7.0))
 //         .rounded(px(6.0))
-//         .bg(t.surfaces.surface_2)
+//         .bg(t.colors().background)
 //         .border_1()
-//         .border_color(t.border.border_strong)
+//         .border_color(t.colors().border_strong)
 //         .text_size(px(12.5))
-//         .text_color(t.text.text)
+//         .text_color(t.colors().text)
 //         .text_align(TextAlign::Right)
 //         .child(options.get(idx).copied().unwrap_or(""));
 //     row_layout(t, label, desc, body.into_any_element()).into_any_element()
@@ -390,11 +391,11 @@ impl Render for SettingsView {
 //         .px(px(10.0))
 //         .py(px(7.0))
 //         .rounded(px(6.0))
-//         .bg(t.surfaces.surface_2)
+//         .bg(t.colors().background)
 //         .border_1()
-//         .border_color(t.border.border_strong)
+//         .border_color(t.colors().border_strong)
 //         .text_size(px(12.5))
-//         .text_color(t.text.text)
+//         .text_color(t.colors().text)
 //         .text_align(TextAlign::Right)
 //         .child(format!("{}", value));
 //     row_layout(t, label, desc, body.into_any_element()).into_any_element()
@@ -402,14 +403,14 @@ impl Render for SettingsView {
 
 // fn row_checkbox(t: &Theme, label: &str, desc: &str, checked: bool) -> AnyElement {
 //     let bg = if checked {
-//         t.accent.accent_strong
+//         t.colors().icon_accent_strong
 //     } else {
-//         t.surfaces.surface_2
+//         t.colors().background
 //     };
 //     let border = if checked {
-//         t.accent.accent_strong
+//         t.colors().icon_accent_strong
 //     } else {
-//         t.border.border_strong
+//         t.colors().border_strong
 //     };
 //     let body = div()
 //         .flex()
@@ -417,7 +418,7 @@ impl Render for SettingsView {
 //         .items_center()
 //         .gap(px(8.0))
 //         .text_size(px(12.5))
-//         .text_color(t.text.text)
+//         .text_color(t.colors().text)
 //         .child(
 //             div()
 //                 .size(px(14.0))

@@ -1,8 +1,8 @@
 //! `FilesPane` — right-hand SFTP-style file browser. Static demo list.
 
-use crate::{state::AppState, theme::active};
+use crate::state::AppState;
 use gpui::*;
-use theme::Theme;
+use theme::{ActiveTheme, Theme};
 
 pub struct FilesPane {
     state: Entity<AppState>,
@@ -16,33 +16,33 @@ impl FilesPane {
 
 impl Render for FilesPane {
     fn render(&mut self, windows: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
-        let t = active(cx).clone();
+        let t = cx.theme();
 
         div()
             .id("lumen-files")
             .flex()
             .flex_col()
-            .w(px(t.layout.rightbar_width))
+            .w(px(280.))
             .h_full()
-            .bg(t.surfaces.surface)
+            .bg(t.colors().background)
             .border_l_1()
-            .border_color(t.border.border)
+            .border_color(t.colors().border)
             // ===== Toolbar =====
             .child(
                 div()
                     .flex()
                     .items_center()
-                    .h(px(t.layout.toolbar_height))
+                    .h(px(44.))
                     .px(px(12.0))
                     .gap(px(8.0))
                     .border_b_1()
-                    .border_color(t.border.border)
+                    .border_color(t.colors().border)
                     .child(
                         div()
                             .flex_1()
                             .text_size(px(11.0))
                             .font_weight(FontWeight::SEMIBOLD)
-                            .text_color(t.text.text_subtle)
+                            .text_color(t.colors().icon_accent)
                             .child("FILES"),
                     ), // .child(icon_btn(t, "↻"))
                        // .child(icon_btn(t, "+"))
@@ -56,15 +56,15 @@ impl Render for FilesPane {
                     .gap(px(4.0))
                     .px(px(12.0))
                     .py(px(8.0))
-                    .font_family(t.font.mono)
+                    .font_family("JetBrains Mono")
                     .text_size(px(12.0))
-                    .text_color(t.text.text_muted)
+                    .text_color(t.colors().text_muted)
                     .border_b_1()
-                    .border_color(t.border.border)
+                    .border_color(t.colors().border)
                     .child(div().child("~"))
-                    .child(div().text_color(t.text.text_subtle).child("/"))
+                    .child(div().text_color(t.colors().icon_accent).child("/"))
                     .child(div().child("deploy"))
-                    .child(div().text_color(t.text.text_subtle).child("/"))
+                    .child(div().text_color(t.colors().icon_accent).child("/"))
                     .child(div().child("projects")),
             )
             // ===== File list =====
@@ -77,7 +77,7 @@ impl Render for FilesPane {
                     .min_h_0()
                     .overflow_y_scroll()
                     .py(px(4.0))
-                    .font_family(t.font.mono)
+                    .font_family("JetBrains Mono")
                     .text_size(px(12.5))
                     .children(vec![
                         row(&t, "..", "dr-x", "—", false),
@@ -96,9 +96,9 @@ impl Render for FilesPane {
 fn row(t: &Theme, name: &str, perms: &str, size: &str, is_dir: bool) -> impl IntoElement {
     let icon = if is_dir { "▸" } else { "·" };
     let icon_color = if is_dir {
-        t.semantic.amber
+        t.status().warning
     } else {
-        t.text.text_muted
+        t.colors().text_muted
     };
     div()
         // .id(("file", name))
@@ -109,7 +109,7 @@ fn row(t: &Theme, name: &str, perms: &str, size: &str, is_dir: bool) -> impl Int
         .px(px(16.0))
         .py(px(4.0))
         .cursor_pointer()
-        .hover(|s| s.bg(t.surfaces.surface_2))
+        .hover(|s| s.bg(t.colors().background))
         // icon
         .child(div().w(px(22.0)).text_color(icon_color).child(icon))
         // name
@@ -117,7 +117,7 @@ fn row(t: &Theme, name: &str, perms: &str, size: &str, is_dir: bool) -> impl Int
             div()
                 .flex_1()
                 .overflow_hidden()
-                .text_color(t.text.text)
+                .text_color(t.colors().text)
                 .child(text!(name)),
         )
         // permissions chip
@@ -127,14 +127,14 @@ fn row(t: &Theme, name: &str, perms: &str, size: &str, is_dir: bool) -> impl Int
                 .py(px(1.0))
                 .rounded(px(4.0))
                 .border_1()
-                .border_color(t.border.border)
-                .bg(t.surfaces.surface_2)
-                .text_color(t.semantic.amber)
+                .border_color(t.colors().border)
+                .bg(t.colors().background)
+                .text_color(t.status().warning)
                 .text_size(px(11.0))
                 .child(text!(perms)),
         )
         // size
-        .child(div().text_color(t.text.text_subtle).child(text!(size)))
+        .child(div().text_color(t.colors().icon_accent).child(text!(size)))
 }
 
 fn icon_btn(t: &Theme, glyph: &'static str) -> impl IntoElement {
@@ -144,9 +144,9 @@ fn icon_btn(t: &Theme, glyph: &'static str) -> impl IntoElement {
         .items_center()
         .justify_center()
         .rounded(px(4.0))
-        .text_color(t.text.text_subtle)
+        .text_color(t.colors().icon_accent)
         .text_size(px(12.0))
         .cursor_pointer()
-        .hover(|s| s.bg(t.surfaces.surface_2).text_color(t.text.text))
+        .hover(|s| s.bg(t.colors().background).text_color(t.colors().text))
         .child(glyph)
 }

@@ -1,8 +1,8 @@
 //! `TabsBar` — horizontal strip of open terminal tabs above the pane area.
 
-use crate::{state::AppState, theme::active};
+use crate::state::AppState;
 use gpui::*;
-use theme::Theme;
+use theme::{ActiveTheme, Theme};
 
 pub struct TabsBar {
     state: Entity<AppState>,
@@ -16,7 +16,7 @@ impl TabsBar {
 
 impl Render for TabsBar {
     fn render(&mut self, windows: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
-        let t = active(cx).clone();
+        let t = cx.theme();
         let state = self.state.read(cx);
         let active_id = state.active_session_id.clone();
         let connected_ids: Vec<String> = state
@@ -31,10 +31,10 @@ impl Render for TabsBar {
             .flex()
             .flex_row()
             .items_center()
-            .h(px(t.layout.tabs_height))
-            .bg(t.surfaces.surface)
+            .h(px(36.))
+            .bg(t.colors().background)
             .border_b_1()
-            .border_color(t.border.border)
+            .border_color(t.colors().border)
             .overflow_x_scroll();
 
         // One tab per connected session, in order.
@@ -67,21 +67,21 @@ fn render_tab(
         .px(px(16.0))
         .h_full()
         .border_r_1()
-        .border_color(t.border.border)
+        .border_color(t.colors().border)
         .bg(if is_active {
-            t.surfaces.bg
+            t.colors().background
         } else {
             Hsla::transparent_black()
         })
         .relative()
-        .child(div().size(px(6.0)).rounded_full().bg(t.semantic.green))
+        .child(div().size(px(6.0)).rounded_full().bg(t.status().conflict))
         .child(
             div()
                 .text_size(px(12.5))
                 .text_color(if is_active {
-                    t.text.text
+                    t.colors().text
                 } else {
-                    t.text.text_muted
+                    t.colors().text_muted
                 })
                 .child(session.name.clone()),
         )
@@ -92,7 +92,7 @@ fn render_tab(
                 .items_center()
                 .justify_center()
                 .rounded(px(4.0))
-                .text_color(t.text.text_subtle)
+                .text_color(t.colors().text_placeholder)
                 .child("×"),
         )
 }
@@ -105,7 +105,7 @@ fn render_new_tab_btn(t: &Theme) -> impl IntoElement {
         .flex()
         .items_center()
         .border_r_1()
-        .border_color(t.border.border)
-        .text_color(t.text.text_muted)
+        .border_color(t.colors().border)
+        .text_color(t.colors().text_muted)
         .child("+")
 }

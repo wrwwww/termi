@@ -3,6 +3,7 @@ use std::{collections::HashMap, sync::Arc};
 
 use anyhow::{Context, Result};
 use gpui::{App, Font, FontFallbacks, FontStyle, Global, Hsla, Pixels, SharedString, Window, px};
+use log::info;
 use palette::convert::FromColorUnclamped;
 use refineable::Refineable;
 use serde::{Deserialize, Serialize};
@@ -101,46 +102,46 @@ pub fn init(themes_to_load: LoadThemes, cx: &mut App) {
     GlobalTheme::update_theme(cx, theme);
     // GlobalTheme::update_icon_theme(cx, icon_theme);
 
-    // let settings = ThemeSettings::get_global(cx);
+    let settings = ThemeSettings::get_global(cx);
+    info!("ui fonts {:#?}", settings);
+    let mut prev_buffer_font_size_settings = settings.buffer_font_size_settings();
+    let mut prev_ui_font_size_settings = settings.ui_font_size_settings();
+    let mut prev_theme_name = settings.theme.name(SystemAppearance::global(cx).0);
+    // let mut prev_icon_theme_name = settings.icon_theme.name(SystemAppearance::global(cx).0);
+    let mut prev_theme_overrides = (
+        settings.experimental_theme_overrides.clone(),
+        settings.theme_overrides.clone(),
+    );
 
-    // let mut prev_buffer_font_size_settings = settings.buffer_font_size_settings();
-    // let mut prev_ui_font_size_settings = settings.ui_font_size_settings();
-    // let mut prev_theme_name = settings.theme.name(SystemAppearance::global(cx).0);
-    // // let mut prev_icon_theme_name = settings.icon_theme.name(SystemAppearance::global(cx).0);
-    // let mut prev_theme_overrides = (
-    //     settings.experimental_theme_overrides.clone(),
-    //     settings.theme_overrides.clone(),
-    // );
+    cx.observe_global::<SettingsStore>(move |cx| {
+        let settings = ThemeSettings::get_global(cx);
 
-    // cx.observe_global::<SettingsStore>(move |cx| {
-    //     let settings = ThemeSettings::get_global(cx);
+        let buffer_font_size_settings = settings.buffer_font_size_settings();
+        let ui_font_size_settings = settings.ui_font_size_settings();
+        let theme_name = settings.theme.name(SystemAppearance::global(cx).0);
+        // let icon_theme_name = settings.icon_theme.name(SystemAppearance::global(cx).0);
+        let theme_overrides = (
+            settings.experimental_theme_overrides.clone(),
+            settings.theme_overrides.clone(),
+        );
 
-    //     let buffer_font_size_settings = settings.buffer_font_size_settings();
-    //     let ui_font_size_settings = settings.ui_font_size_settings();
-    //     let theme_name = settings.theme.name(SystemAppearance::global(cx).0);
-    //     // let icon_theme_name = settings.icon_theme.name(SystemAppearance::global(cx).0);
-    //     let theme_overrides = (
-    //         settings.experimental_theme_overrides.clone(),
-    //         settings.theme_overrides.clone(),
-    //     );
+        if buffer_font_size_settings != prev_buffer_font_size_settings {
+            prev_buffer_font_size_settings = buffer_font_size_settings;
+            reset_buffer_font_size(cx);
+        }
 
-    //     if buffer_font_size_settings != prev_buffer_font_size_settings {
-    //         prev_buffer_font_size_settings = buffer_font_size_settings;
-    //         reset_buffer_font_size(cx);
-    //     }
+        if ui_font_size_settings != prev_ui_font_size_settings {
+            prev_ui_font_size_settings = ui_font_size_settings;
+            reset_ui_font_size(cx);
+        }
 
-    //     if ui_font_size_settings != prev_ui_font_size_settings {
-    //         prev_ui_font_size_settings = ui_font_size_settings;
-    //         reset_ui_font_size(cx);
-    //     }
-
-    //     if theme_name != prev_theme_name || theme_overrides != prev_theme_overrides {
-    //         prev_theme_name = theme_name;
-    //         prev_theme_overrides = theme_overrides;
-    //         reload_theme(cx);
-    //     }
-    // })
-    // .detach();
+        if theme_name != prev_theme_name || theme_overrides != prev_theme_overrides {
+            prev_theme_name = theme_name;
+            prev_theme_overrides = theme_overrides;
+            reload_theme(cx);
+        }
+    })
+    .detach();
 }
 
 /// Gets the font size, adjusted by the difference between the current buffer font size and the one set in the settings.
@@ -358,13 +359,12 @@ pub fn reload_theme(cx: &mut App) {
 }
 fn configured_theme(cx: &mut App) -> Arc<Theme> {
     let themes = ThemeRegistry::default_global(cx);
-    // let theme_settings = ThemeSettings::get_global(cx);
+    let theme_settings = ThemeSettings::get_global(cx);
     let system_appearance = SystemAppearance::global(cx);
 
-    // let theme_name = theme_settings.theme.name(*system_appearance);
-    let theme_name = "default".to_string();
+    let theme_name = theme_settings.theme.name(*system_appearance);
 
-    let theme = match themes.get(&theme_name) {
+    let theme = match themes.get(&theme_name.0) {
         Ok(theme) => theme,
         Err(err) => {
             if themes.extensions_loaded() {
@@ -375,11 +375,11 @@ fn configured_theme(cx: &mut App) -> Arc<Theme> {
                 .unwrap_or_else(|_| themes.get(DEFAULT_DARK_THEME).unwrap())
         }
     };
-    theme
-    // theme_settings.apply_theme_overrides(theme)
+    // theme
+    theme_settings.apply_theme_overrides(theme)
 }
 
-#[derive(Clone, PartialEq, RegisterSetting)]
+#[derive(Clone, PartialEq, RegisterSetting, Debug)]
 pub struct ThemeSettings {
     /// The UI font size. Determines the size of text in the UI,
     /// as well as the size of a [gpui::Rems] unit.
@@ -2498,5 +2498,31 @@ fn ensure_non_opaque(color: Hsla) -> Hsla {
             a: MAXIMUM_OPACITY,
             ..color
         }
+    }
+}
+/// Sets the mode for the theme.
+pub fn set_mode(content: &mut SettingsContent, mode: ThemeAppearanceMode) {
+    let theme = content.theme.as_mut();
+
+    if let Some(selection) = theme.theme.as_mut() {
+        match selection {
+            settings_content::theme::ThemeSelection::Static(_) => {
+                *selection = settings_content::theme::ThemeSelection::Dynamic {
+                    mode: ThemeAppearanceMode::System,
+                    light: ThemeName(settings_content::theme::DEFAULT_LIGHT_THEME.into()),
+                    dark: ThemeName(settings_content::theme::DEFAULT_DARK_THEME.into()),
+                };
+            }
+            settings_content::theme::ThemeSelection::Dynamic {
+                mode: mode_to_update,
+                ..
+            } => *mode_to_update = mode,
+        }
+    } else {
+        theme.theme = Some(settings_content::theme::ThemeSelection::Dynamic {
+            mode,
+            light: ThemeName(settings_content::theme::DEFAULT_LIGHT_THEME.into()),
+            dark: ThemeName(settings_content::theme::DEFAULT_DARK_THEME.into()),
+        });
     }
 }

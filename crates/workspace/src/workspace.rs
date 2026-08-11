@@ -217,9 +217,9 @@ fn menu_button(label: &'static str, t: &Theme) -> impl IntoElement {
 //         .items_center()
 //         .justify_center()
 //         .rounded(px(4.0))
-//         .text_color(t.text.text_muted)
+//         .text_color(t.colors().text_muted)
 //         .cursor_pointer()
-//         .hover(|s| s.bg(t.surfaces.surface_2).text_color(t.text.text))
+//         .hover(|s| s.bg(t.colors().background).text_color(t.colors().text))
 //         // placeholder dot — replace with svg::path()
 //         .child(
 //             div()
@@ -232,7 +232,7 @@ fn menu_button(label: &'static str, t: &Theme) -> impl IntoElement {
 
 // impl RenderOnce for TitleBar {
 //     fn render(self, window: &mut Window, cx: &mut App) -> impl IntoElement {
-//         let t = active(cx).clone();
+//         let t = cx.theme();
 
 //         div()
 //             .flex()
@@ -240,7 +240,7 @@ fn menu_button(label: &'static str, t: &Theme) -> impl IntoElement {
 //             .items_center()
 //             .h(px(t.layout.header_height))
 //             .px(px(16.0))
-//             .bg(t.surfaces.surface)
+//             .bg(t.colors().background)
 //             .border_b_1()
 //             .border_color(t.colors().border.border)
 //             // brand
@@ -250,11 +250,11 @@ fn menu_button(label: &'static str, t: &Theme) -> impl IntoElement {
 //                     .items_center()
 //                     .gap(px(8.0))
 //                     .ml(px(16.0))
-//                     .text_color(t.text.text)
+//                     .text_color(t.colors().text)
 //                     .font_weight(FontWeight::SEMIBOLD)
 //                     .child(
 //                         // logo glyph (>) — replace with SVG path in production
-//                         div().text_color(t.accent.accent).child(">"),
+//                         div().text_color(t.colors().icon_accent).child(">"),
 //                     )
 //                     .child("Lumen"),
 //             )

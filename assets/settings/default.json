@@ -7,9 +7,9 @@
   // - "light": Use the theme indicated by the "light" field
   // - "dark": Use the theme indicated by the "dark" field
   "theme": {
-    "mode": "system",
-    "light": "One Light",
-    "dark": "One Dark"
+    "mode": "dark",
+    "light": "Light",
+    "dark": "Dark"
   },
   "icon_theme": "Zed (Default)",
   // The name of a base set of key bindings to use.
@@ -810,7 +810,9 @@
   },
   // Whether to resize all the panels in a dock when resizing the dock.
   // Can be a combination of "left", "right" and "bottom".
-  "resize_all_panels_in_dock": ["left"],
+  "resize_all_panels_in_dock": [
+    "left"
+  ],
   "project_panel": {
     // Whether to show the project panel button in the status bar
     "button": true,
@@ -1308,7 +1310,9 @@
   // The list of language servers to use (or disable) for all languages.
   //
   // This is typically customized on a per-language basis.
-  "language_servers": ["..."],
+  "language_servers": [
+    "..."
+  ],
   // Controls how semantic tokens from language servers are used for syntax highlighting.
   //
   // Options:
@@ -1318,7 +1322,6 @@
   //
   // May require language server restart to properly apply.
   "semantic_tokens": "off",
-
   // Controls whether folding ranges from language servers are used instead of
   // tree-sitter and indent-based folding.
   //
@@ -1326,14 +1329,12 @@
   // - "off": Use tree-sitter and indent-based folding (default).
   // - "on": Use LSP folding wherever possible, falling back to tree-sitter and indent-based folding when no results were returned by the server.
   "document_folding_ranges": "off",
-
   // Controls the source of document symbols used for outlines and breadcrumbs.
   //
   // Options:
   // - "off": Use tree-sitter queries to compute document symbols (default).
   // - "on": Use the language server's `textDocument/documentSymbol` LSP response. When enabled, tree-sitter is not used for document symbols.
   "document_symbols": "off",
-
   // When to automatically save edited buffers. This setting can
   // take four values.
   //
@@ -1649,7 +1650,9 @@
   // for files that are not tracked by git, but are still important to your project. Note that globs
   // that are overly broad can slow down Zed's file scanning. `file_scan_exclusions` takes
   // precedence over these inclusions.
-  "file_scan_inclusions": [".env*"],
+  "file_scan_inclusions": [
+    ".env*"
+  ],
   // When to scan content of linked directories.
   // May take 2 values:
   //  1. Only scan symlinked directories when they've been expanded in the workspace:
@@ -1659,7 +1662,9 @@
   "scan_symlinks": "expanded",
   // Globs to match files that will be considered "hidden". These files can be hidden from the
   // project panel by toggling the "hide_hidden" setting.
-  "hidden_files": ["**/.*"],
+  "hidden_files": [
+    "**/.*"
+  ],
   // Globs to match files that will be opened as read-only. You can still view these files,
   // but cannot edit them. This is useful for generated files or external dependencies.
   "read_only_files": [],
@@ -1979,7 +1984,12 @@
         // Default directories to search for virtual environments, relative
         // to the current working directory. We recommend overriding this
         // in your project's settings, rather than globally.
-        "directories": [".env", "env", ".venv", "venv"],
+        "directories": [
+          ".env",
+          "env",
+          ".venv",
+          "venv"
+        ],
         // Can also be `csh`, `fish`, `nushell` and `power_shell`
         "activate_script": "default",
         // Preferred Conda manager to use when activating Conda environments.
@@ -2015,14 +2025,16 @@
     },
     // Set the terminal's font size. If this option is not included,
     // the terminal will default to matching the buffer's font size.
-    // "font_size": 15,
+    "font_size": 15,
     // Set the terminal's font family. If this option is not included,
     // the terminal will default to matching the buffer's font family.
-    // "font_family": ".ZedMono",
+    "font_family": "JetBrains Mono",
     // Set the terminal's font fallbacks. If this option is not included,
     // the terminal will default to matching the buffer's font fallbacks.
     // This will be merged with the platform's default font fallbacks
-    // "font_fallbacks": ["FiraCode Nerd Fonts"],
+    "font_fallbacks": [
+      "FiraCode Nerd Fonts"
+    ],
     // The weight of the editor font in standard CSS units from 100 to 900.
     "font_weight": 400,
     // Sets the maximum number of lines in the terminal's scrollback buffer.
@@ -2134,8 +2146,15 @@
       "**/{zed,Zed}/{settings,keymap,tasks,debug}.json",
       "tsconfig*.json"
     ],
-    "Markdown": [".rules", ".cursorrules", ".windsurfrules", ".clinerules"],
-    "Shell Script": [".env.*"]
+    "Markdown": [
+      ".rules",
+      ".cursorrules",
+      ".windsurfrules",
+      ".clinerules"
+    ],
+    "Shell Script": [
+      ".env.*"
+    ]
   },
   // Settings for which version of Node.js and NPM to use when installing
   // language servers and Copilot.
@@ -2164,9 +2183,24 @@
   //
   // This list can be customized to restrict what extensions are able to do.
   "granted_extension_capabilities": [
-    { "kind": "process:exec", "command": "*", "args": ["**"] },
-    { "kind": "download_file", "host": "*", "path": ["**"] },
-    { "kind": "npm:install", "package": "*" }
+    {
+      "kind": "process:exec",
+      "command": "*",
+      "args": [
+        "**"
+      ]
+    },
+    {
+      "kind": "download_file",
+      "host": "*",
+      "path": [
+        "**"
+      ]
+    },
+    {
+      "kind": "npm:install",
+      "package": "*"
+    }
   ],
   // Controls how completions are processed for this language.
   "completions": {
@@ -2223,10 +2257,15 @@
   "languages": {
     "Astro": {
       "format_on_save": "on",
-      "language_servers": ["astro-language-server", "..."],
+      "language_servers": [
+        "astro-language-server",
+        "..."
+      ],
       "prettier": {
         "allowed": true,
-        "plugins": ["prettier-plugin-astro"]
+        "plugins": [
+          "prettier-plugin-astro"
+        ]
       }
     },
     "Blade": {
@@ -2247,7 +2286,12 @@
       }
     },
     "CSharp": {
-      "language_servers": ["roslyn", "!csharp-ls", "!omnisharp", "..."]
+      "language_servers": [
+        "roslyn",
+        "!csharp-ls",
+        "!omnisharp",
+        "..."
+      ]
     },
     "CSS": {
       "prettier": {
@@ -2291,7 +2335,11 @@
       "tab_size": 4
     },
     "Erlang": {
-      "language_servers": ["erlang-ls", "!elp", "..."]
+      "language_servers": [
+        "erlang-ls",
+        "!elp",
+        "..."
+      ]
     },
     "Git Commit": {
       "allow_rewrap": "anywhere",
@@ -2304,7 +2352,9 @@
       "code_actions_on_format": {
         "source.organizeImports": true
       },
-      "debuggers": ["Delve"]
+      "debuggers": [
+        "Delve"
+      ]
     },
     "GraphQL": {
       "format_on_save": "on",
@@ -2329,16 +2379,26 @@
       }
     },
     "HTML+ERB": {
-      "language_servers": ["herb", "!ruby-lsp", "..."]
+      "language_servers": [
+        "herb",
+        "!ruby-lsp",
+        "..."
+      ]
     },
     "Java": {
       "prettier": {
         "allowed": true,
-        "plugins": ["prettier-plugin-java"]
+        "plugins": [
+          "prettier-plugin-java"
+        ]
       }
     },
     "JavaScript": {
-      "language_servers": ["!typescript-language-server", "vtsls", "..."],
+      "language_servers": [
+        "!typescript-language-server",
+        "vtsls",
+        "..."
+      ],
       "prettier": {
         "allowed": true
       }
@@ -2354,18 +2414,30 @@
       }
     },
     "JS+ERB": {
-      "language_servers": ["!ruby-lsp", "..."]
+      "language_servers": [
+        "!ruby-lsp",
+        "..."
+      ]
     },
     "Kotlin": {
       "format_on_save": "on",
-      "language_servers": ["!kotlin-language-server", "kotlin-lsp", "..."]
+      "language_servers": [
+        "!kotlin-language-server",
+        "kotlin-lsp",
+        "..."
+      ]
     },
     "LaTeX": {
       "formatter": "language_server",
-      "language_servers": ["texlab", "..."],
+      "language_servers": [
+        "texlab",
+        "..."
+      ],
       "prettier": {
         "allowed": true,
-        "plugins": ["prettier-plugin-latex"]
+        "plugins": [
+          "prettier-plugin-latex"
+        ]
       }
     },
     "Markdown": {
@@ -2390,7 +2462,9 @@
       ],
       "prettier": {
         "allowed": true,
-        "plugins": ["@prettier/plugin-php"],
+        "plugins": [
+          "@prettier/plugin-php"
+        ],
         "parser": "php"
       }
     },
@@ -2418,7 +2492,9 @@
           "name": "ruff"
         }
       },
-      "debuggers": ["Debugpy"],
+      "debuggers": [
+        "Debugpy"
+      ],
       "language_servers": [
         "basedpyright",
         "ruff",
@@ -2443,7 +2519,9 @@
     },
     "Rust": {
       "format_on_save": "on",
-      "debuggers": ["CodeLLDB"]
+      "debuggers": [
+        "CodeLLDB"
+      ]
     },
     "SCSS": {
       "prettier": {
@@ -2452,17 +2530,31 @@
     },
     "Starlark": {
       "format_on_save": "on",
-      "language_servers": ["starpls", "!buck2-lsp", "!tilt", "..."]
+      "language_servers": [
+        "starpls",
+        "!buck2-lsp",
+        "!tilt",
+        "..."
+      ]
     },
     "Svelte": {
-      "language_servers": ["svelte-language-server", "..."],
+      "language_servers": [
+        "svelte-language-server",
+        "..."
+      ],
       "prettier": {
         "allowed": true,
-        "plugins": ["prettier-plugin-svelte"]
+        "plugins": [
+          "prettier-plugin-svelte"
+        ]
       }
     },
     "TSX": {
-      "language_servers": ["!typescript-language-server", "vtsls", "..."],
+      "language_servers": [
+        "!typescript-language-server",
+        "vtsls",
+        "..."
+      ],
       "prettier": {
         "allowed": true
       }
@@ -2473,17 +2565,28 @@
       }
     },
     "TypeScript": {
-      "language_servers": ["!typescript-language-server", "vtsls", "..."],
+      "language_servers": [
+        "!typescript-language-server",
+        "vtsls",
+        "..."
+      ],
       "prettier": {
         "allowed": true
       }
     },
     "SystemVerilog": {
-      "language_servers": ["!slang", "..."],
+      "language_servers": [
+        "!slang",
+        "..."
+      ],
       "use_on_type_format": false
     },
     "Vue.js": {
-      "language_servers": ["vue-language-server", "vtsls", "..."],
+      "language_servers": [
+        "vue-language-server",
+        "vtsls",
+        "..."
+      ],
       "prettier": {
         "allowed": true
       }
@@ -2491,7 +2594,9 @@
     "XML": {
       "prettier": {
         "allowed": true,
-        "plugins": ["@prettier/plugin-xml"]
+        "plugins": [
+          "@prettier/plugin-xml"
+        ]
       }
     },
     "YAML": {
@@ -2500,11 +2605,17 @@
       }
     },
     "YAML+ERB": {
-      "language_servers": ["!ruby-lsp", "..."]
+      "language_servers": [
+        "!ruby-lsp",
+        "..."
+      ]
     },
     "Zig": {
       "format_on_save": "on",
-      "language_servers": ["zls", "..."]
+      "language_servers": [
+        "zls",
+        "..."
+      ]
     }
   },
   // Different settings for specific language models.
@@ -2866,13 +2977,11 @@
   //   }
   // }
   "profiles": {},
-
   // A map of log scopes to the desired log level.
   // Useful for filtering out noisy logs or enabling more verbose logging.
   //
   // Example: {"log": {"client": "warn"}}
   "log": {},
-
   // Configuration for developer-oriented instrumentation tools that can be
   // toggled at runtime.
   "instrumentation": {

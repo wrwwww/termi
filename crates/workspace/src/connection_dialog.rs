@@ -41,8 +41,7 @@ impl Render for ConnectionDialog {
                     .max_w(px(1080.0))
                     .gap(px(40.0))
                     .items_start()
-                    .child(render_hero(&t))
-                    .child(render_form_card(&t, state, cx)),
+                    .child(render_hero(&t)), // .child(render_form_card(&t, state, cx)),
             )
     }
 }
@@ -69,9 +68,9 @@ fn render_hero(t: &Theme) -> impl IntoElement {
                 .line_height(px(23.1))
                 .child("Save your servers, keys and connection preferences once. Connect with a single click — across SSH, Mosh, or local shell."),
         )
-        // .child(feature(&t, "First-class key management", "Ed25519, RSA, ECDSA, PuTTY .ppk — auto-detected from ~/.ssh", "🔐", t.accent.accent, t.accent.accent_soft))
-        // .child(feature(&t, "Port forwarding", "Local, remote, dynamic — all set per-session", "↔", t.semantic.amber, amber_bg()))
-        // .child(feature(&t, "Snippets & macros", "Save commands, bind hotkeys, replay with one keystroke", "↻", t.semantic.green, green_bg()))
+        // .child(feature(&t, "First-class key management", "Ed25519, RSA, ECDSA, PuTTY .ppk — auto-detected from ~/.ssh", "🔐", t.colors().icon_accent, t.colors().icon_accent))
+        // .child(feature(&t, "Port forwarding", "Local, remote, dynamic — all set per-session", "↔", t.status().warning, amber_bg()))
+        // .child(feature(&t, "Snippets & macros", "Save commands, bind hotkeys, replay with one keystroke", "↻", t.colors().icon_accent, green_bg()))
         .child(
             div()
                 .mt(px(32.0))
@@ -307,7 +306,7 @@ fn input(t: &Theme, value: &str, mono: bool) -> AnyElement {
         .text_size(px(12.5))
         .text_color(t.colors().text);
     if mono {
-        // d = d.font_family(t.font.mono);
+        // d = d.font_family( "JetBrains Mono");
     }
     d.child(text!(value)).into_any_element()
 }
@@ -385,7 +384,7 @@ fn file_input(t: &Theme) -> AnyElement {
                 .bg(t.colors().background)
                 .border_1()
                 .border_color(t.colors().border)
-                // .font_family(t.font.mono)
+                // .font_family( "JetBrains Mono")
                 .text_size(px(12.5))
                 .text_color(t.colors().text)
                 .child("~/.ssh/id_ed25519"),

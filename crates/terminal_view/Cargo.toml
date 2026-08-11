@@ -26,3 +26,4 @@ theme.workspace = true
 settings_content.workspace = true
 schemars.workspace = true
 itertools.workspace = true
+
