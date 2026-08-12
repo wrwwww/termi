@@ -71,7 +71,7 @@ pub struct Terminal {
     event_loop_task: Task<Result<(), anyhow::Error>>,
     // pub backend: std::sync::Arc<std::sync::Mutex<BackendTx>>,
     pub scroll_pixel_y: f32,
-    backend: std::sync::Arc<std::sync::Mutex<BackendTx>>,
+    // backend: std::sync::Arc<std::sync::Mutex<BackendTx>>,
     // pub(crate) highlight_cache: std::cell::RefCell<
     //     Option<(
     //         Vec<RenderCell>,
@@ -423,9 +423,9 @@ impl Terminal {
     }
 
     pub fn write_to_pty(&mut self, bytes: impl Into<Vec<u8>>) {
-        if let Ok(backend) = self.backend.lock() {
-            backend.send(SshMessage::Input(bytes.into()));
-        }
+        // if let Ok(backend) = self.backend.lock() {
+        //     backend.send(SshMessage::Input(bytes.into()));
+        // }
     }
     fn write_input(&mut self, input: impl Into<Cow<'static, [u8]>>) {
         let input = input.into();
@@ -1640,8 +1640,8 @@ impl TerminalBuilder {
             init_command_startup_marker: None,
             init_command_startup_tx: None,
 
-            scroll_pixel_y: todo!(),
-            backend: todo!(),
+            scroll_pixel_y: 0.,
+            // backend: todo!(),
         };
         Self {
             terminal,
@@ -1649,7 +1649,7 @@ impl TerminalBuilder {
         }
     }
 
-    pub fn subscribe(mut self, cx: &Context<Terminal>) -> Terminal {
+    pub fn subscribe(mut self, cx: &Context<Terminal>) -> Terminal {    
         //Event loop
         self.terminal.event_loop_task = cx.spawn(async move |terminal, cx| {
             while let Some(event) = self.events_rx.next().await {

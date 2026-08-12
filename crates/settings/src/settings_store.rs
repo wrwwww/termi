@@ -135,11 +135,10 @@ impl SettingsStore {
     ///
     /// Does not panic
     pub fn try_get<T: Settings>(&self, path: Option<String>) -> Option<&T> {
-        // self.setting_values
-        //     .get(&TypeId::of::<T>())
-        //     .map(|value| value.value_for_path(path))
-        //     .and_then(|value| value.downcast_ref::<T>())
-        todo!()
+        self.setting_values
+            .get(&TypeId::of::<T>())
+            .map(|value| value.value_for_path(path))
+            .and_then(|value| value.downcast_ref::<T>())
     }
 
     // /// Get all values from project specific settings

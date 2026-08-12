@@ -5,6 +5,7 @@
 
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
+use strum::{Display, EnumIter, EnumString};
 
 #[derive(Clone, Debug, Default, Serialize, Deserialize)]
 pub struct AppState {
@@ -54,7 +55,9 @@ pub struct Session {
     pub latencies_ms: Vec<u32>, // rolling window, last 60 samples
 }
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(
+    Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize, EnumString, Display, EnumIter,
+)]
 pub enum Protocol {
     Ssh,
     Mosh,

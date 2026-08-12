@@ -3,8 +3,14 @@
 //! Each group is collapsible. Selecting an entry sets the active session
 //! and (in the real app) brings the tab forward.
 
-use crate::state::{AppState, SessionStatus};
+use crate::{
+    OpenNewSession, OpenTerminal,
+    connection_dialog::ConnectionDialog,
+    state::{ActiveView::Workspace, AppState, SessionStatus},
+};
 use gpui::*;
+use gpui_component::{IconName, WindowExt, button::Button};
+use log::info;
 use theme::{ActiveTheme, Theme};
 
 pub struct Sidebar {
@@ -12,16 +18,18 @@ pub struct Sidebar {
     // Persisted client-side UI state (not serialised).
     collapsed: std::collections::HashSet<String>,
     search_query: String,
+    connection_dialog: Entity<ConnectionDialog>,
 }
 
 impl Sidebar {
-    pub fn new(state: Entity<AppState>) -> Self {
+    pub fn new(state: Entity<AppState>, connection_dialog: Entity<ConnectionDialog>) -> Self {
         let mut collapsed = std::collections::HashSet::new();
         collapsed.insert("Personal".into()); // match `preview.html` collapsed group
         Self {
             state,
             collapsed,
             search_query: String::new(),
+            connection_dialog,
         }
     }
 }
@@ -75,9 +83,32 @@ impl Render for Sidebar {
                             .font_weight(FontWeight::SEMIBOLD)
                             .text_color(t.colors().icon_accent)
                             .child("SESSIONS"),
-                    ), // .child(icon_button(t, "↻")) // refresh
-                       // .child(icon_button(t, "+")) // new
-                       // .child(icon_button(t, "⋯")), // more
+                    )
+                    .text_color(t.colors().text_accent)
+                    .child(Button::new("1").icon(IconName::Redo2).on_click(|_, _, _| {
+                        info!("点击事件");
+                    }))
+                    .child(Button::new("2").icon(IconName::Plus).on_click(cx.listener({
+                        |this, _, window, cx| {
+                            let d = this.connection_dialog.clone();
+                            window.open_dialog(cx, move |dialog, window, cx| {
+                                dialog
+                                    // .h(px(450.))
+                                    .w(px(700.))
+                                    .title("新建会话")
+                                    .close_button(true)
+                                    .overlay(true)
+                                    .child(div().flex().flex_1().min_h_0().child(d.clone()))
+                            })
+                        }
+                    })))
+                    .child(
+                        Button::new("3")
+                            .icon(IconName::Ellipsis)
+                            .on_click(|_, _, _| {
+                                info!("点击事件3");
+                            }),
+                    ),
             )
             // ============ Search box ============
             .child(
@@ -93,7 +124,7 @@ impl Render for Sidebar {
                         div()
                             .text_color(t.colors().icon_accent)
                             .text_size(px(12.0))
-                            .child("⌕"),
+                            .child(IconName::Search),
                     )
                     .child(
                         div()
@@ -124,10 +155,11 @@ impl Render for Sidebar {
                     .flex_1()
                     .min_h_0()
                     // .overflow_y_scroll()
-                    .py(px(8.0)), // .children(groups.into_iter().map(|(group_name, sessions)| {
-                                  //     let collapsed = self.collapsed.contains(&group_name);
-                                  //     // render_group(group_name, sessions, collapsed, active_id.clone(), &t, cx)
-                                  // })),
+                    .py(px(8.0))
+                    .children(groups.into_iter().map(|(group_name, sessions)| {
+                        let collapsed = self.collapsed.contains(&group_name);
+                        render_group(group_name, sessions, collapsed, active_id.clone(), &cx)
+                    })),
             )
     }
 }
@@ -137,10 +169,15 @@ fn render_group(
     sessions: Vec<crate::state::Session>,
     collapsed: bool,
     active_id: Option<String>,
-    t: &Theme,
-    cx: &mut Context<Sidebar>,
+
+    cx: &&mut Context<Sidebar>,
 ) -> impl IntoElement {
-    let chevron_rot = if collapsed { "›" } else { "⌄" };
+    let t = cx.theme();
+    let chevron_rot = if collapsed {
+        IconName::ChevronRight
+    } else {
+        IconName::ChevronDown
+    };
 
     div()
         .flex()
@@ -158,39 +195,43 @@ fn render_group(
                 .font_weight(FontWeight::SEMIBOLD)
                 .text_color(t.colors().icon_accent)
                 .cursor_pointer()
-                .child(div().child(chevron_rot))
+                .child(chevron_rot)
                 .child(
                     div()
                         .flex_1()
                         .child(format!("{} · {}", name, sessions.len())),
-                ), // .on_click(cx.listener(move |this, _, _| {
-                   //     if this.collapsed.contains(&name) {
-                   //         this.collapsed.remove(&name);
-                   //     } else {
-                   //         this.collapsed.insert(name.clone());
-                   //     }
-                   // })),
+                )
+                .on_mouse_down(
+                    MouseButton::Left,
+                    cx.listener(move |this, _, _, cx| {
+                        if this.collapsed.contains(&name) {
+                            this.collapsed.remove(&name);
+                        } else {
+                            this.collapsed.insert(name.clone());
+                        }
+                        cx.notify();
+                    }),
+                ),
         )
-    // entries (only when expanded)
-    // .children(if !collapsed {
-    //     sessions
-    //         .into_iter()
-    //         .map(|s| {
-    //             let is_active = active_id.as_deref() == Some(&s.id);
-    //             render_session_item(s, is_active, t, cx)
-    //         })
-    //         .collect()
-    // } else {
-    //     Vec::new()
-    // })
+        .children(if !collapsed {
+            sessions
+                .into_iter()
+                .map(|s| {
+                    let is_active = active_id.as_deref() == Some(&s.id);
+                    render_session_item(s, is_active, cx)
+                })
+                .collect()
+        } else {
+            Vec::new()
+        })
 }
 
 fn render_session_item(
     session: crate::state::Session,
     is_active: bool,
-    t: &Theme,
-    cx: &mut Context<Sidebar>,
+    cx: &&mut Context<Sidebar>,
 ) -> impl IntoElement {
+    let t = cx.theme();
     let id = session.id.clone();
     let status_color = match session.status {
         SessionStatus::Connected => t.colors().icon_accent,
@@ -221,9 +262,18 @@ fn render_session_item(
         .border_color(border_left_color)
         .cursor_pointer()
         .hover(|s| s.bg(t.colors().background))
-        // .on_click(cx.listener(move |this, _, _| {
-        //     this.state.update(this.cx(), |s| s.set_active_session(&id));
-        // }))
+        .on_mouse_down(
+            MouseButton::Left,
+            cx.listener(move |this, e: &MouseDownEvent, window, cx| {
+                this.state
+                    .update(cx, |state, cx| state.set_active_session(&id));
+                if e.click_count == 2 {
+                    info!("这里");
+                    window.dispatch_action(OpenTerminal.boxed_clone(), cx);
+                }
+                cx.notify();
+            }),
+        )
         // status dot
         .child(div().size(px(7.0)).rounded_full().bg(status_color))
         // name + meta
@@ -250,18 +300,4 @@ fn render_session_item(
                         )),
                 ),
         )
-}
-
-fn icon_button(t: &Theme, glyph: &'static str) -> impl IntoElement {
-    div()
-        .size(px(24.0))
-        .flex()
-        .items_center()
-        .justify_center()
-        .rounded(px(4.0))
-        .text_color(t.colors().icon_accent)
-        .text_size(px(13.0))
-        .cursor_pointer()
-        .hover(|s| s.bg(t.colors().background).text_color(t.colors().text))
-        .child(glyph)
 }

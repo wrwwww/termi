@@ -1,0 +1,18 @@
+[package]
+name = "termi_action"
+version = "0.1.0"
+publish.workspace = true
+edition.workspace = true
+
+[lints]
+workspace = true
+
+[lib]
+path = "src/termi_action.rs"
+
+[dependencies]
+gpui.workspace = true
+serde.workspace = true
+
+
+ 

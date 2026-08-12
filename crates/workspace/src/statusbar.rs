@@ -8,6 +8,7 @@ use crate::state::{AppState, SessionStatus};
 use gpui::*;
 use settings::Settings;
 use settings_content::theme::ThemeAppearanceMode;
+use termi_action::theme::ToggleMode;
 use theme::{ActiveTheme, Theme};
 use theme_settings::ThemeSettings;
 
@@ -30,10 +31,10 @@ impl StatusBar {
             },
         };
 
-        let fs = self.project().read(cx).fs().clone();
-        settings::update_settings_file(fs, cx, move |settings, _cx| {
-            theme_settings::set_mode(settings, next_mode);
-        });
+        // let fs = self.project().read(cx).fs().clone();
+        // settings::update_settings_file(fs, cx, move |settings, _cx| {
+        // theme_settings::set_mode(settings, next_mode);
+        // });
     }
 }
 

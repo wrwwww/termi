@@ -43,6 +43,7 @@ terminal = { path = "crates/terminal" }
 terminal_view = { path = "crates/terminal_view" }
 workspace = { path = "crates/workspace" }
 protocol = { path = "crates/protocol" }
+termi_action = { path = "crates/termi_action" }
 #
 # Workspace member crates
 #

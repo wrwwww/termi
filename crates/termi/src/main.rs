@@ -4,7 +4,7 @@ use assets::Assets;
 use gpui::{
     App, AppContext, Application, Bounds, TitlebarOptions, WindowBounds, WindowOptions, px, size,
 };
-use gpui_component::{Theme, ThemeMode, TitleBar};
+use gpui_component::{Root, Theme, ThemeMode, TitleBar};
 use gpui_platform;
 
 use log::info;
@@ -35,7 +35,7 @@ fn main() {
         info!("terminal settings {:#?}", settings);
         gpui_component::init(cx);
         // 在应用初始化时，将主题模式切换为 Dark
-        // Theme::change(ThemeMode::Dark, None, cx);
+        Theme::change(ThemeMode::Dark, None, cx);
 
         // terminal_view::init(cx);
         // theme_selector::init(cx);
@@ -78,9 +78,9 @@ fn open_window(cx: &mut App) {
                 ..Default::default()
             },
             |window, cx| {
-                let view = cx.new(|cx| WorkspaceView::new(state, cx));
-                // cx.new(|cx| Root::new(view, window, cx));
-                view
+                let view = cx.new(|cx| WorkspaceView::new(state, window, cx));
+                cx.new(|cx| Root::new(view, window, cx))
+                // view
             },
         )
         .expect("Failed to open window");

@@ -37,7 +37,10 @@ use crate::{
 };
 use ::theme::{ActiveTheme, Theme};
 use gpui::{prelude::FluentBuilder, *};
-use gpui_component::{TitleBar, white};
+use gpui_component::{Root, TitleBar, white};
+use log::info;
+
+actions!(workspace, [OpenTerminal, OpenNewSession]);
 
 pub struct WorkspaceView {
     state: Entity<AppState>,
@@ -54,14 +57,15 @@ pub struct WorkspaceView {
 }
 
 impl WorkspaceView {
-    pub fn new(state: Entity<AppState>, cx: &mut Context<Self>) -> Self {
+    pub fn new(state: Entity<AppState>, window: &mut Window, cx: &mut Context<Self>) -> Self {
         // Subscribe so any state changes re-render the chrome.
         cx.observe(&state, |_, _, cx| cx.notify()).detach();
-        let sidebar = cx.new(|cx| Sidebar::new(state.clone()));
+        let connection_dialog = cx.new(|cx| ConnectionDialog::new(window, cx));
+        let sidebar = cx.new(|cx| Sidebar::new(state.clone(), connection_dialog.clone()));
         let tabsbar = cx.new(|cx| TabsBar::new(state.clone()));
         let terminal_pane = cx.new(|cx| TerminalPane::new(state.clone()));
         let files_pane = cx.new(|cx| FilesPane::new(state.clone()));
-        let connection_dialog = cx.new(|cx| ConnectionDialog::new(state.clone()));
+
         let settings_view = cx.new(|cx| SettingsView::new(state.clone()));
         let status_bar = cx.new(|cx| StatusBar::new(state.clone()));
         let monitor_panel = cx.new(|cx| MonitorPanel::new(state.clone()));
@@ -79,51 +83,59 @@ impl WorkspaceView {
             monitor_panel,
         }
     }
+    pub fn open_terminal(
+        &mut self,
+        action: &OpenTerminal,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        info!("收到打开终端action");
+    }
+    pub fn open_new_session(
+        &mut self,
+        _: &OpenNewSession,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        info!("收到打开终端action");
+    }
 }
 
 impl Render for WorkspaceView {
     fn render(&mut self, windows: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
+        let dialog_layer = Root::render_dialog_layer(windows, cx);
         let t = cx.theme();
-        let view_mode = self.state.read(cx).active_view;
 
         // Choose the central canvas based on active_view.
-        let canvas: AnyElement = match view_mode {
-            ActiveView::Workspace => div()
-                .flex()
-                .flex_row()
-                .flex_1()
-                .min_h_0()
-                .child(self.sidebar.clone())
-                .child(
-                    div()
-                        .flex()
-                        .flex_col()
-                        .flex_1()
-                        .min_w_0()
-                        .min_h_0()
-                        .bg(t.colors().background)
-                        .child(self.tabsbar.clone())
-                        .child(self.terminal_pane.clone()),
-                )
-                .child(self.files_pane.clone())
-                .into_any_element(),
-            ActiveView::NewConnection => div()
-                .flex()
-                .flex_1()
-                .min_h_0()
-                .child(self.connection_dialog.clone())
-                .into_any_element(),
-            ActiveView::Settings => div()
-                .flex()
-                .flex_1()
-                .min_h_0()
-                .child(self.settings_view.clone())
-                .into_any_element(),
-        };
+        let canvas: AnyElement = div()
+            .flex()
+            .flex_row()
+            .flex_1()
+            .min_h_0()
+            .child(self.sidebar.clone())
+            .child(
+                div()
+                    .flex()
+                    .flex_col()
+                    .flex_1()
+                    .min_w_0()
+                    .min_h_0()
+                    .bg(t.colors().background)
+                    .child(self.tabsbar.clone())
+                    .child(self.terminal_pane.clone()),
+            )
+            .child(self.files_pane.clone())
+            .into_any_element();
 
         div()
             .id("lumen-workspace")
             .flex()
+            .on_action(cx.listener(Self::open_new_session))
+            .on_action(
+                cx.listener(|this: &mut WorkspaceView, _: &OpenTerminal, _window, _cx| {
+                    info!("收到 OpenTerminal");
+                }),
+            )
             .flex_col()
             .size_full()
             .bg(t.colors().background)
@@ -181,11 +193,10 @@ impl Render for WorkspaceView {
             // ============== CANVAS ==============
             .child(canvas)
             // ============== MONITOR (workspace mode only) ==============
-            .when(view_mode == ActiveView::Workspace, |d| {
-                d.child(self.monitor_panel.clone())
-            })
+            .child(self.monitor_panel.clone())
             // ============== STATUS BAR ==============
             .child(self.status_bar.clone())
+            .children(dialog_layer)
     }
 }
 struct TitleBarState {

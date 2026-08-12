@@ -7807,6 +7807,14 @@ dependencies = [
 ]
 
 [[package]]
+name = "termi_action"
+version = "0.1.0"
+dependencies = [
+ "gpui",
+ "serde",
+]
+
+[[package]]
 name = "terminal"
 version = "0.1.0"
 dependencies = [
@@ -9618,6 +9626,8 @@ dependencies = [
  "settings",
  "settings_content",
  "smallvec",
+ "strum 0.28.0",
+ "termi_action",
  "terminal",
  "theme",
  "theme_settings",
