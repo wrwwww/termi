@@ -6,7 +6,8 @@
 use crate::{
     OpenNewSession, OpenTerminal,
     connection_dialog::ConnectionDialog,
-    state::{ActiveView::Workspace, AppState, SessionStatus},
+    session_manager::{self, Session, SessionManager, SessionStatus},
+    state::{ActiveView::Workspace, AppState},
 };
 use gpui::*;
 use gpui_component::{IconName, WindowExt, button::Button};
@@ -19,10 +20,15 @@ pub struct Sidebar {
     collapsed: std::collections::HashSet<String>,
     search_query: String,
     connection_dialog: Entity<ConnectionDialog>,
+    session_manager: Entity<SessionManager>,
 }
 
 impl Sidebar {
-    pub fn new(state: Entity<AppState>, connection_dialog: Entity<ConnectionDialog>) -> Self {
+    pub fn new(
+        state: Entity<AppState>,
+        connection_dialog: Entity<ConnectionDialog>,
+        session_manager: Entity<SessionManager>,
+    ) -> Self {
         let mut collapsed = std::collections::HashSet::new();
         collapsed.insert("Personal".into()); // match `preview.html` collapsed group
         Self {
@@ -30,6 +36,7 @@ impl Sidebar {
             collapsed,
             search_query: String::new(),
             connection_dialog,
+            session_manager,
         }
     }
 }
@@ -37,7 +44,7 @@ impl Sidebar {
 impl Render for Sidebar {
     fn render(&mut self, windows: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         let t = cx.theme();
-        let grouped = self.state.read(cx).grouped_sessions();
+        let grouped = self.session_manager.read(cx).grouped_sessions();
         let active_id = self.state.read(cx).active_session_id.clone();
         let query = self.search_query.to_lowercase();
 
@@ -166,7 +173,7 @@ impl Render for Sidebar {
 
 fn render_group(
     name: String,
-    sessions: Vec<crate::state::Session>,
+    sessions: Vec<Session>,
     collapsed: bool,
     active_id: Option<String>,
 
@@ -227,7 +234,7 @@ fn render_group(
 }
 
 fn render_session_item(
-    session: crate::state::Session,
+    session: Session,
     is_active: bool,
     cx: &&mut Context<Sidebar>,
 ) -> impl IntoElement {
@@ -265,6 +272,9 @@ fn render_session_item(
         .on_mouse_down(
             MouseButton::Left,
             cx.listener(move |this, e: &MouseDownEvent, window, cx| {
+                this.session_manager.update(cx, |this, cx| {
+                    this.open_session(session.id.clone());
+                });
                 this.state
                     .update(cx, |state, cx| state.set_active_session(&id));
                 if e.click_count == 2 {

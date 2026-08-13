@@ -1,16 +1,23 @@
 //! `TabsBar` — horizontal strip of open terminal tabs above the pane area.
 
-use crate::state::AppState;
+use crate::{
+    session_manager::{self, Session, SessionManager, SessionStatus},
+    state::AppState,
+};
 use gpui::*;
 use theme::{ActiveTheme, Theme};
 
 pub struct TabsBar {
     state: Entity<AppState>,
+    session_manager: Entity<SessionManager>,
 }
 
 impl TabsBar {
-    pub fn new(state: Entity<AppState>) -> Self {
-        Self { state }
+    pub fn new(state: Entity<AppState>, session_manager: Entity<SessionManager>) -> Self {
+        Self {
+            state,
+            session_manager,
+        }
     }
 }
 
@@ -22,9 +29,10 @@ impl Render for TabsBar {
         let connected_ids: Vec<String> = state
             .sessions
             .iter()
-            .filter(|s| s.status == crate::state::SessionStatus::Connected)
+            .filter(|s| s.status == SessionStatus::Connected)
             .map(|s| s.id.clone())
             .collect();
+        let mut connected_ids = self.session_manager.read(cx).open_sessions.clone();
 
         let mut row = div()
             .id("lumen-tabs")
@@ -36,17 +44,17 @@ impl Render for TabsBar {
             .border_b_1()
             .border_color(t.colors().border)
             .overflow_x_scroll();
-
+        let list = self.session_manager.read(cx).connectioned();
         // One tab per connected session, in order.
-        // row = row.children(connected_ids.iter().map(|id| {
-        //     let session = state.sessions.iter().find(|s| &s.id == id);
-        //     if let Some(session) = session {
-        //         let is_active = Some(id.as_str()) == active_id.as_deref();
-        //         render_tab(session, is_active, &t, cx).into_any_element()
-        //     } else {
-        //         div().into_any_element()
-        //     }
-        // }));
+        row = row.children(list.iter().map(|session| {
+            // let session = list.iter().find(|s| *s.id == *id);
+            // if let Some(session) = session {
+            // let is_active = Some(id.as_str()) == active_id.as_deref();
+            render_tab(session, true, &t, &cx).into_any_element()
+            // } else {
+            // div().into_any_element()
+            // }
+        }));
 
         row = row.child(render_new_tab_btn(&t));
 
@@ -55,10 +63,10 @@ impl Render for TabsBar {
 }
 
 fn render_tab(
-    session: &crate::state::Session,
+    session: &Session,
     is_active: bool,
     t: &Theme,
-    _cx: &mut Context<TabsBar>,
+    _cx: &&mut Context<TabsBar>,
 ) -> impl IntoElement {
     div()
         .flex()

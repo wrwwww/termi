@@ -4,7 +4,7 @@
 //! the connection form on the right. The card model is purely visual;
 //! the actual field state lives in `AppState` once the user saves.
 
-use std::{arch::naked_asm, sync::Arc};
+use std::{arch::naked_asm, os::windows, sync::Arc};
 
 use gpui::*;
 use gpui_component::{
@@ -15,8 +15,67 @@ use gpui_rsx::rsx;
 use log::info;
 use strum::IntoEnumIterator;
 use theme::{ActiveTheme, Theme};
+use ui::button::ButtonGroup;
 
-use crate::state::Protocol;
+use crate::session_manager::{self, Protocol, Session, SessionManager, SessionStatus};
+// struct SessionForm {
+//     name: Entity<InputState>,
+//     group: Entity<InputState>,
+//     host: Entity<InputState>,
+//     port: Entity<InputState>,
+//     username: Entity<InputState>,
+//     protocol: Option<usize>,
+//     authentication: Entity<InputState>,
+//     identity: Entity<InputState>,
+// }
+// impl SessionForm {
+//     pub fn new(window: &mut Window, cx: &mut Context<Self>) -> Self {
+//         let name = cx.new(|cx| InputState::new(window, cx));
+//         let group = cx.new(|cx| InputState::new(window, cx));
+//         let host = cx.new(|cx| InputState::new(window, cx));
+//         let port = cx.new(|cx| InputState::new(window, cx));
+//         let username = cx.new(|cx| InputState::new(window, cx));
+//         let protocol = Some(0);
+//         let authentication = cx.new(|cx| InputState::new(window, cx));
+//         let identity = cx.new(|cx| InputState::new(window, cx));
+//         Self {
+//             name,
+//             group,
+//             host,
+//             port,
+//             username,
+//             protocol,
+//             authentication,
+//             identity,
+//         }
+//     }
+//     pub fn to_session(self, cx: &mut Context<Self>) -> Session {
+//         let idx = self.protocol.unwrap_or_else(|| 0);
+//         let (_, protocol) = Protocol::iter()
+//             .enumerate()
+//             .find(|(i, _)| *i == idx)
+//             .unwrap();
+//         Session {
+//             id: String::new(),
+//             name: self.name.read(cx).value().to_string(),
+//             group: self.group.read(cx).value().to_string(),
+//             host: self.host.read(cx).value().to_string(),
+//             port: self
+//                 .port
+//                 .read(cx)
+//                 .value()
+//                 .to_string()
+//                 .parse::<u16>()
+//                 .unwrap(),
+//             username: self.port.read(cx).value().to_string(),
+//             protocol: protocol,
+//             auth: session_manager::AuthMethod::Password,
+//             identity_file: Some(self.identity.read(cx).value().to_string()),
+//             status: SessionStatus::Disconnected,
+//             latencies_ms: vec![],
+//         }
+//     }
+// }
 
 pub struct ConnectionDialog {
     // state: Entity<AppState>,
@@ -25,21 +84,33 @@ pub struct ConnectionDialog {
     host: Entity<InputState>,
     port: Entity<InputState>,
     username: Entity<InputState>,
-    protocol: Option<Protocol>,
+    protocol: Option<usize>,
     authentication: Entity<InputState>,
     identity: Entity<InputState>,
+    // form: Entity<SessionForm>,
+    session_manager: Entity<SessionManager>,
 }
 
 impl ConnectionDialog {
-    pub fn new(window: &mut Window, cx: &mut Context<Self>) -> Self {
+    pub fn new(
+        window: &mut Window,
+        cx: &mut Context<Self>,
+        session_manager: Entity<SessionManager>,
+    ) -> Self {
         let name = cx.new(|cx| InputState::new(window, cx));
         let group = cx.new(|cx| InputState::new(window, cx));
         let host = cx.new(|cx| InputState::new(window, cx));
         let port = cx.new(|cx| InputState::new(window, cx));
         let username = cx.new(|cx| InputState::new(window, cx));
-        let protocol = Some(Protocol::Ssh);
+        let protocol = Some(0);
         let authentication = cx.new(|cx| InputState::new(window, cx));
         let identity = cx.new(|cx| InputState::new(window, cx));
+        // let form = cx.new(|cx| SessionForm::new(window, cx));
+        // let protocol = cx.new(|cx| {
+        //     ButtonGroup::new(Some(Protocol::Ssh))
+        //         .display_fn(|_, e| e.to_string())
+        //         .options(Protocol::iter())
+        // });
 
         Self {
             name,
@@ -50,6 +121,8 @@ impl ConnectionDialog {
             protocol,
             authentication,
             identity,
+            // form,
+            session_manager,
         }
     }
 }
@@ -99,16 +172,16 @@ impl Render for ConnectionDialog {
                                     <div><div w={px(130.0)}  text_right  text_size={px(12.5)} text_color={t.colors().text_muted}>"protocol"</div></div>
                                     <div flex_1>
                                     {
+                                        // self.protocol.clone()
+                                        RadioGroup::horizontal("options")
+                                        .children(list)
+                                        .selected_index(self.protocol)
+                                        .on_click(cx.listener(|view, selected_index: &usize, _, cx| {
+                                           info!("点击{}",*selected_index);
+                                           view.protocol = Some(*selected_index);
 
-                                        // RadioGroup::horizontal("options")
-                                        // .children(list)
-                                        // .selected_index(self.protocol)
-                                        // .on_click(cx.listener(|view, selected_index: &usize, _, cx| {
-                                        //    info!("点击{}",*selected_index);
-                                        //    view.protocol = Some(*selected_index);
-
-                                        //     cx.notify();
-                                        // }))
+                                            cx.notify();
+                                        }))
 
 
 
@@ -190,12 +263,6 @@ fn card_footer(t: &Theme, cx: &&mut Context<ConnectionDialog>) -> impl IntoEleme
         .bg(t.colors().background)
         .child(
             div()
-                .text_size(px(11.0))
-                .text_color(t.colors().text_muted)
-                .child("⌘S Save · ⌘↩ Connect"),
-        )
-        .child(
-            div()
                 .flex()
                 .flex_row()
                 .gap(px(8.0))
@@ -207,6 +274,34 @@ fn card_footer(t: &Theme, cx: &&mut Context<ConnectionDialog>) -> impl IntoEleme
                             // this.state.update(cx, |state, cx| {
                             //     state.set_active_view(ActiveView::Workspace)
                             // });
+
+                            let idx = this.protocol.unwrap_or_else(|| 0);
+                            let (_, protocol) = Protocol::iter()
+                                .enumerate()
+                                .find(|(i, _)| *i == idx)
+                                .unwrap();
+                            let session = Session {
+                                id: String::new(),
+                                name: this.name.read(cx).value().to_string(),
+                                group: this.group.read(cx).value().to_string(),
+                                host: this.host.read(cx).value().to_string(),
+                                port: this
+                                    .port
+                                    .read(cx)
+                                    .value()
+                                    .to_string()
+                                    .parse::<u16>()
+                                    .unwrap(),
+                                username: this.port.read(cx).value().to_string(),
+                                protocol: protocol,
+                                auth: session_manager::AuthMethod::Password,
+                                identity_file: Some(this.identity.read(cx).value().to_string()),
+                                status: SessionStatus::Disconnected,
+                                latencies_ms: vec![],
+                            };
+                            this.session_manager.update(cx, |this, cx| {
+                                this.add(session);
+                            })
                         }),
                     ),
                 )

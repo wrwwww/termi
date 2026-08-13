@@ -7,6 +7,8 @@ use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
 use strum::{Display, EnumIter, EnumString};
 
+use crate::session_manager::{AuthMethod, Protocol, Session, SessionStatus};
+
 #[derive(Clone, Debug, Default, Serialize, Deserialize)]
 pub struct AppState {
     pub sessions: Vec<Session>,
@@ -38,46 +40,6 @@ impl Default for ActiveView {
     fn default() -> Self {
         ActiveView::Workspace
     }
-}
-
-#[derive(Clone, Debug, Serialize, Deserialize)]
-pub struct Session {
-    pub id: String,
-    pub name: String,
-    pub group: String,
-    pub host: String,
-    pub port: u16,
-    pub username: String,
-    pub protocol: Protocol,
-    pub auth: AuthMethod,
-    pub identity_file: Option<String>,
-    pub status: SessionStatus,
-    pub latencies_ms: Vec<u32>, // rolling window, last 60 samples
-}
-
-#[derive(
-    Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize, EnumString, Display, EnumIter,
-)]
-pub enum Protocol {
-    Ssh,
-    Mosh,
-    Telnet,
-    Local,
-}
-
-#[derive(Clone, Debug, Serialize, Deserialize)]
-pub enum AuthMethod {
-    Key { path: String },
-    Password,
-    Agent,
-}
-
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
-pub enum SessionStatus {
-    Connected,
-    Idle,
-    Disconnected,
-    Error,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -349,15 +311,6 @@ impl AppState {
         //         std::fs::write(path, text).ok();
         //     }
         // }
-    }
-
-    /// Group sessions by their group name, in stable display order.
-    pub fn grouped_sessions(&self) -> BTreeMap<String, Vec<Session>> {
-        let mut map: BTreeMap<String, Vec<Session>> = BTreeMap::new();
-        for s in &self.sessions {
-            map.entry(s.group.clone()).or_default().push(s.clone());
-        }
-        map
     }
 
     pub fn set_active_view(&mut self, v: ActiveView) {

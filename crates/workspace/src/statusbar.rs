@@ -3,7 +3,7 @@
 //! Mirrors the preview's footer pattern: connected chip · user@host ·
 //! encoding/line endings/grid · theme + agent forwarding (right).
 
-use crate::state::{AppState, SessionStatus};
+use crate::{session_manager::SessionStatus, state::AppState};
 
 use gpui::*;
 use settings::Settings;
