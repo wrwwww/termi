@@ -10,8 +10,9 @@ use crate::{
     state::{ActiveView::Workspace, AppState},
 };
 use gpui::*;
-use gpui_component::{IconName, WindowExt, button::Button};
+use gpui_component::{IconName, Root, WindowExt, button::Button};
 use log::info;
+use settings::Settings;
 use theme::{ActiveTheme, Theme};
 
 pub struct Sidebar {
@@ -19,14 +20,14 @@ pub struct Sidebar {
     // Persisted client-side UI state (not serialised).
     collapsed: std::collections::HashSet<String>,
     search_query: String,
-    connection_dialog: Entity<ConnectionDialog>,
+    // connection_dialog: Entity<ConnectionDialog>,
     session_manager: Entity<SessionManager>,
 }
 
 impl Sidebar {
     pub fn new(
         state: Entity<AppState>,
-        connection_dialog: Entity<ConnectionDialog>,
+        // connection_dialog: Entity<ConnectionDialog>,
         session_manager: Entity<SessionManager>,
     ) -> Self {
         let mut collapsed = std::collections::HashSet::new();
@@ -35,7 +36,7 @@ impl Sidebar {
             state,
             collapsed,
             search_query: String::new(),
-            connection_dialog,
+            // connection_dialog,
             session_manager,
         }
     }
@@ -97,16 +98,55 @@ impl Render for Sidebar {
                     }))
                     .child(Button::new("2").icon(IconName::Plus).on_click(cx.listener({
                         |this, _, window, cx| {
-                            let d = this.connection_dialog.clone();
-                            window.open_dialog(cx, move |dialog, window, cx| {
-                                dialog
-                                    // .h(px(450.))
-                                    .w(px(700.))
-                                    .title("新建会话")
-                                    .close_button(true)
-                                    .overlay(true)
-                                    .child(div().flex().flex_1().min_h_0().child(d.clone()))
-                            })
+                            let session_manager = this.session_manager.clone();
+
+                            cx.defer(|cx| {
+                                let current_rem_size: f32 =
+                                    theme_settings::ThemeSettings::get_global(cx)
+                                        .ui_font_size(cx)
+                                        .into();
+
+                                let default_bounds = DEFAULT_ADDITIONAL_WINDOW_SIZE;
+                                let default_rem_size = 16.0;
+                                let scale_factor = current_rem_size / default_rem_size;
+                                let scaled_bounds: gpui::Size<Pixels> =
+                                    default_bounds.map(|axis| axis * scale_factor);
+
+                                cx.open_window(
+                                    WindowOptions {
+                                        titlebar: Some(TitlebarOptions {
+                                            title: Some("新建会话".into()),
+                                            appears_transparent: true,
+                                            traffic_light_position: Some(point(px(12.0), px(12.0))),
+                                        }),
+                                        focus: true,
+                                        show: true,
+                                        is_movable: true,
+                                        kind: gpui::WindowKind::Normal,
+                                        window_background: cx
+                                            .theme()
+                                            .window_background_appearance(),
+
+                                        window_bounds: Some(WindowBounds::centered(
+                                            scaled_bounds,
+                                            cx,
+                                        )),
+                                        ..Default::default()
+                                    },
+                                    |window, cx| {
+                                        let connection_dialog = cx.new(|cx| {
+                                            ConnectionDialog::new(window, cx, session_manager)
+                                        });
+                                        // settings_window.update(cx, |settings_window, cx| {
+                                        //     callback(settings_window, window, cx);
+                                        // });
+
+                                        // connection_dialog
+                                        cx.new(|cx| Root::new(connection_dialog, window, cx))
+                                    },
+                                )
+                                .expect("Failed to open window");
+                            });
                         }
                     })))
                     .child(

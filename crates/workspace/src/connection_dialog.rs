@@ -17,7 +17,10 @@ use strum::IntoEnumIterator;
 use theme::{ActiveTheme, Theme};
 use ui::button::ButtonGroup;
 
-use crate::session_manager::{self, Protocol, Session, SessionManager, SessionStatus};
+use crate::{
+    session_manager::{self, Protocol, Session, SessionManager, SessionStatus},
+    title_bar::PlatformTitleBar,
+};
 // struct SessionForm {
 //     name: Entity<InputState>,
 //     group: Entity<InputState>,
@@ -78,6 +81,7 @@ use crate::session_manager::{self, Protocol, Session, SessionManager, SessionSta
 // }
 
 pub struct ConnectionDialog {
+    title_bar: Option<Entity<PlatformTitleBar>>,
     // state: Entity<AppState>,
     name: Entity<InputState>,
     group: Entity<InputState>,
@@ -112,7 +116,32 @@ impl ConnectionDialog {
         //         .options(Protocol::iter())
         // });
 
+        let title_bar = if !cfg!(target_os = "macos") {
+            let title_bar = cx.new(|cx| {
+                let mut bar = PlatformTitleBar::new("settings-title-bar", cx);
+
+                bar.set_children([div()
+                    .w_full()
+                    .h_full()
+                    .border(px(3.)) // 显眼的红色边框
+                    .border_color(rgb(0xFF0000))
+                    .bg(rgb(0xFFFFFF)) // 白色背景
+                    .child(
+                        div().
+                            .child("新建会话")
+                  
+                    )
+                    .into_any_element()]);
+
+                bar
+            });
+
+            Some(title_bar)
+        } else {
+            None
+        };
         Self {
+            title_bar,
             name,
             group,
             host,
@@ -142,8 +171,11 @@ impl Render for ConnectionDialog {
         let list = Protocol::iter()
             .map(|e| e.to_string())
             .collect::<Vec<String>>();
+
+        div().size_full().children(self.title_bar.clone()).child(
         rsx! {
             <div id="newconn" flex flex_1 items_center justify_center p={px(32.)}>
+
                 <div flex flex_row w_full max_w={px(1080.)} gap={px(40.)} items_start>
                     <div w_full flex flex_col overflow_hidden>
                         <div>
@@ -203,7 +235,7 @@ impl Render for ConnectionDialog {
                     </div>
                 </div>
             </div>
-        }
+        })
     }
 }
 
@@ -291,7 +323,7 @@ fn card_footer(t: &Theme, cx: &&mut Context<ConnectionDialog>) -> impl IntoEleme
                                     .value()
                                     .to_string()
                                     .parse::<u16>()
-                                    .unwrap(),
+                                    .unwrap_or(22),
                                 username: this.port.read(cx).value().to_string(),
                                 protocol: protocol,
                                 auth: session_manager::AuthMethod::Password,

@@ -1695,7 +1695,7 @@ impl TerminalBuilder {
                         if wakeup {
                             this.process_event(TerminalBackendEvent::Wakeup, cx);
                         }
-
+                        
                         for event in events {
                             this.process_pty_event(event, cx);
                         }

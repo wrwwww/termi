@@ -24,7 +24,7 @@ pub mod tabs;
 pub mod terminal;
 // pub mod theme;
 pub mod session_manager;
-
+pub mod title_bar;
 use crate::{
     connection_dialog::ConnectionDialog,
     files::FilesPane,
@@ -51,7 +51,7 @@ pub struct WorkspaceView {
     tabsbar: Entity<TabsBar>,
     terminal_pane: Entity<TerminalPane>,
     files_pane: Entity<FilesPane>,
-    connection_dialog: Entity<ConnectionDialog>,
+    // connection_dialog: Entity<ConnectionDialog>,
     settings_view: Entity<SettingsView>,
     status_bar: Entity<StatusBar>,
 
@@ -63,12 +63,12 @@ impl WorkspaceView {
         // Subscribe so any state changes re-render the chrome.
         cx.observe(&state, |_, _, cx| cx.notify()).detach();
         let session_manager = cx.new(|cx| SessionManager::new());
-        let connection_dialog =
-            cx.new(|cx| ConnectionDialog::new(window, cx, session_manager.clone()));
+        // let connection_dialog =
+        // cx.new(|cx| ConnectionDialog::new(window, cx, session_manager.clone()));
         let sidebar = cx.new(|cx| {
             Sidebar::new(
                 state.clone(),
-                connection_dialog.clone(),
+                // connection_dialog.clone(),
                 session_manager.clone(),
             )
         });
@@ -87,7 +87,7 @@ impl WorkspaceView {
             tabsbar,
             terminal_pane,
             files_pane,
-            connection_dialog,
+            // connection_dialog,
             settings_view,
             status_bar,
             monitor_panel,
