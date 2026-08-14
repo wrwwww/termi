@@ -126,11 +126,7 @@ impl ConnectionDialog {
                     .border(px(3.)) // 显眼的红色边框
                     .border_color(rgb(0xFF0000))
                     .bg(rgb(0xFFFFFF)) // 白色背景
-                    .child(
-                        div().
-                            .child("新建会话")
-                  
-                    )
+                    .child(div().child("新建会话"))
                     .into_any_element()]);
 
                 bar
