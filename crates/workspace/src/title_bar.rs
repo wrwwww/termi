@@ -5,9 +5,11 @@ use gpui::Pixels;
 use gpui::{
     Action, AnyElement, App, Context, Decorations, ElementId, Entity, Hsla, InteractiveElement,
     IntoElement, MouseButton, ParentElement, Render, StatefulInteractiveElement, Styled,
-    WeakEntity, Window, WindowButtonLayout, WindowControlArea, div, prelude::FluentBuilder, px,
+    WeakEntity, Window, WindowButtonLayout, WindowControlArea, black, div, prelude::FluentBuilder,
+    px, white,
 };
 
+use log::info;
 use settings::Settings;
 use smallvec::SmallVec;
 use std::mem;
@@ -102,6 +104,7 @@ impl PlatformTitleBar {
     ) -> Option<WindowButtonLayout> {
         if self.platform_style == PlatformStyle::Linux
             && matches!(decorations, Decorations::Client { .. })
+            || self.platform_style == PlatformStyle::Windows
         {
             self.button_layout.or_else(|| cx.button_layout())
         } else {
@@ -145,10 +148,12 @@ pub fn render_right_window_controls(
 ) -> Option<AnyElement> {
     let decorations = window.window_decorations();
     let height = platform_title_bar_height(window);
-
+    log::info!("这里{:?}", button_layout);
     match PlatformStyle::platform() {
         PlatformStyle::Linux => None,
-        PlatformStyle::Windows => Some(WindowsWindowControls::new(height).into_any_element()),
+        PlatformStyle::Windows => {
+            Some(WindowsWindowControls::new(height, button_layout).into_any_element())
+        }
         PlatformStyle::Mac => None,
     }
 }

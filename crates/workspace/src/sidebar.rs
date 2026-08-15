@@ -7,36 +7,31 @@ use crate::{
     OpenNewSession, OpenTerminal,
     connection_dialog::ConnectionDialog,
     session_manager::{self, Session, SessionManager, SessionStatus},
-    state::{ActiveView::Workspace, AppState},
+    state::AppState,
 };
 use gpui::*;
-use gpui_component::{IconName, Root, WindowExt, button::Button};
+use gpui_component::{IconName, Root, button::Button};
 use log::info;
 use settings::Settings;
-use theme::{ActiveTheme, Theme};
+use theme::ActiveTheme;
 
 pub struct Sidebar {
     state: Entity<AppState>,
     // Persisted client-side UI state (not serialised).
     collapsed: std::collections::HashSet<String>,
     search_query: String,
-    // connection_dialog: Entity<ConnectionDialog>,
+
     session_manager: Entity<SessionManager>,
 }
 
 impl Sidebar {
-    pub fn new(
-        state: Entity<AppState>,
-        // connection_dialog: Entity<ConnectionDialog>,
-        session_manager: Entity<SessionManager>,
-    ) -> Self {
+    pub fn new(state: Entity<AppState>, session_manager: Entity<SessionManager>) -> Self {
         let mut collapsed = std::collections::HashSet::new();
         collapsed.insert("Personal".into()); // match `preview.html` collapsed group
         Self {
             state,
             collapsed,
             search_query: String::new(),
-            // connection_dialog,
             session_manager,
         }
     }
@@ -115,14 +110,14 @@ impl Render for Sidebar {
                                 cx.open_window(
                                     WindowOptions {
                                         titlebar: Some(TitlebarOptions {
-                                            title: Some("新建会话".into()),
+                                            title: None,
                                             appears_transparent: true,
                                             traffic_light_position: Some(point(px(12.0), px(12.0))),
                                         }),
                                         focus: true,
                                         show: true,
                                         is_movable: true,
-                                        kind: gpui::WindowKind::Normal,
+                                        kind: gpui::WindowKind::Dialog,
                                         window_background: cx
                                             .theme()
                                             .window_background_appearance(),

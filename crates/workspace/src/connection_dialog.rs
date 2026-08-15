@@ -4,8 +4,6 @@
 //! the connection form on the right. The card model is purely visual;
 //! the actual field state lives in `AppState` once the user saves.
 
-use std::{arch::naked_asm, os::windows, sync::Arc};
-
 use gpui::*;
 use gpui_component::{
     input::{Input, InputState},
@@ -15,7 +13,6 @@ use gpui_rsx::rsx;
 use log::info;
 use strum::IntoEnumIterator;
 use theme::{ActiveTheme, Theme};
-use ui::button::ButtonGroup;
 
 use crate::{
     session_manager::{self, Protocol, Session, SessionManager, SessionStatus},
@@ -81,7 +78,7 @@ use crate::{
 // }
 
 pub struct ConnectionDialog {
-    title_bar: Option<Entity<PlatformTitleBar>>,
+    pub title_bar: Entity<PlatformTitleBar>,
     // state: Entity<AppState>,
     name: Entity<InputState>,
     group: Entity<InputState>,
@@ -116,26 +113,16 @@ impl ConnectionDialog {
         //         .options(Protocol::iter())
         // });
 
-        let title_bar = if !cfg!(target_os = "macos") {
-            let title_bar = cx.new(|cx| {
-                let mut bar = PlatformTitleBar::new("settings-title-bar", cx);
+        let title_bar = cx.new(|cx| {
+            let mut bar = PlatformTitleBar::new("settings-title-bar", cx);
+            bar.set_button_layout(Some(WindowButtonLayout {
+                left: [None, None, None],
+                right: [None, None, Some(WindowButton::Close)],
+            }));
 
-                bar.set_children([div()
-                    .w_full()
-                    .h_full()
-                    .border(px(3.)) // 显眼的红色边框
-                    .border_color(rgb(0xFF0000))
-                    .bg(rgb(0xFFFFFF)) // 白色背景
-                    .child(div().child("新建会话"))
-                    .into_any_element()]);
+            bar
+        });
 
-                bar
-            });
-
-            Some(title_bar)
-        } else {
-            None
-        };
         Self {
             title_bar,
             name,
@@ -154,6 +141,9 @@ impl ConnectionDialog {
 
 impl Render for ConnectionDialog {
     fn render(&mut self, windows: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
+        self.title_bar.update(cx, |this, _cx| {
+            this.set_children(["新建会话".into_any_element()]);
+        });
         let t = cx.theme();
 
         let name = self.name.clone();
@@ -168,7 +158,7 @@ impl Render for ConnectionDialog {
             .map(|e| e.to_string())
             .collect::<Vec<String>>();
 
-        div().size_full().children(self.title_bar.clone()).child(
+        div().size_full().child(self.title_bar.clone()).child(
         rsx! {
             <div id="newconn" flex flex_1 items_center justify_center p={px(32.)}>
 

@@ -1,15 +1,48 @@
-use gpui::{App, Hsla, Pixels, Rgba, Window, WindowControlArea, div, prelude::*, px};
+use gpui::{
+    App, Hsla, MAX_BUTTONS_PER_SIDE, Pixels, Rgba, Window, WindowButton, WindowButtonLayout,
+    WindowControlArea, div, prelude::*, px,
+};
 use theme::ActiveTheme;
 use ui::h_flex;
 
 #[derive(IntoElement)]
 pub struct WindowsWindowControls {
     button_height: Pixels,
+    layout: Option<WindowButtonLayout>, // 新增布局字段
 }
-
 impl WindowsWindowControls {
-    pub fn new(button_height: Pixels) -> Self {
-        Self { button_height }
+    // 只显示关闭按钮（Windows 风格）
+    pub fn close_only(button_height: Pixels) -> Self {
+        Self::new(
+            button_height,
+            Some(WindowButtonLayout {
+                left: [None; MAX_BUTTONS_PER_SIDE],
+                right: [Some(WindowButton::Close), None, None],
+            }),
+        )
+    }
+
+    // 标准 Windows 布局（最小化、最大化、关闭）
+    pub fn windows_standard(button_height: Pixels) -> Self {
+        Self::new(
+            button_height,
+            Some(WindowButtonLayout {
+                left: [None; MAX_BUTTONS_PER_SIDE],
+                right: [
+                    Some(WindowButton::Minimize),
+                    Some(WindowButton::Maximize),
+                    Some(WindowButton::Close),
+                ],
+            }),
+        )
+    }
+}
+impl WindowsWindowControls {
+    pub fn new(button_height: Pixels, layout: Option<WindowButtonLayout>) -> Self {
+        Self {
+            button_height,
+            layout,
+        }
     }
 
     #[cfg(not(target_os = "windows"))]
@@ -30,11 +63,31 @@ impl WindowsWindowControls {
             "Segoe MDL2 Assets"
         }
     }
+    // 辅助方法：将 WindowButton 转换为对应的按钮组件
+    fn render_button(
+        button: WindowButton,
+        window: &mut Window,
+        cx: &mut App,
+    ) -> Option<WindowsCaptionButton> {
+        match button {
+            WindowButton::Close => Some(WindowsCaptionButton::Close),
+            WindowButton::Minimize => Some(WindowsCaptionButton::Minimize),
+            WindowButton::Maximize => {
+                if window.is_maximized() {
+                    Some(WindowsCaptionButton::Restore)
+                } else {
+                    Some(WindowsCaptionButton::Maximize)
+                }
+            }
+            // 如果有其他变体，处理它们
+            _ => None,
+        }
+    }
 }
 
 impl RenderOnce for WindowsWindowControls {
-    fn render(self, window: &mut Window, _: &mut App) -> impl IntoElement {
-        div()
+    fn render(mut self, window: &mut Window, cx: &mut App) -> impl IntoElement {
+        let mut builder = div()
             .id("windows-window-controls")
             .font_family(Self::get_font())
             .flex()
@@ -42,16 +95,50 @@ impl RenderOnce for WindowsWindowControls {
             .justify_center()
             .content_stretch()
             .max_h(self.button_height)
-            .min_h(self.button_height)
-            .child(WindowsCaptionButton::Minimize)
-            .map(|this| {
-                this.child(if window.is_maximized() {
-                    WindowsCaptionButton::Restore
-                } else {
-                    WindowsCaptionButton::Maximize
-                })
-            })
-            .child(WindowsCaptionButton::Close)
+            .min_h(self.button_height);
+        // 渲染左侧按钮
+        if let None = self.layout {
+            self.layout = Some(WindowButtonLayout {
+                left: [None; MAX_BUTTONS_PER_SIDE],
+                right: [
+                    Some(WindowButton::Minimize),
+                    Some(WindowButton::Maximize),
+                    Some(WindowButton::Close),
+                ],
+            });
+        }
+        if let Some(layout) = self.layout {
+            for button_opt in layout.left.iter() {
+                if let Some(button) = button_opt {
+                    if let Some(caption_button) = Self::render_button(*button, window, cx) {
+                        builder = builder.child(caption_button);
+                    }
+                }
+            }
+
+            // // 添加一个弹性间隔，让左右两侧按钮分开（可选）
+            // builder = builder.flex_grow(1.0);
+
+            // 渲染右侧按钮
+            for button_opt in layout.right.iter() {
+                if let Some(button) = button_opt {
+                    if let Some(caption_button) = Self::render_button(*button, window, cx) {
+                        builder = builder.child(caption_button);
+                    }
+                }
+            }
+        }
+
+        // .child(WindowsCaptionButton::Minimize)
+        // .map(|this| {
+        //     this.child(if window.is_maximized() {
+        //         WindowsCaptionButton::Restore
+        //     } else {
+        //         WindowsCaptionButton::Maximize
+        //     })
+        // })
+        // .child(WindowsCaptionButton::Close)
+        builder
     }
 }
 

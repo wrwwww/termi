@@ -16,29 +16,21 @@
 pub mod connection_dialog;
 pub mod files;
 pub mod monitor;
+pub mod session_manager;
 pub mod settings;
 pub mod sidebar;
 pub mod state;
 pub mod statusbar;
 pub mod tabs;
 pub mod terminal;
-// pub mod theme;
-pub mod session_manager;
 pub mod title_bar;
 use crate::{
-    connection_dialog::ConnectionDialog,
-    files::FilesPane,
-    monitor::MonitorPanel,
-    session_manager::SessionManager,
-    settings::SettingsView,
-    sidebar::Sidebar,
-    state::{ActiveView, AppState},
-    statusbar::StatusBar,
-    tabs::TabsBar,
-    terminal::TerminalPane,
+    files::FilesPane, monitor::MonitorPanel, session_manager::SessionManager,
+    settings::SettingsView, sidebar::Sidebar, state::AppState, statusbar::StatusBar, tabs::TabsBar,
+    terminal::TerminalPane, title_bar::PlatformTitleBar,
 };
 use ::theme::{ActiveTheme, Theme};
-use gpui::{prelude::FluentBuilder, *};
+use gpui::*;
 use gpui_component::{Root, TitleBar, white};
 use log::info;
 
@@ -46,12 +38,11 @@ actions!(workspace, [OpenTerminal, OpenNewSession]);
 
 pub struct WorkspaceView {
     state: Entity<AppState>,
-
+    title_bar: Entity<PlatformTitleBar>,
     sidebar: Entity<crate::sidebar::Sidebar>,
     tabsbar: Entity<TabsBar>,
     terminal_pane: Entity<TerminalPane>,
     files_pane: Entity<FilesPane>,
-    // connection_dialog: Entity<ConnectionDialog>,
     settings_view: Entity<SettingsView>,
     status_bar: Entity<StatusBar>,
 
@@ -63,8 +54,6 @@ impl WorkspaceView {
         // Subscribe so any state changes re-render the chrome.
         cx.observe(&state, |_, _, cx| cx.notify()).detach();
         let session_manager = cx.new(|cx| SessionManager::new());
-        // let connection_dialog =
-        // cx.new(|cx| ConnectionDialog::new(window, cx, session_manager.clone()));
         let sidebar = cx.new(|cx| {
             Sidebar::new(
                 state.clone(),
@@ -72,6 +61,7 @@ impl WorkspaceView {
                 session_manager.clone(),
             )
         });
+        let title_bar = cx.new(|cx| PlatformTitleBar::new("title_bar", cx));
         let tabsbar = cx.new(|cx| TabsBar::new(state.clone(), session_manager.clone()));
         let terminal_pane = cx.new(|cx| TerminalPane::new(state.clone()));
         let files_pane = cx.new(|cx| FilesPane::new(state.clone()));
@@ -82,12 +72,11 @@ impl WorkspaceView {
 
         Self {
             state,
-
+            title_bar,
             sidebar,
             tabsbar,
             terminal_pane,
             files_pane,
-            // connection_dialog,
             settings_view,
             status_bar,
             monitor_panel,
@@ -113,7 +102,53 @@ impl WorkspaceView {
 
 impl Render for WorkspaceView {
     fn render(&mut self, windows: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
-        let dialog_layer = Root::render_dialog_layer(windows, cx);
+        self.title_bar.update(cx, |this, cx| {
+            let t = cx.theme();
+            this.set_children([div()
+                .flex()
+                .items_center()
+                .gap_3()
+                .child(
+                    div()
+                        .flex()
+                        .flex_row()
+                        .items_center()
+                        .h_full()
+                        // .h(px(t.layout.header_height))
+                        .px(px(16.0))
+                        .bg(t.colors().background)
+                        // .border_b_1()
+                        // .border_color(t.colors().border)
+                        // brand
+                        .child(
+                            div()
+                                .flex()
+                                .items_center()
+                                .gap(px(8.0))
+                                // .ml(px(16.0))
+                                .text_color(t.colors().text)
+                                .font_weight(FontWeight::SEMIBOLD)
+                                .child(
+                                    // logo glyph (>) — replace with SVG path in production
+                                    div().text_color(t.styles.colors.icon_accent).child(">"),
+                                )
+                                .child("Termi"),
+                        )
+                        // top-level menu
+                        .child(
+                            div()
+                                .flex()
+                                .gap(px(2.0))
+                                .ml(px(24.0))
+                                .child(menu_button("File", &t))
+                                .child(menu_button("Edit", &t))
+                                .child(menu_button("View", &t))
+                                .child(menu_button("Window", &t))
+                                .child(menu_button("Help", &t)),
+                        ),
+                )
+                .into_any_element()]);
+        });
         let t = cx.theme();
 
         // Choose the central canvas based on active_view.
@@ -151,53 +186,10 @@ impl Render for WorkspaceView {
             .bg(t.colors().background)
             // ============== HEADER ==============
             .child(
-                TitleBar::new()
-                    .bg(t.colors().background)
-                    .border_color(t.colors().border)
-                    .text_color(white())
-                    .child(
-                        div().flex().items_center().gap_3().child(
-                            div()
-                                .flex()
-                                .flex_row()
-                                .items_center()
-                                .h_full()
-                                // .h(px(t.layout.header_height))
-                                .px(px(16.0))
-                                .bg(t.colors().background)
-                                .border_b_1()
-                                .border_color(t.colors().border)
-                                // brand
-                                .child(
-                                    div()
-                                        .flex()
-                                        .items_center()
-                                        .gap(px(8.0))
-                                        // .ml(px(16.0))
-                                        .text_color(t.colors().text)
-                                        .font_weight(FontWeight::SEMIBOLD)
-                                        .child(
-                                            // logo glyph (>) — replace with SVG path in production
-                                            div()
-                                                .text_color(t.styles.colors.icon_accent)
-                                                .child(">"),
-                                        )
-                                        .child("Termi"),
-                                )
-                                // top-level menu
-                                .child(
-                                    div()
-                                        .flex()
-                                        .gap(px(2.0))
-                                        .ml(px(24.0))
-                                        .child(menu_button("File", &t))
-                                        .child(menu_button("Edit", &t))
-                                        .child(menu_button("View", &t))
-                                        .child(menu_button("Window", &t))
-                                        .child(menu_button("Help", &t)),
-                                ),
-                        ),
-                    ),
+                div()
+                    .child(self.title_bar.clone())
+                    .border_b_1()
+                    .border_color(t.colors().border),
             )
             // .child(render_header(&t, windows, cx))
             // ============== CANVAS ==============
@@ -206,15 +198,6 @@ impl Render for WorkspaceView {
             .child(self.monitor_panel.clone())
             // ============== STATUS BAR ==============
             .child(self.status_bar.clone())
-            .children(dialog_layer)
-    }
-}
-struct TitleBarState {
-    should_move: bool,
-}
-impl Render for TitleBarState {
-    fn render(&mut self, _: &mut Window, _: &mut Context<Self>) -> impl IntoElement {
-        div()
     }
 }
 
@@ -230,74 +213,3 @@ fn menu_button(label: &'static str, t: &Theme) -> impl IntoElement {
         .hover(|s| s.bg(t.colors().background).text_color(t.colors().text))
         .child(label)
 }
-
-// fn header_icon_button(t: &Theme) -> impl IntoElement {
-//     div()
-//         .size(px(28.0))
-//         .flex()
-//         .items_center()
-//         .justify_center()
-//         .rounded(px(4.0))
-//         .text_color(t.colors().text_muted)
-//         .cursor_pointer()
-//         .hover(|s| s.bg(t.colors().background).text_color(t.colors().text))
-//         // placeholder dot — replace with svg::path()
-//         .child(
-//             div()
-//                 .size(px(14.0))
-//                 .rounded_full()
-//                 .border_1()
-//                 .border_color(t.colors().border_variant),
-//         )
-// }
-
-// impl RenderOnce for TitleBar {
-//     fn render(self, window: &mut Window, cx: &mut App) -> impl IntoElement {
-//         let t = cx.theme();
-
-//         div()
-//             .flex()
-//             .flex_row()
-//             .items_center()
-//             .h(px(t.layout.header_height))
-//             .px(px(16.0))
-//             .bg(t.colors().background)
-//             .border_b_1()
-//             .border_color(t.colors().border.border)
-//             // brand
-//             .child(
-//                 div()
-//                     .flex()
-//                     .items_center()
-//                     .gap(px(8.0))
-//                     .ml(px(16.0))
-//                     .text_color(t.colors().text)
-//                     .font_weight(FontWeight::SEMIBOLD)
-//                     .child(
-//                         // logo glyph (>) — replace with SVG path in production
-//                         div().text_color(t.colors().icon_accent).child(">"),
-//                     )
-//                     .child("Lumen"),
-//             )
-//             // top-level menu
-//             .child(
-//                 div()
-//                     .flex()
-//                     .gap(px(2.0))
-//                     .ml(px(24.0))
-//                     .child(menu_button("File", &t))
-//                     .child(menu_button("Edit", &t))
-//                     .child(menu_button("View", &t))
-//                     .child(menu_button("Window", &t))
-//                     .child(menu_button("Help", &t)),
-//             )
-//             // spacer
-//             .child(
-//                 div()
-//                     .flex_1()
-//                     .h_full()
-//                     .window_control_area(WindowControlArea::Drag),
-//             ) // header actions (right-aligned)
-//             .child(AppMenuBar::new(cx))
-//     }
-// }
