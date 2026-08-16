@@ -4,16 +4,48 @@
 //! `vte::Parser` to translate ANSI escape sequences into styled glyphs.
 //! This reference paints a representative static frame.
 
-use crate::state::AppState;
+use crate::{
+    OpenTerminal, item::ItemHandle, session_manager::SessionManager, state::AppState,
+    welcome::WelcomePage,
+};
 use gpui::*;
 
 pub struct TerminalPane {
     state: Entity<AppState>,
+    // view: Entity<TerminalView>,
+    session_manager: Entity<SessionManager>,
+    focus_handle: FocusHandle,
+    items: Vec<Box<dyn ItemHandle>>,
+    active_item_index: usize,
+    should_display_welcome_page: bool,
+    welcome_page: Option<Entity<WelcomePage>>,
 }
 
 impl TerminalPane {
-    pub fn new(state: Entity<AppState>) -> Self {
-        Self { state }
+    pub fn new(
+        state: Entity<AppState>,
+        session_manager: Entity<SessionManager>,
+        windows: &mut Window,
+        cx: &mut Context<Self>,
+    ) -> Self {
+        let welcome_page = cx::new(|cx| WelcomePage::new(true, windows, cx));
+        Self {
+            state,
+            session_manager,
+            welcome_page: Some(welcome_page),
+            // view: todo!(),
+            focus_handle: cx.focus_handle(),
+            items: vec![],
+            active_item_index: 0,
+            should_display_welcome_page: true,
+        }
+    }
+    pub fn open_terminal(
+        &mut self,
+        action: &OpenTerminal,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
     }
 }
 
@@ -22,6 +54,7 @@ impl Render for TerminalPane {
         let t = cx.theme();
         let active = self.state.read(cx).active_session_id.clone();
         // let terminal_settings = TerminalSettings::get_global(cx);
+
         div()
             .id("lumen-terminal")
             .flex()
@@ -186,4 +219,5 @@ impl Render for TerminalPane {
 use gpui::Hsla;
 use settings::Settings;
 use terminal::terminal_settings::TerminalSettings;
+use terminal_view::TerminalView;
 use theme::{ActiveTheme, Theme};

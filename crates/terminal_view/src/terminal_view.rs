@@ -179,6 +179,7 @@ impl Render for TerminalView {
         let terminal_handle = self.terminal.clone();
         let terminal_view_handle = cx.entity();
         let focused = self.focus_handle.is_focused(window);
+        log::info!("打印 focused:{}", focused);
         // let view = cx.entity();
         // let config = self.config.read(cx).config_manager.current.theme.font_size;
         // let list = self.terminal_manager.read(cx).session_manager.read(cx);
@@ -186,7 +187,9 @@ impl Render for TerminalView {
         rsx! {
             <div id="terminal_view" class="bg-black" h_full w_full
                 on_action={cx.listener(TerminalView::send_text)}
-                on_key_down={cx.listener(Self::key_down)}>
+                on_key_down={cx.listener(Self::key_down)}
+                track_focus={&self.focus_handle.clone()}
+                >
                 <div id="terminal_container" class="" h_full w_full>
                     {
                         TerminalElement::new(

@@ -148,7 +148,7 @@ pub fn render_right_window_controls(
 ) -> Option<AnyElement> {
     let decorations = window.window_decorations();
     let height = platform_title_bar_height(window);
-    log::info!("这里{:?}", button_layout);
+
     match PlatformStyle::platform() {
         PlatformStyle::Linux => None,
         PlatformStyle::Windows => {

@@ -15,6 +15,7 @@
 //! ```
 pub mod connection_dialog;
 pub mod files;
+pub mod item;
 pub mod monitor;
 pub mod session_manager;
 pub mod settings;
@@ -24,6 +25,7 @@ pub mod statusbar;
 pub mod tabs;
 pub mod terminal;
 pub mod title_bar;
+pub mod welcome;
 use crate::{
     files::FilesPane, monitor::MonitorPanel, session_manager::SessionManager,
     settings::SettingsView, sidebar::Sidebar, state::AppState, statusbar::StatusBar, tabs::TabsBar,
@@ -63,7 +65,8 @@ impl WorkspaceView {
         });
         let title_bar = cx.new(|cx| PlatformTitleBar::new("title_bar", cx));
         let tabsbar = cx.new(|cx| TabsBar::new(state.clone(), session_manager.clone()));
-        let terminal_pane = cx.new(|cx| TerminalPane::new(state.clone()));
+        let terminal_pane =
+            cx.new(|cx| TerminalPane::new(state.clone(), session_manager, window, cx));
         let files_pane = cx.new(|cx| FilesPane::new(state.clone()));
 
         let settings_view = cx.new(|cx| SettingsView::new(state.clone()));
