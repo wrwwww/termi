@@ -4,9 +4,10 @@
 //! the connection form on the right. The card model is purely visual;
 //! the actual field state lives in `AppState` once the user saves.
 
-use gpui::*;
+use gpui::{accesskit::Uuid, prelude::FluentBuilder, *};
 use gpui_component::{
     IconName,
+    checkbox::Checkbox,
     input::{Input, InputState},
     radio::RadioGroup,
     tab::TabBar,
@@ -29,10 +30,11 @@ pub struct ConnectionDialog {
     host: Entity<InputState>,
     port: Entity<InputState>,
     username: Entity<InputState>,
+    password: Entity<InputState>,
     protocol: usize,
-    authentication: Entity<InputState>,
+    authentication: Option<usize>,
     identity: Entity<InputState>,
-    // form: Entity<SessionForm>,
+
     session_manager: Entity<SessionManager>,
 }
 
@@ -47,15 +49,10 @@ impl ConnectionDialog {
         let host = cx.new(|cx| InputState::new(window, cx).placeholder("[用户@]主机地址"));
         let port = cx.new(|cx| InputState::new(window, cx).placeholder("22"));
         let username = cx.new(|cx| InputState::new(window, cx));
+        let password = cx.new(|cx| InputState::new(window, cx));
         let protocol = 0;
-        let authentication = cx.new(|cx| InputState::new(window, cx));
+        let authentication = Some(0);
         let identity = cx.new(|cx| InputState::new(window, cx));
-        // let form = cx.new(|cx| SessionForm::new(window, cx));
-        // let protocol = cx.new(|cx| {
-        //     ButtonGroup::new(Some(Protocol::Ssh))
-        //         .display_fn(|_, e| e.to_string())
-        //         .options(Protocol::iter())
-        // });
 
         let title_bar = cx.new(|cx| {
             let mut bar = PlatformTitleBar::new("settings-title-bar", cx);
@@ -74,6 +71,7 @@ impl ConnectionDialog {
             host,
             port,
             username,
+            password,
             protocol,
             authentication,
             identity,
@@ -89,7 +87,7 @@ impl ConnectionDialog {
             .find(|(i, _)| *i == idx)
             .unwrap();
         let session = Session {
-            id: String::new(),
+            id: Uuid::new_v4().to_string(),
             name: self.name.read(cx).value().to_string(),
             group: self.group.read(cx).value().to_string(),
             host: self.host.read(cx).value().to_string(),
@@ -125,6 +123,7 @@ impl Render for ConnectionDialog {
         let host = self.host.clone();
         let port = self.port.clone();
         let username = self.username.clone();
+        let password= self.password.clone();
         let protocol = self.protocol;
         let authentication = self.authentication.clone();
         let identity = self.identity.clone();
@@ -164,7 +163,7 @@ impl Render for ConnectionDialog {
                                                 div().child(
                                                     TabBar::new("segmented-tabs")
                                                         .segmented()
-                                                        .selected_index(self.protocol)
+                                                        .selected_index(protocol)
                                                         .on_click(cx.listener(
                                                             |this, e, _window, _cx| {
                                                                 this.protocol = *e;
@@ -297,12 +296,50 @@ impl Render for ConnectionDialog {
                                                                 .child("authentication"),
                                                         ),
                                                     )
-                                                    .child(div().flex_1().child(input(
-                                                        t,
-                                                        authentication,
-                                                        false,
-                                                    ))),
+                                                    .child(div().flex_1().child( RadioGroup::horizontal("options")
+                                                        .children(["SSH key","Password", "Agent"])
+                                                        .selected_index(self.authentication)
+                                                        .on_click(cx.listener(|view, selected_index: &usize, _, cx| {
+                                                            view.authentication = Some(*selected_index);
+                                                            cx.notify();
+                                                        })))),
                                             )
+                                            .when_some(self.authentication, |this,v|{
+                                                match v{
+                                                    0=>{
+                                                        this.child("child")
+                                                    },
+                                                    1=>{
+                                                        
+                                                        this               .child(
+                                                div()
+                                                    .flex()
+                                                    .flex_row()
+                                                    .items_center()
+                                                    .gap(px(12.0))
+                                                    .child(
+                                                        div().child(
+                                                            div()
+                                                                .w(px(130.0))
+                                                                .text_right()
+                                                                .text_size(px(12.5))
+                                                                .text_color(t.colors().text_muted)
+                                                                .child("password"),
+                                                        ),
+                                                    )
+                                                    .child(
+                                                        div()
+                                                            .flex_1()
+                                                            .child(input(t, password, false)),
+                                                    ),
+                                            )
+                                                    }
+                                                    _=>{
+
+                                                        this.child("child")
+                                                    }
+                                                }
+                                            })
                                             .child(
                                                 div()
                                                     .flex()
@@ -337,6 +374,7 @@ impl Render for ConnectionDialog {
                                             div()
                                                 .flex()
                                                 .flex_row()
+                                                .justify_end()
                                                 .gap(px(8.0))
                                                 .child(
                                                     button(t, ButtonKind::Ghost, "Cancel")
@@ -351,8 +389,9 @@ impl Render for ConnectionDialog {
                                                     button(t, ButtonKind::Secondary, "Save only")
                                                         .on_mouse_down(
                                                             MouseButton::Left,
-                                                            cx.listener(move |this, _, _, cx| {
-                                                                this.connection_session(cx, false)
+                                                            cx.listener(move |this, _, w, cx| {
+                                                                this.connection_session(cx, false);
+                                                                w.remove_window();
                                                             }),
                                                         ),
                                                 )
@@ -364,8 +403,9 @@ impl Render for ConnectionDialog {
                                                     )
                                                     .on_mouse_down(
                                                         MouseButton::Left,
-                                                        cx.listener(move |this, _, _, cx| {
-                                                            this.connection_session(cx, true)
+                                                        cx.listener(move |this, _, window, cx| {
+                                                            this.connection_session(cx, true);
+                                                            window.remove_window();
                                                         }),
                                                     ),
                                                 ),
