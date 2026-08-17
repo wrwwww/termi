@@ -8,7 +8,7 @@ use crate::{
     OpenTerminal, item::ItemHandle, session_manager::SessionManager, state::AppState,
     welcome::WelcomePage,
 };
-use gpui::*;
+use gpui::{prelude::FluentBuilder, *};
 
 pub struct TerminalPane {
     state: Entity<AppState>,
@@ -28,7 +28,7 @@ impl TerminalPane {
         windows: &mut Window,
         cx: &mut Context<Self>,
     ) -> Self {
-        let welcome_page = cx::new(|cx| WelcomePage::new(true, windows, cx));
+        let welcome_page = cx.new(|cx| WelcomePage::new(true, windows, cx));
         Self {
             state,
             session_manager,
@@ -62,19 +62,25 @@ impl Render for TerminalPane {
             .flex_1()
             .min_h_0()
             .bg(t.colors().terminal_background)
-            .child(
-                div()
-                    .id("terminal-viewport")
-                    .flex()
-                    .flex_col()
-                    .flex_1()
-                    .p(px(16.0))
-                    .px(px(20.0))
-                    .font_family("JetBrains Mono")
-                    .text_size(px(13.0))
-                    .line_height(px(20.15)) // matches 1.55 with 13px
-                    .text_color(t.colors().terminal_ansi_white)
-                    .overflow_y_scroll(), // .children(sample_lines(&t, active.as_deref())),
+            .when_else(
+                self.should_display_welcome_page,
+                |e| e.child(self.welcome_page.as_ref().unwrap().clone()),
+                |e| {
+                    e.child(
+                        div()
+                            .id("terminal-viewport")
+                            .flex()
+                            .flex_col()
+                            .flex_1()
+                            .p(px(16.0))
+                            .px(px(20.0))
+                            .font_family("JetBrains Mono")
+                            .text_size(px(13.0))
+                            .line_height(px(20.15)) // matches 1.55 with 13px
+                            .text_color(t.colors().terminal_ansi_white)
+                            .overflow_y_scroll(), // .children(sample_lines(&t, active.as_deref())),
+                    )
+                },
             )
     }
 }

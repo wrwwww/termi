@@ -129,7 +129,7 @@ impl Render for ConnectionDialog {
         let authentication = self.authentication.clone();
         let identity = self.identity.clone();
 
-        div().size_full().children(self.title_bar.clone()).child(
+        div().size_full().child(self.title_bar.clone()).child(
             div()
                 .id("newconn")
                 .flex()
