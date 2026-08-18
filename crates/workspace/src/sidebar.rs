@@ -3,6 +3,8 @@
 //! Each group is collapsible. Selecting an entry sets the active session
 //! and (in the real app) brings the tab forward.
 
+use std::borrow::Cow;
+
 use crate::{
     OpenNewSession, OpenTerminal,
     connection_dialog::ConnectionDialog,
@@ -10,11 +12,32 @@ use crate::{
     state::AppState,
 };
 use gpui::*;
-use gpui_component::{IconName, Root, button::Button};
+use gpui_component::{IconName, Root, button::Button, menu::ContextMenuExt};
 use log::info;
+use schemars::JsonSchema;
+use serde::Deserialize;
 use settings::Settings;
 use theme::ActiveTheme;
 
+// actions!(session_manager, [Edit, Copy, Delete]);
+fn default_1() -> usize {
+    1
+}
+#[derive(Clone, Deserialize, PartialEq, JsonSchema, Action)]
+#[action(namespace = session_manager)]
+pub struct EditAction {
+    session_id: String,
+}
+#[derive(Clone, Deserialize, PartialEq, JsonSchema, Action)]
+#[action(namespace = session_manager)]
+pub struct CopyAction {
+    session_id: String,
+}
+#[derive(Clone, Deserialize, PartialEq, JsonSchema, Action)]
+#[action(namespace = session_manager)]
+pub struct DeleteAction {
+    session_id: String,
+}
 pub struct Sidebar {
     state: Entity<AppState>,
     // Persisted client-side UI state (not serialised).
@@ -34,6 +57,38 @@ impl Sidebar {
             search_query: String::new(),
             session_manager,
         }
+    }
+
+    pub fn del_session(
+        &mut self,
+        action: &DeleteAction,
+        window: &mut Window,
+        cx: &mut Context<'_, Sidebar>,
+    ) {
+        let session_id = &action.session_id;
+        info!("xx{}", session_id);
+        self.session_manager.update(cx, |this, cx| {
+            this.del_session(session_id);
+            info!("xx{}", this.list().len());
+        });
+    }
+    pub fn edit_session(
+        &mut self,
+        action: &EditAction,
+        window: &mut Window,
+        cx: &mut Context<'_, Sidebar>,
+    ) {
+    }
+    pub fn copy_session(
+        &mut self,
+        action: &CopyAction,
+        window: &mut Window,
+        cx: &mut Context<'_, Sidebar>,
+    ) {
+        let session_id = action.session_id.clone();
+        self.session_manager.update(cx, |this, _cx| {
+            this.copy_session(&session_id);
+        });
     }
 }
 
@@ -60,6 +115,9 @@ impl Render for Sidebar {
             .collect();
 
         div()
+            .on_action(cx.listener(Self::del_session))
+            .on_action(cx.listener(Self::edit_session))
+            .on_action(cx.listener(Self::copy_session))
             .flex()
             .flex_col()
             .w(px(256.))
@@ -307,18 +365,45 @@ fn render_session_item(
         .on_mouse_down(
             MouseButton::Left,
             cx.listener(move |this, e: &MouseDownEvent, window, cx| {
-                this.session_manager.update(cx, |this, cx| {
-                    this.open_session(session.id.clone());
-                });
-                this.state
-                    .update(cx, |state, cx| state.set_active_session(&id));
                 if e.click_count == 2 {
+                    this.session_manager.update(cx, |this, cx| {
+                        this.open_session(session.id.clone());
+                    });
+                    // this.state
+                    //     .update(cx, |state, cx| state.set_active_session(&id));
+                    // if e.click_count == 2 {
                     info!("这里");
                     window.dispatch_action(OpenTerminal.boxed_clone(), cx);
+                    // }
+                    cx.notify();
                 }
-                cx.notify();
             }),
         )
+        .context_menu({
+            let id = id.clone();
+            move |menu, window, cx| {
+                menu.menu(
+                    "编辑",
+                    Box::new(EditAction {
+                        session_id: id.clone(),
+                    }),
+                )
+                .separator()
+                .menu(
+                    "复制",
+                    Box::new(CopyAction {
+                        session_id: id.clone(),
+                    }),
+                )
+                .separator()
+                .menu(
+                    "删除",
+                    Box::new(DeleteAction {
+                        session_id: id.clone(),
+                    }),
+                )
+            }
+        })
         // status dot
         .child(div().size(px(7.0)).rounded_full().bg(status_color))
         // name + meta

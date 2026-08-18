@@ -26,3 +26,4 @@ terminal.workspace = true
 gpui-component-assets.workspace = true
 gpui-component.workspace = true
 palette = { workspace = true, features = ["std"] }
+serde = { workspace = true, features = ["derive"] }

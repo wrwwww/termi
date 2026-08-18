@@ -1,5 +1,6 @@
 use std::collections::BTreeMap;
 
+use gpui::accesskit::Uuid;
 use serde::{Deserialize, Serialize};
 use strum::{Display, EnumIter, EnumString};
 use utils::collections::HashMap;
@@ -72,8 +73,16 @@ impl SessionManager {
             open_sessions: vec![],
         }
     }
-    pub fn add(&mut self, session: Session) {
+    pub fn save_session(&mut self, session: Session, is_connected: bool) {
         self.inner.insert(session.id.clone(), session);
+    }
+    pub fn del_session(&mut self, session_id: &str) {
+        self.inner.remove(session_id);
+    }
+    pub fn copy_session(&mut self, session_id: &str) {
+        let mut res = self.inner.get(session_id).unwrap().clone();
+        res.id = Uuid::new_v4().to_string();
+        self.inner.insert(res.id.clone(), res);
     }
     pub fn list(&self) -> Vec<&Session> {
         self.inner.values().collect()

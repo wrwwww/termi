@@ -80,7 +80,7 @@ impl ConnectionDialog {
         }
     }
 
-    fn connection_session(&self, cx: &mut Context<ConnectionDialog>, is_connect: bool) {
+    fn save_session(&self, cx: &mut Context<ConnectionDialog>, is_connect: bool) {
         let idx = self.protocol;
         let (_, protocol) = Protocol::iter()
             .enumerate()
@@ -106,7 +106,7 @@ impl ConnectionDialog {
             latencies_ms: vec![],
         };
         self.session_manager.update(cx, |this, cx| {
-            this.add(session);
+            this.save_session(session,is_connect);
         })
     }
 }
@@ -390,7 +390,7 @@ impl Render for ConnectionDialog {
                                                         .on_mouse_down(
                                                             MouseButton::Left,
                                                             cx.listener(move |this, _, w, cx| {
-                                                                this.connection_session(cx, false);
+                                                                this.save_session (cx, false);
                                                                 w.remove_window();
                                                             }),
                                                         ),
@@ -404,7 +404,7 @@ impl Render for ConnectionDialog {
                                                     .on_mouse_down(
                                                         MouseButton::Left,
                                                         cx.listener(move |this, _, window, cx| {
-                                                            this.connection_session(cx, true);
+                                                            this.save_session(cx, true);
                                                             window.remove_window();
                                                         }),
                                                     ),

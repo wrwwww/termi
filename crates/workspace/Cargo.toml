@@ -30,7 +30,7 @@ settings_content.workspace=true
 terminal.workspace=true
 terminal_view.workspace=true
 termi_action.workspace=true
-
+schemars.workspace=true
 strum.workspace=true
 [target.'cfg(windows)'.dependencies]
 windows.workspace = true
