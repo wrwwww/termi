@@ -6,10 +6,10 @@
 use std::borrow::Cow;
 
 use crate::{
-    OpenNewSession, OpenTerminal,
     connection_dialog::ConnectionDialog,
     session_manager::{self, Session, SessionManager, SessionStatus},
     state::AppState,
+    terminal::OpenTerminalAction,
 };
 use gpui::*;
 use gpui_component::{IconName, Root, button::Button, menu::ContextMenuExt};
@@ -23,6 +23,9 @@ use theme::ActiveTheme;
 fn default_1() -> usize {
     1
 }
+#[derive(Clone, Deserialize, PartialEq, JsonSchema, Action)]
+#[action(namespace = session_manager)]
+pub struct NewAction;
 #[derive(Clone, Deserialize, PartialEq, JsonSchema, Action)]
 #[action(namespace = session_manager)]
 pub struct EditAction {
@@ -88,6 +91,61 @@ impl Sidebar {
         let session_id = action.session_id.clone();
         self.session_manager.update(cx, |this, _cx| {
             this.copy_session(&session_id);
+        });
+    }
+    pub fn new_session(
+        &mut self,
+        action: &NewAction,
+        window: &mut Window,
+        cx: &mut Context<'_, Sidebar>,
+    ) {
+    }
+    pub fn open_dialog(
+        &self,
+        window: &mut Window,
+        cx: &mut Context<'_, Sidebar>,
+        session_id: Option<String>,
+    ) {
+        let session_manager = self.session_manager.clone();
+
+        cx.defer(|cx| {
+            let current_rem_size: f32 = theme_settings::ThemeSettings::get_global(cx)
+                .ui_font_size(cx)
+                .into();
+
+            let default_bounds = DEFAULT_ADDITIONAL_WINDOW_SIZE;
+            let default_rem_size = 16.0;
+            let scale_factor = current_rem_size / default_rem_size;
+            let scaled_bounds: gpui::Size<Pixels> = default_bounds.map(|axis| axis * scale_factor);
+
+            cx.open_window(
+                WindowOptions {
+                    titlebar: Some(TitlebarOptions {
+                        title: None,
+                        appears_transparent: true,
+                        traffic_light_position: Some(point(px(12.0), px(12.0))),
+                    }),
+                    focus: true,
+                    show: true,
+                    is_movable: true,
+                    kind: gpui::WindowKind::Dialog,
+                    window_background: cx.theme().window_background_appearance(),
+
+                    window_bounds: Some(WindowBounds::centered(scaled_bounds, cx)),
+                    ..Default::default()
+                },
+                |window, cx| {
+                    let connection_dialog =
+                        cx.new(|cx| ConnectionDialog::new(window, cx, session_manager, session_id));
+                    // settings_window.update(cx, |settings_window, cx| {
+                    //     callback(settings_window, window, cx);
+                    // });
+
+                    // connection_dialog
+                    cx.new(|cx| Root::new(connection_dialog, window, cx))
+                },
+            )
+            .expect("Failed to open window");
         });
     }
 }
@@ -188,7 +246,7 @@ impl Render for Sidebar {
                                     },
                                     |window, cx| {
                                         let connection_dialog = cx.new(|cx| {
-                                            ConnectionDialog::new(window, cx, session_manager)
+                                            ConnectionDialog::new(window, cx, session_manager, None)
                                         });
                                         // settings_window.update(cx, |settings_window, cx| {
                                         //     callback(settings_window, window, cx);
@@ -369,11 +427,17 @@ fn render_session_item(
                     this.session_manager.update(cx, |this, cx| {
                         this.open_session(session.id.clone());
                     });
+
                     // this.state
                     //     .update(cx, |state, cx| state.set_active_session(&id));
                     // if e.click_count == 2 {
                     info!("这里");
-                    window.dispatch_action(OpenTerminal.boxed_clone(), cx);
+                    window.dispatch_action(
+                        Box::new(OpenTerminalAction {
+                            session_id: session.id.clone(),
+                        }),
+                        cx,
+                    );
                     // }
                     cx.notify();
                 }
@@ -382,26 +446,35 @@ fn render_session_item(
         .context_menu({
             let id = id.clone();
             move |menu, window, cx| {
-                menu.menu(
-                    "编辑",
-                    Box::new(EditAction {
-                        session_id: id.clone(),
-                    }),
-                )
-                .separator()
-                .menu(
-                    "复制",
-                    Box::new(CopyAction {
-                        session_id: id.clone(),
-                    }),
-                )
-                .separator()
-                .menu(
-                    "删除",
-                    Box::new(DeleteAction {
-                        session_id: id.clone(),
-                    }),
-                )
+                // 方法1：链式调用并赋值
+                info!("=== 开始构建菜单 ===");
+                info!("当前 id: {}", id);
+                // info!("menu 对象: {:?}", menu);
+                let menu = menu
+                    .menu(
+                        "编辑",
+                        Box::new(EditAction {
+                            session_id: id.clone(),
+                        }),
+                    )
+                    .separator()
+                    .menu(
+                        "复制",
+                        Box::new(CopyAction {
+                            session_id: id.clone(),
+                        }),
+                    )
+                    .separator()
+                    .menu(
+                        "删除",
+                        Box::new(DeleteAction {
+                            session_id: id.clone(),
+                        }),
+                    );
+
+                info!("=== 菜单构建完成 ===");
+                // 返回构建好的菜单
+                menu
             }
         })
         // status dot

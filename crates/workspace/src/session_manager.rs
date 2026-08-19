@@ -107,4 +107,7 @@ impl SessionManager {
 
         list
     }
+    pub fn query(&self, session_id: &str) -> Option<&Session> {
+        self.inner.get(session_id)
+    }
 }

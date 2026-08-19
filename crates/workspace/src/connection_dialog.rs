@@ -43,14 +43,19 @@ impl ConnectionDialog {
         window: &mut Window,
         cx: &mut Context<Self>,
         session_manager: Entity<SessionManager>,
+        session_id:Option<String>
     ) -> Self {
-        let name = cx.new(|cx| InputState::new(window, cx).placeholder(" "));
-        let group = cx.new(|cx| InputState::new(window, cx));
-        let host = cx.new(|cx| InputState::new(window, cx).placeholder("[用户@]主机地址"));
-        let port = cx.new(|cx| InputState::new(window, cx).placeholder("22"));
-        let username = cx.new(|cx| InputState::new(window, cx));
+        let mut session=Session { id: String::new(), name: String::new(), group: String::new(), host: String::new(), port: 22, username: String::new(), protocol: Protocol::Ssh, auth: session_manager::AuthMethod::Password, identity_file: None, status: SessionStatus::Disconnected, latencies_ms: vec![] };
+        if let Some(session_id)=session_id{
+            session=session_manager.read(cx).query(&session_id).unwrap().clone();  
+        }
+        let name = cx.new(|cx| InputState::new(window, cx).placeholder(" ").default_value(session.name));
+        let group = cx.new(|cx| InputState::new(window, cx).default_value(session.group));
+        let host = cx.new(|cx| InputState::new(window, cx).placeholder("[用户@]主机地址").default_value(session.host));
+        let port = cx.new(|cx| InputState::new(window, cx).placeholder("22").default_value(session.port.to_string()));
+        let username = cx.new(|cx| InputState::new(window, cx).default_value(session.username));
         let password = cx.new(|cx| InputState::new(window, cx));
-        let protocol = 0;
+        let protocol = Protocol::iter().enumerate().find(|e|e.1==session.protocol).unwrap_or((0,Protocol::Ssh)).0;
         let authentication = Some(0);
         let identity = cx.new(|cx| InputState::new(window, cx));
 
@@ -62,7 +67,8 @@ impl ConnectionDialog {
             }));
 
             bar
-        });
+        });  
+  
 
         Self {
             title_bar,

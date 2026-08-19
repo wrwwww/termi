@@ -39,7 +39,7 @@ use gpui::{
     Window, accesskit::Uuid, div, fill, font, hsla, point, px, relative, rgba, size,
 };
 use itertools::Itertools;
-use protocol::{BackendTx, SshMessage, SystemEvent};
+use protocol::{BackendTx, SshMessage, SystemEvent, open_session_terminal, ssh::Session  };
 use serde::{Deserialize, Serialize};
 use vte::ansi::{Attr, Color, Handler, NamedColor, Processor, Rgb, StdSyncHandler};
 
@@ -69,7 +69,7 @@ pub struct Terminal {
     init_command_startup_tx: Option<Sender<()>>,
 
     event_loop_task: Task<Result<(), anyhow::Error>>,
-    // pub backend: std::sync::Arc<std::sync::Mutex<BackendTx>>,
+    pub backend: std::sync::Arc<std::sync::Mutex<BackendTx>>,
     pub scroll_pixel_y: f32,
     // backend: std::sync::Arc<std::sync::Mutex<BackendTx>>,
     // pub(crate) highlight_cache: std::cell::RefCell<
@@ -253,7 +253,7 @@ impl Terminal {
         //     self.vi_motion(keystroke);
         //     return true;
         // }
-
+        info!("key down........");
         // Keep default terminal behavior
         let esc = to_esc_str(keystroke, self.last_content.mode, option_as_meta);
         if let Some(esc) = esc {
@@ -280,6 +280,7 @@ impl Terminal {
             // }
         }
     }
+    // 后台任务处理，alacrity解析的事件
     fn process_pty_event(&mut self, event: PtyEvent, cx: &mut Context<Self>) {
         match event {
             PtyEvent::Event(event) => self.process_event(event, cx),
@@ -421,13 +422,14 @@ impl Terminal {
         self.detect_init_command_startup_marker();
         // cx.emit(Event::Wakeup);
     }
-
+    // 监听键盘输入事件，将字符解析然后发送给后端
     pub fn write_to_pty(&mut self, bytes: impl Into<Vec<u8>>) {
         // if let Ok(backend) = self.backend.lock() {
         //     backend.send(SshMessage::Input(bytes.into()));
         // }
     }
     fn write_input(&mut self, input: impl Into<Cow<'static, [u8]>>) {
+        info!("write_input");
         let input = input.into();
         // if !self.is_remote_terminal && input.contains(&b'\r') {
         //     let term = self.term.lock_unfair();
@@ -558,9 +560,15 @@ fn convert_lf_to_crlf(bytes: &[u8], previous_byte_was_cr: &mut bool) -> Vec<u8> 
     }
     converted
 }
+
+
+
+
 #[derive(Clone)]
 struct TerminalListener(UnboundedSender<PtyEvent>);
-
+// 一个在后台独立运行的 “PTY 读取线程”（PTY reader thread）会持续不断地从 SSH 或本地 Shell 
+// 进程的输出中读取原始的字节流数据 
+// 负责“通知”的部门，它把分拣好的物品清单（Event）派发给真正需要它们的部门（比如渲染器）去执行。
 impl EventListener for TerminalListener {
     fn send_event(&self, event: Event) {
         self.0.unbounded_send(PtyEvent::Event(event.into())).ok();
@@ -1615,10 +1623,16 @@ pub struct TerminalBuilder {
 }
 
 impl TerminalBuilder {
-    pub fn new_terminal(terminal_bounds: TerminalBounds) -> Self {
+    pub fn new_terminal(terminal_bounds: TerminalBounds,session:Session,events : std::sync::mpsc::Sender<SystemEvent>,) -> Self {
         let terminal_bounds = normalize_terminal_bounds(terminal_bounds);
         let (events_tx, events_rx) = unbounded();
         let term = new_term(terminal_bounds, events_tx.clone());
+          let (cmd_tx, cmd_rx) = tokio::sync::mpsc::unbounded_channel::<SshMessage>();
+        let tab_id=Uuid::new_v4().to_string();
+        let title = session.name.clone();
+        // events_tx 负责把消息发送给具体的终端窗口alac ,cmd-rx 负责读取字符发送给ssh后端
+        open_session_terminal(events .clone(), session, tab_id, cmd_rx);
+        let backendtx = BackendTx::Ssh(cmd_tx);
         let terminal = Terminal {
             term,
             event_loop_task: Task::ready(Ok(())),
@@ -1641,6 +1655,7 @@ impl TerminalBuilder {
             init_command_startup_tx: None,
 
             scroll_pixel_y: 0.,
+            backend: Arc::new(std::sync::Mutex::new(backendtx)),
             // backend: todo!(),
         };
         Self {

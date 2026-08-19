@@ -5,6 +5,7 @@ pub mod terminal_element;
 use gpui::Action;
 use gpui::*;
 use gpui_rsx::rsx;
+use log::info;
 use serde::Deserialize;
 use settings::Settings;
 use settings_content::terminal::TerminalBlink;
@@ -122,6 +123,7 @@ impl TerminalView {
     }
 
     fn key_down(&mut self, event: &KeyDownEvent, window: &mut Window, cx: &mut Context<Self>) {
+        info!("key down ");
         self.clear_bell(cx);
         self.pause_cursor_blinking(window, cx);
 
@@ -190,6 +192,7 @@ impl Render for TerminalView {
                 on_key_down={cx.listener(Self::key_down)}
                 track_focus={&self.focus_handle.clone()}
                 >
+
                 <div id="terminal_container" class="" h_full w_full>
                     {
                         TerminalElement::new(

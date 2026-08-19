@@ -4,21 +4,27 @@
 //! `vte::Parser` to translate ANSI escape sequences into styled glyphs.
 //! This reference paints a representative static frame.
 
+use std::sync::mpsc::{self, Receiver};
+
 use crate::{
-    OpenTerminal, item::ItemHandle, session_manager::SessionManager, state::AppState,
-    welcome::WelcomePage,
+    item::ItemHandle, session_manager::SessionManager, state::AppState, welcome::WelcomePage,
 };
 use gpui::{prelude::FluentBuilder, *};
-
+#[derive(Clone, Deserialize, PartialEq, JsonSchema, Action)]
+#[action(namespace = workspace)]
+pub struct OpenTerminalAction {
+    pub session_id: String,
+}
 pub struct TerminalPane {
     state: Entity<AppState>,
     // view: Entity<TerminalView>,
     session_manager: Entity<SessionManager>,
     focus_handle: FocusHandle,
-    items: Vec<Box<dyn ItemHandle>>,
+    items: Vec<Entity<TerminalView>>,
     active_item_index: usize,
     should_display_welcome_page: bool,
     welcome_page: Option<Entity<WelcomePage>>,
+    events_rx: Receiver<SystemEvent>,
 }
 
 impl TerminalPane {
@@ -29,23 +35,56 @@ impl TerminalPane {
         cx: &mut Context<Self>,
     ) -> Self {
         let welcome_page = cx.new(|cx| WelcomePage::new(true, windows, cx));
+        let (events_tx, events_rx) = mpsc::channel();
+        let builder = TerminalBuilder::new_terminal(
+            TerminalBounds::default(),
+            Session {
+                id: (),
+                name: (),
+                kind: (),
+                config: (),
+                status: (),
+            },
+            events_tx,
+        );
+        let terminal = cx.new(|cx| builder.subscribe(cx));
+
+        let terminal_view = cx.new(|cx| TerminalView::new(terminal.clone(), windows, cx));
+        let item = vec![terminal_view.clone()];
+        // self.should_display_welcome_page = false;
+        // self.active_item_index = self.items.len() - 1;
         Self {
             state,
             session_manager,
             welcome_page: Some(welcome_page),
             // view: todo!(),
             focus_handle: cx.focus_handle(),
-            items: vec![],
+            items: item,
             active_item_index: 0,
-            should_display_welcome_page: true,
+            should_display_welcome_page: false,
+            events_rx,
         }
     }
     pub fn open_terminal(
         &mut self,
-        action: &OpenTerminal,
+        action: &OpenTerminalAction,
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
+        info!("收到打开终端action");
+        let session_id = self
+            .session_manager
+            .read(cx)
+            .query(&action.session_id)
+            .unwrap()
+            .clone();
+        let builder = TerminalBuilder::new_terminal(TerminalBounds::default());
+        let terminal = cx.new(|cx| builder.subscribe(cx));
+
+        let terminal_view = cx.new(|cx| TerminalView::new(terminal.clone(), window, cx));
+        self.items.push(terminal_view.clone());
+        self.should_display_welcome_page = false;
+        self.active_item_index = self.items.len() - 1;
     }
 }
 
@@ -54,9 +93,10 @@ impl Render for TerminalPane {
         let t = cx.theme();
         let active = self.state.read(cx).active_session_id.clone();
         // let terminal_settings = TerminalSettings::get_global(cx);
-
+        // cx.on_action(|| {});
         div()
             .id("lumen-terminal")
+            .on_action(cx.listener(Self::open_terminal))
             .flex()
             .flex_col()
             .flex_1()
@@ -78,7 +118,8 @@ impl Render for TerminalPane {
                             .text_size(px(13.0))
                             .line_height(px(20.15)) // matches 1.55 with 13px
                             .text_color(t.colors().terminal_ansi_white)
-                            .overflow_y_scroll(), // .children(sample_lines(&t, active.as_deref())),
+                            .overflow_y_scroll()
+                            .child(self.items[self.active_item_index].clone()), // .children(sample_lines(&t, active.as_deref())),
                     )
                 },
             )
@@ -223,7 +264,11 @@ impl Render for TerminalPane {
 
 // Import Hsla trait so `.text_color()` accepts our token types.
 use gpui::Hsla;
+use log::info;
+use schemars::JsonSchema;
+use serde::Deserialize;
 use settings::Settings;
 use terminal::terminal_settings::TerminalSettings;
+use terminal::{TerminalBounds, TerminalBuilder};
 use terminal_view::TerminalView;
 use theme::{ActiveTheme, Theme};
