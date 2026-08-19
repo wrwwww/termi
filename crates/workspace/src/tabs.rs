@@ -1,10 +1,11 @@
 //! `TabsBar` — horizontal strip of open terminal tabs above the pane area.
 
 use crate::{
-    session_manager::{self, Session, SessionManager, SessionStatus},
+    session_manager::{self, SessionManager},
     state::AppState,
 };
 use gpui::*;
+use protocol::{Session, SessionStatus};
 use theme::{ActiveTheme, Theme};
 
 pub struct TabsBar {

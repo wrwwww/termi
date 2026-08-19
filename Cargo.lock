@@ -5741,9 +5741,11 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "aws-lc-rs",
+ "futures",
  "log",
  "russh",
  "serde",
+ "strum 0.28.0",
  "tokio",
  "uuid",
 ]
@@ -9589,11 +9591,13 @@ name = "workspace"
 version = "0.1.0"
 dependencies = [
  "anyhow",
+ "futures",
  "gpui",
  "gpui-component",
  "gpui-component-assets",
  "gpui-rsx",
  "log",
+ "protocol",
  "schemars",
  "serde",
  "serde_json",
@@ -9606,6 +9610,7 @@ dependencies = [
  "terminal_view",
  "theme",
  "theme_settings",
+ "tokio",
  "ui",
  "utils",
  "windows 0.61.3",

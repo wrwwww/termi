@@ -12,9 +12,11 @@ path = "src/protocol.rs"
 
 [dependencies]
 anyhow.workspace = true
-tokio.workspace = true
 russh.workspace = true
 aws-lc-rs = { workspace = true, features = ["prebuilt-nasm"] }
 log.workspace = true
 serde.workspace = true
 uuid.workspace = true
+strum.workspace=true
+futures.workspace = true
+tokio.workspace = true

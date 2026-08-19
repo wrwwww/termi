@@ -39,7 +39,7 @@ use gpui::{
     Window, accesskit::Uuid, div, fill, font, hsla, point, px, relative, rgba, size,
 };
 use itertools::Itertools;
-use protocol::{BackendTx, SshMessage, SystemEvent, open_session_terminal, ssh::Session  };
+use protocol::{BackendTx, Session, SshMessage, SystemEvent, open_session_terminal,   };
 use serde::{Deserialize, Serialize};
 use vte::ansi::{Attr, Color, Handler, NamedColor, Processor, Rgb, StdSyncHandler};
 
@@ -1620,18 +1620,24 @@ fn modifier_code(keystroke: &Keystroke) -> u32 {
 pub struct TerminalBuilder {
     terminal: Terminal,
     events_rx: UnboundedReceiver<PtyEvent>,
+    cmd_rx:Option< tokio::sync::mpsc::UnboundedReceiver<SshMessage>>
 }
 
 impl TerminalBuilder {
-    pub fn new_terminal(terminal_bounds: TerminalBounds,session:Session,events : std::sync::mpsc::Sender<SystemEvent>,) -> Self {
+    pub fn new_terminal(terminal_bounds: TerminalBounds,  
+ ) -> Self {
         let terminal_bounds = normalize_terminal_bounds(terminal_bounds);
         let (events_tx, events_rx) = unbounded();
         let term = new_term(terminal_bounds, events_tx.clone());
           let (cmd_tx, cmd_rx) = tokio::sync::mpsc::unbounded_channel::<SshMessage>();
-        let tab_id=Uuid::new_v4().to_string();
-        let title = session.name.clone();
+        // let tab_id=Uuid::new_v4().to_string();
+        // let title = session.name.clone();
         // events_tx 负责把消息发送给具体的终端窗口alac ,cmd-rx 负责读取字符发送给ssh后端
-        open_session_terminal(events .clone(), session, tab_id, cmd_rx);
+     
+        // open_session_terminal(events.clone(), session, tab_id, cmd_rx);
+       
+    
+       
         let backendtx = BackendTx::Ssh(cmd_tx);
         let terminal = Terminal {
             term,
@@ -1656,15 +1662,21 @@ impl TerminalBuilder {
 
             scroll_pixel_y: 0.,
             backend: Arc::new(std::sync::Mutex::new(backendtx)),
+        
             // backend: todo!(),
         };
         Self {
             terminal,
             events_rx,
+            cmd_rx:Some(cmd_rx)
         }
     }
 
-    pub fn subscribe(mut self, cx: &Context<Terminal>) -> Terminal {    
+    pub fn subscribe(mut self,session:Session, events : UnboundedSender<SystemEvent>,cx: &Context<Terminal>) -> Terminal {  
+        let cmd_rx=self.cmd_rx.take().unwrap();
+        cx.spawn(async move|this,cx|{
+            open_session_terminal(events.clone(), session, "".to_string(), cmd_rx);
+        }).detach();  
         //Event loop
         self.terminal.event_loop_task = cx.spawn(async move |terminal, cx| {
             while let Some(event) = self.events_rx.next().await {

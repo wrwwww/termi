@@ -181,7 +181,7 @@ impl Render for TerminalView {
         let terminal_handle = self.terminal.clone();
         let terminal_view_handle = cx.entity();
         let focused = self.focus_handle.is_focused(window);
-        log::info!("打印 focused:{}", focused);
+        // log::info!("打印 focused:{}", focused);
         // let view = cx.entity();
         // let config = self.config.read(cx).config_manager.current.theme.font_size;
         // let list = self.terminal_manager.read(cx).session_manager.read(cx);

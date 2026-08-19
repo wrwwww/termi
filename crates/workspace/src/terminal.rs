@@ -9,6 +9,9 @@ use std::sync::mpsc::{self, Receiver};
 use crate::{
     item::ItemHandle, session_manager::SessionManager, state::AppState, welcome::WelcomePage,
 };
+use anyhow::Ok;
+use futures::StreamExt;
+use futures::channel::mpsc::{UnboundedReceiver, unbounded};
 use gpui::{prelude::FluentBuilder, *};
 #[derive(Clone, Deserialize, PartialEq, JsonSchema, Action)]
 #[action(namespace = workspace)]
@@ -24,7 +27,9 @@ pub struct TerminalPane {
     active_item_index: usize,
     should_display_welcome_page: bool,
     welcome_page: Option<Entity<WelcomePage>>,
-    events_rx: Receiver<SystemEvent>,
+    // 接受从backend返回的事件
+    events_rx: UnboundedReceiver<SystemEvent>,
+    event_loop_task: Task<Result<(), anyhow::Error>>,
 }
 
 impl TerminalPane {
@@ -35,19 +40,12 @@ impl TerminalPane {
         cx: &mut Context<Self>,
     ) -> Self {
         let welcome_page = cx.new(|cx| WelcomePage::new(true, windows, cx));
-        let (events_tx, events_rx) = mpsc::channel();
-        let builder = TerminalBuilder::new_terminal(
-            TerminalBounds::default(),
-            Session {
-                id: (),
-                name: (),
-                kind: (),
-                config: (),
-                status: (),
-            },
-            events_tx,
-        );
-        let terminal = cx.new(|cx| builder.subscribe(cx));
+        // let (events_tx, events_rx) = mpsc::channel();
+        let (events_tx, events_rx) = unbounded();
+        let session = (*session_manager.read(cx).list().get(0).unwrap()).clone();
+
+        let builder = TerminalBuilder::new_terminal(TerminalBounds::default());
+        let terminal = cx.new(|cx| builder.subscribe(session, events_tx, cx));
 
         let terminal_view = cx.new(|cx| TerminalView::new(terminal.clone(), windows, cx));
         let item = vec![terminal_view.clone()];
@@ -63,6 +61,37 @@ impl TerminalPane {
             active_item_index: 0,
             should_display_welcome_page: false,
             events_rx,
+            event_loop_task: Task::ready(Ok(())),
+        }
+    }
+    pub fn background_task(mut self, cx: &mut Context<Self>) {
+        self.event_loop_task = cx.spawn(async move |this, cx| {
+            while let Some(event) = self.events_rx.next().await {
+                this.update(cx, |this, cx| {
+                    //write_output
+                    this.process_event(event, cx);
+                });
+            }
+            anyhow::Ok(())
+        });
+    }
+    pub fn process_event(&mut self, event: SystemEvent, cx: &mut Context<Self>) {
+        match event {
+            SystemEvent::Output { tab_id, bytes } => {
+                self.items[0].update(cx, |this, cx| {
+                    this.terminal().update(cx, |this, cx| {
+                        this.write_output(&bytes);
+                    })
+                });
+            }
+            SystemEvent::Status { tab_id, text } => {}
+            SystemEvent::Connected { tab_id } => {}
+            SystemEvent::Error(_) => {}
+            SystemEvent::CommandComplete(_) => {}
+            SystemEvent::TitleUpdate { tab_id, title } => {}
+            SystemEvent::ClearScreen => {}
+            SystemEvent::ProcessStarted(_) => {}
+            SystemEvent::ProcessTerminated => {}
         }
     }
     pub fn open_terminal(
@@ -78,13 +107,13 @@ impl TerminalPane {
             .query(&action.session_id)
             .unwrap()
             .clone();
-        let builder = TerminalBuilder::new_terminal(TerminalBounds::default());
-        let terminal = cx.new(|cx| builder.subscribe(cx));
+        // let builder = TerminalBuilder::new_terminal(TerminalBounds::default());
+        // let terminal = cx.new(|cx| builder.subscribe(cx));
 
-        let terminal_view = cx.new(|cx| TerminalView::new(terminal.clone(), window, cx));
-        self.items.push(terminal_view.clone());
-        self.should_display_welcome_page = false;
-        self.active_item_index = self.items.len() - 1;
+        // let terminal_view = cx.new(|cx| TerminalView::new(terminal.clone(), window, cx));
+        // self.items.push(terminal_view.clone());
+        // self.should_display_welcome_page = false;
+        // self.active_item_index = self.items.len() - 1;
     }
 }
 
@@ -265,6 +294,7 @@ impl Render for TerminalPane {
 // Import Hsla trait so `.text_color()` accepts our token types.
 use gpui::Hsla;
 use log::info;
+use protocol::SystemEvent;
 use schemars::JsonSchema;
 use serde::Deserialize;
 use settings::Settings;
@@ -272,3 +302,4 @@ use terminal::terminal_settings::TerminalSettings;
 use terminal::{TerminalBounds, TerminalBuilder};
 use terminal_view::TerminalView;
 use theme::{ActiveTheme, Theme};
+use utils::collections::HashMap;

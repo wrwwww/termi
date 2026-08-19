@@ -52,63 +52,63 @@ impl SessionId {
     }
 }
 
-#[derive(Clone, Debug, Serialize, Deserialize, Default)]
-pub enum SessionKind {
-    #[default] // 指定默认变体
-    Ssh,
-    Telnet,
-}
+// #[derive(Clone, Debug, Serialize, Deserialize, Default)]
+// pub enum SessionKind {
+//     #[default] // 指定默认变体
+//     Ssh,
+//     Telnet,
+// }
 
-#[derive(Clone, Debug, Serialize, Deserialize)]
-pub enum AuthMethod {
-    Password {
-        remember: bool,
-        // secret_id: Option<String>,
-        username: String,
-        password: String,
-    },
+// #[derive(Clone, Debug, Serialize, Deserialize)]
+// pub enum AuthMethod {
+//     Password {
+//         remember: bool,
+//         // secret_id: Option<String>,
+//         username: String,
+//         password: String,
+//     },
 
-    PublicKey {
-        private_key: PathBuf,
-        passphrase_secret_id: Option<String>,
-    },
+//     PublicKey {
+//         private_key: PathBuf,
+//         passphrase_secret_id: Option<String>,
+//     },
 
-    KeyboardInteractive,
+//     KeyboardInteractive,
 
-    GssApi,
-}
-#[derive(Clone, Debug, Serialize, Deserialize)]
-pub struct SessionConfig {
-    pub hostname: String,
-    pub port: u32,
-    pub auth_method: AuthMethod,
-}
+//     GssApi,
+// }
+// #[derive(Clone, Debug, Serialize, Deserialize)]
+// pub struct SessionConfig {
+//     pub hostname: String,
+//     pub port: u32,
+//     pub auth_method: AuthMethod,
+// }
 
-#[derive(Clone, Debug, Serialize, Deserialize, Default)]
-pub enum SessionStatus {
-    #[default] // 指定默认变体
-    Connected,
-}
+// #[derive(Clone, Debug, Serialize, Deserialize, Default)]
+// pub enum SessionStatus {
+//     #[default] // 指定默认变体
+//     Connected,
+// }
 
-#[derive(Clone, Debug, Serialize, Deserialize)]
-pub struct Session {
-    pub id: SessionId,
+// #[derive(Clone, Debug, Serialize, Deserialize)]
+// pub struct Session {
+//     pub id: SessionId,
 
-    // 显示名称
-    pub name: String,
+//     // 显示名称
+//     pub name: String,
 
-    // 连接类型
-    pub kind: SessionKind,
+//     // 连接类型
+//     pub kind: SessionKind,
 
-    // 连接配置
-    pub config: SessionConfig,
+//     // 连接配置
+//     pub config: SessionConfig,
 
-    // 当前状态
-    #[serde(skip)]
-    pub status: SessionStatus,
-}
-impl Session {
-    pub fn get_hostname(&self) -> String {
-        self.config.hostname.clone()
-    }
-}
+//     // 当前状态
+//     #[serde(skip)]
+//     pub status: SessionStatus,
+// }
+// impl Session {
+//     pub fn get_hostname(&self) -> String {
+//         self.config.hostname.clone()
+//     }
+// }

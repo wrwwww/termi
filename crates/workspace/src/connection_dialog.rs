@@ -14,11 +14,12 @@ use gpui_component::{
 };
 use gpui_rsx::rsx;
 
+use protocol::{AuthMethod, Protocol, Session, SessionStatus};
 use strum::IntoEnumIterator;
 use theme::{ActiveTheme, Theme};
 
 use crate::{
-    session_manager::{self, Protocol, Session, SessionManager, SessionStatus},
+    session_manager::{self,   SessionManager   },
     title_bar::PlatformTitleBar,
 };
 
@@ -27,7 +28,7 @@ pub struct ConnectionDialog {
     // state: Entity<AppState>,
     name: Entity<InputState>,
     group: Entity<InputState>,
-    host: Entity<InputState>,
+    hostname: Entity<InputState>,
     port: Entity<InputState>,
     username: Entity<InputState>,
     password: Entity<InputState>,
@@ -45,13 +46,13 @@ impl ConnectionDialog {
         session_manager: Entity<SessionManager>,
         session_id:Option<String>
     ) -> Self {
-        let mut session=Session { id: String::new(), name: String::new(), group: String::new(), host: String::new(), port: 22, username: String::new(), protocol: Protocol::Ssh, auth: session_manager::AuthMethod::Password, identity_file: None, status: SessionStatus::Disconnected, latencies_ms: vec![] };
+        let mut session=Session { id: String::new(), name: String::new(), group: String::new(), hostname: String::new(), port: 22, username: String::new(), protocol: Protocol::Ssh, auth:  AuthMethod::Password{password:"".to_string()}, identity_file: None, status: SessionStatus::Disconnected, latencies_ms: vec![] };
         if let Some(session_id)=session_id{
             session=session_manager.read(cx).query(&session_id).unwrap().clone();  
         }
         let name = cx.new(|cx| InputState::new(window, cx).placeholder(" ").default_value(session.name));
         let group = cx.new(|cx| InputState::new(window, cx).default_value(session.group));
-        let host = cx.new(|cx| InputState::new(window, cx).placeholder("[用户@]主机地址").default_value(session.host));
+        let hostname = cx.new(|cx| InputState::new(window, cx).placeholder("[用户@]主机地址").default_value(session.hostname));
         let port = cx.new(|cx| InputState::new(window, cx).placeholder("22").default_value(session.port.to_string()));
         let username = cx.new(|cx| InputState::new(window, cx).default_value(session.username));
         let password = cx.new(|cx| InputState::new(window, cx));
@@ -74,7 +75,7 @@ impl ConnectionDialog {
             title_bar,
             name,
             group,
-            host,
+            hostname,
             port,
             username,
             password,
@@ -96,7 +97,7 @@ impl ConnectionDialog {
             id: Uuid::new_v4().to_string(),
             name: self.name.read(cx).value().to_string(),
             group: self.group.read(cx).value().to_string(),
-            host: self.host.read(cx).value().to_string(),
+            hostname: self.hostname.read(cx).value().to_string(),
             port: self
                 .port
                 .read(cx)
@@ -106,7 +107,7 @@ impl ConnectionDialog {
                 .unwrap_or(22),
             username: self.port.read(cx).value().to_string(),
             protocol: protocol,
-            auth: session_manager::AuthMethod::Password,
+            auth:  AuthMethod::Password{password:"".to_string()},
             identity_file: Some(self.identity.read(cx).value().to_string()),
             status: SessionStatus::Disconnected,
             latencies_ms: vec![],
@@ -126,7 +127,7 @@ impl Render for ConnectionDialog {
 
         let name = self.name.clone();
         let group = self.group.clone();
-        let host = self.host.clone();
+        let host = self.hostname.clone();
         let port = self.port.clone();
         let username = self.username.clone();
         let password= self.password.clone();

@@ -3,11 +3,10 @@
 //! Held inside a single `Entity<AppState>` that views observe and mutate
 //! via GPUI's standard model notification API.
 
+use protocol::{Session, SessionStatus};
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
 use strum::{Display, EnumIter, EnumString};
-
-use crate::session_manager::{AuthMethod, Protocol, Session, SessionStatus};
 
 #[derive(Clone, Debug, Default, Serialize, Deserialize)]
 pub struct AppState {
@@ -222,71 +221,7 @@ impl AppState {
         let mut groups: Vec<String> =
             vec!["Production".into(), "Staging".into(), "Personal".into()];
         groups.sort();
-        let sessions = vec![
-            demo_session(
-                "s1",
-                "prod-web-01",
-                "Production",
-                "10.0.1.21",
-                22,
-                "deploy",
-                SessionStatus::Connected,
-            ),
-            demo_session(
-                "s2",
-                "prod-db-primary",
-                "Production",
-                "10.0.2.11",
-                22,
-                "postgres",
-                SessionStatus::Connected,
-            ),
-            demo_session(
-                "s3",
-                "prod-cache-01",
-                "Production",
-                "10.0.3.5",
-                22,
-                "ops",
-                SessionStatus::Disconnected,
-            ),
-            demo_session(
-                "s4",
-                "staging-app-01",
-                "Staging",
-                "10.10.1.21",
-                2222,
-                "deploy",
-                SessionStatus::Idle,
-            ),
-            demo_session(
-                "s5",
-                "staging-db",
-                "Staging",
-                "10.10.2.11",
-                2222,
-                "deploy",
-                SessionStatus::Disconnected,
-            ),
-            demo_session(
-                "s6",
-                "raspberry-pi",
-                "Personal",
-                "192.168.1.10",
-                22,
-                "pi",
-                SessionStatus::Disconnected,
-            ),
-            demo_session(
-                "s7",
-                "homelab-nas",
-                "Personal",
-                "192.168.1.50",
-                22,
-                "pi",
-                SessionStatus::Disconnected,
-            ),
-        ];
+        let sessions = vec![];
         let active_session_id = Some("s1".into());
 
         Self {
@@ -319,31 +254,5 @@ impl AppState {
 
     pub fn set_active_session(&mut self, id: &str) {
         self.active_session_id = Some(id.into());
-    }
-}
-
-fn demo_session(
-    id: &str,
-    name: &str,
-    group: &str,
-    host: &str,
-    port: u16,
-    user: &str,
-    status: SessionStatus,
-) -> Session {
-    Session {
-        id: id.into(),
-        name: name.into(),
-        group: group.into(),
-        host: host.into(),
-        port,
-        username: user.into(),
-        protocol: Protocol::Ssh,
-        auth: AuthMethod::Key {
-            path: "~/.ssh/id_ed25519".into(),
-        },
-        identity_file: Some("~/.ssh/id_ed25519".into()),
-        status,
-        latencies_ms: vec![23, 22, 25, 21, 24],
     }
 }
