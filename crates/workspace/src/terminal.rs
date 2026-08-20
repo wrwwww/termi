@@ -11,7 +11,7 @@ use crate::{
 };
 use anyhow::Ok;
 use futures::StreamExt;
-use futures::channel::mpsc::{UnboundedReceiver, unbounded};
+use futures::channel::mpsc::{UnboundedReceiver, UnboundedSender, unbounded};
 use gpui::{prelude::FluentBuilder, *};
 #[derive(Clone, Deserialize, PartialEq, JsonSchema, Action)]
 #[action(namespace = workspace)]
@@ -20,7 +20,6 @@ pub struct OpenTerminalAction {
 }
 pub struct TerminalPane {
     state: Entity<AppState>,
-    // view: Entity<TerminalView>,
     session_manager: Entity<SessionManager>,
     focus_handle: FocusHandle,
     items: Vec<Entity<TerminalView>>,
@@ -29,6 +28,7 @@ pub struct TerminalPane {
     welcome_page: Option<Entity<WelcomePage>>,
     // 接受从backend返回的事件
     events_rx: Option<UnboundedReceiver<SystemEvent>>,
+    events_tx: UnboundedSender<SystemEvent>,
     event_loop_task: Task<Result<(), anyhow::Error>>,
 }
 
@@ -42,13 +42,13 @@ impl TerminalPane {
         let welcome_page = cx.new(|cx| WelcomePage::new(true, windows, cx));
         // let (events_tx, events_rx) = mpsc::channel();
         let (events_tx, events_rx) = unbounded();
-        let session = (*session_manager.read(cx).list().get(0).unwrap()).clone();
+        // let session = (*session_manager.read(cx).list().get(0).unwrap()).clone();
 
-        let builder = TerminalBuilder::new_terminal(TerminalBounds::default());
-        let terminal = cx.new(|cx| builder.subscribe(session, events_tx, cx));
+        // let builder = TerminalBuilder::new_terminal(TerminalBounds::default());
+        // let terminal = cx.new(|cx| builder.subscribe(session, events_tx.clone(), cx));
 
-        let terminal_view = cx.new(|cx| TerminalView::new(terminal.clone(), windows, cx));
-        let item = vec![terminal_view.clone()];
+        // let terminal_view = cx.new(|cx| TerminalView::new(terminal.clone(), windows, cx));
+        // let item = vec![terminal_view.clone()];
         // self.should_display_welcome_page = false;
         // self.active_item_index = self.items.len() - 1;
         Self {
@@ -57,10 +57,11 @@ impl TerminalPane {
             welcome_page: Some(welcome_page),
             // view: todo!(),
             focus_handle: cx.focus_handle(),
-            items: item,
+            items: vec![],
             active_item_index: 0,
             should_display_welcome_page: false,
             events_rx: Some(events_rx),
+            events_tx: events_tx,
             event_loop_task: Task::ready(Ok(())),
         }
     }
@@ -102,28 +103,31 @@ impl TerminalPane {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
-        let session_id = self
+        info!("接受到打开session");
+        let session = self
             .session_manager
             .read(cx)
             .query(&action.session_id)
             .unwrap()
             .clone();
-        // let builder = TerminalBuilder::new_terminal(TerminalBounds::default());
-        // let terminal = cx.new(|cx| builder.subscribe(cx));
+        info!("接受到打开session{:?}", session);
+        let builder = TerminalBuilder::new_terminal(TerminalBounds::default());
+        let terminal = cx.new(|cx| builder.subscribe(session, self.events_tx.clone(), cx));
 
-        // let terminal_view = cx.new(|cx| TerminalView::new(terminal.clone(), window, cx));
-        // self.items.push(terminal_view.clone());
-        // self.should_display_welcome_page = false;
-        // self.active_item_index = self.items.len() - 1;
+        let terminal_view = cx.new(|cx| TerminalView::new(terminal.clone(), window, cx));
+        // let item = vec![terminal_view.clone()];
+        self.items.push(terminal_view);
+        self.active_item_index = self.items.len() - 1;
+        cx.notify();
     }
 }
 
 impl Render for TerminalPane {
     fn render(&mut self, windows: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         let t = cx.theme();
-        let active = self.state.read(cx).active_session_id.clone();
+
         // let terminal_settings = TerminalSettings::get_global(cx);
-        // cx.on_action(|| {});
+
         div()
             .id("lumen-terminal")
             .on_action(cx.listener(Self::open_terminal))
@@ -132,28 +136,11 @@ impl Render for TerminalPane {
             .flex_1()
             .min_h_0()
             .bg(t.colors().terminal_background)
-            .when_else(
-                self.should_display_welcome_page,
-                |e| e.child(self.welcome_page.as_ref().unwrap().clone()),
-                |e| {
-                    e.child(
-                        // div()
-                        //     .id("terminal-viewport")
-                        //     .flex()
-                        //     .flex_col()
-                        //     .flex_1()
-                        //     .p(px(16.0))
-                        //     .px(px(20.0))
-                        //     .font_family("JetBrains Mono")
-                        //     .text_size(px(13.0))
-                        //     .line_height(px(20.15)) // matches 1.55 with 13px
-                        //     .text_color(t.colors().terminal_ansi_white)
-                        //     .overflow_y_scroll()
-                        // .child(
-                        self.items[self.active_item_index].clone(), // .children(sample_lines(&t, active.as_deref())),
-                    )
-                },
-            )
+        // .when_else(
+        //     self.should_display_welcome_page || self.items.is_empty(),
+        //     |e| e.child(self.welcome_page.as_ref().unwrap().clone()),
+        //     |e| e.child(self.items[self.active_item_index].clone()),
+        // )
     }
 }
 

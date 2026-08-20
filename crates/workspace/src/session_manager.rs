@@ -13,23 +13,23 @@ pub struct SessionManager {
 impl SessionManager {
     pub fn new() -> Self {
         let mut map = HashMap::default();
-        // let session_1 = Session {
-        //     id: "7bf80381-a70d-41e3-8056-65c5c2c558aa".to_string(),
-        //     name: "192.168.117.129".to_string(),
-        //     group: "linux".to_string(),
-        //     hostname: "192.168.117.4".to_string(),
-        //     port: 22,
-        //     username: "wrw".to_string(),
-        //     protocol: Protocol::Ssh,
-        //     auth: AuthMethod::Password {
-        //         password: "1006".to_string(),
-        //     },
-        //     identity_file: Some("".to_string()),
-        //     status: SessionStatus::Disconnected,
-        //     latencies_ms: vec![],
-        // };
         let session_1 = Session {
             id: "7bf80381-a70d-41e3-8056-65c5c2c558aa".to_string(),
+            name: "192.168.117.4".to_string(),
+            group: "linux".to_string(),
+            hostname: "192.168.117.4".to_string(),
+            port: 22,
+            username: "wrw".to_string(),
+            protocol: Protocol::Ssh,
+            auth: AuthMethod::Password {
+                password: "1006".to_string(),
+            },
+            identity_file: Some("".to_string()),
+            status: SessionStatus::Disconnected,
+            latencies_ms: vec![],
+        };
+        let session_2 = Session {
+            id: "7bf80381-a70d-41e3-8056-65c5c2c558ab".to_string(),
             name: "192.168.117.129".to_string(),
             group: "linux".to_string(),
             hostname: "192.168.117.129".to_string(),
@@ -43,10 +43,9 @@ impl SessionManager {
             status: SessionStatus::Disconnected,
             latencies_ms: vec![],
         };
-        map.insert(
-            "7bf80381-a70d-41e3-8056-65c5c2c558aa".to_string(),
-            session_1,
-        );
+
+        map.insert(session_1.id.clone(), session_1);
+        map.insert(session_2.id.clone(), session_2);
         Self {
             inner: map,
             open_sessions: vec![],

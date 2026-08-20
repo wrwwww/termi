@@ -7,6 +7,7 @@ use crate::{
     connection_dialog::ConnectionDialog,
     session_manager::{self, SessionManager},
     state::AppState,
+    terminal::OpenTerminalAction,
 };
 use gpui::*;
 use gpui_component::{IconName, Root, button::Button, menu::ContextMenuExt};
@@ -364,16 +365,20 @@ fn render_session_item(
             MouseButton::Left,
             cx.listener(move |this, e: &MouseDownEvent, window, cx| {
                 if e.click_count == 2 {
-                    this.session_manager.update(cx, |this, cx| {
-                        this.open_session(session.id.clone());
-                    });
+                    // this.session_manager.update(cx, |this, cx| {
+                    //     this.open_session(session.id.clone());
+                    // });
                     // this.state
                     //     .update(cx, |state, cx| state.set_active_session(&id));
-                    // if e.click_count == 2 {
-                    info!("这里");
-                    // window.dispatch_action(OpenTerminal.boxed_clone(), cx);
-                    // }
+
+                    window.dispatch_action(
+                        Box::new(OpenTerminalAction {
+                            session_id: session.id.clone(),
+                        }),
+                        cx,
+                    );
                     cx.notify();
+                    info!("发送消息");
                 }
             }),
         )
