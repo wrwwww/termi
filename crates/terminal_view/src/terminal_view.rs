@@ -27,9 +27,16 @@ pub struct TerminalView {
     // config: Entity<AppState>,
     pub ime_state: Option<ImeState>,
     pub scroll_top: Pixels,
+    _subscriptions: Vec<Subscription>,
 }
 
 const CURSOR_BLINK_INTERVAL: Duration = Duration::from_millis(500);
+impl Focusable for TerminalView {
+    fn focus_handle(&self, _cx: &App) -> FocusHandle {
+        self.focus_handle.clone()
+    }
+}
+
 impl TerminalView {
     pub fn new(
         terminal: Entity<Terminal>,
@@ -38,6 +45,16 @@ impl TerminalView {
         // config_manager: Entity<AppState>,
     ) -> Self {
         let focus_handle = cx.focus_handle();
+        let focus_in = cx.on_focus_in(&focus_handle, window, |terminal_view, window, cx| {
+            terminal_view.focus_in(window, cx);
+        });
+        let focus_out = cx.on_focus_out(
+            &focus_handle,
+            window,
+            |terminal_view, _event, window, cx| {
+                terminal_view.focus_out(window, cx);
+            },
+        );
         let cursor_shape = TerminalSettings::get_global(cx).cursor_shape;
         let blink_manager = cx.new(|cx| {
             BlinkManager::new(
@@ -51,6 +68,12 @@ impl TerminalView {
                 cx,
             )
         });
+        let subscriptions = vec![
+            focus_in,
+            focus_out,
+            cx.observe(&blink_manager, |_, _, cx| cx.notify()),
+            // cx.observe_global::<SettingsStore>(Self::settings_changed),
+        ];
         Self {
             scroll_top: Pixels::ZERO,
 
@@ -59,6 +82,7 @@ impl TerminalView {
             focus_handle,
             cursor_shape: cursor_shape.into(),
             blink_manager,
+            _subscriptions: subscriptions,
         }
     }
     pub(crate) fn marked_text_range(&self) -> Option<StdRange<usize>> {
@@ -97,7 +121,7 @@ impl TerminalView {
         // cx.emit(Event::Wakeup);
     }
     pub fn pause_cursor_blinking(&mut self, _window: &mut Window, cx: &mut Context<Self>) {
-        // self.blink_manager.update(cx, BlinkManager::pause_blinking);
+        self.blink_manager.update(cx, BlinkManager::pause_blinking);
     }
 
     pub fn terminal(&self) -> &Entity<Terminal> {
@@ -151,7 +175,7 @@ impl TerminalView {
         }
 
         window.invalidate_character_coordinates();
-        // cx.notify();
+        cx.notify();
     }
     fn send_text(&mut self, text: &SendText, _: &mut Window, cx: &mut Context<Self>) {
         self.clear_bell(cx);

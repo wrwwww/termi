@@ -11,9 +11,11 @@ use gpui::{
     TextStyle, UTF16Selection, UnderlineStyle, WhiteSpace, Window, div, fill, font, hsla, point,
     px, relative, size,
 };
+
 use itertools::Itertools;
 use log::info;
 use settings::Settings;
+use terminal::terminal_settings::CursorShape as EditorCursorShape;
 use terminal::terminal_settings::TerminalSettings;
 use terminal::{
     BASE_REM_SIZE_IN_PX, BlockContext, BlockProperties, Cell, Content, CursorShape, DisplayCursor,
@@ -582,21 +584,18 @@ impl Element for TerminalElement {
                     || settings.buffer_font.family.clone(),
                     |font_family| font_family.0.clone().into(),
                 );
-                info!("font_fanily:{}", font_family);
                 let font_fallbacks = terminal_settings
                     .font_fallbacks
                     .as_ref()
                     .or(settings.buffer_font.fallbacks.as_ref())
                     .cloned();
 
-                info!("font_fallbacks:{:?}", font_fallbacks);
                 let font_features = terminal_settings
                     .font_features
                     .as_ref()
                     .unwrap_or(&FontFeatures::disable_ligatures())
                     .clone();
 
-                info!("font_features:{:?}", font_features);
                 let font_weight = terminal_settings.font_weight.unwrap_or_default();
 
                 let line_height = terminal_settings.line_height.value();
@@ -637,7 +636,6 @@ impl Element for TerminalElement {
                     color: theme.colors().terminal_foreground,
                     ..Default::default()
                 };
-                info!("font:{:?}", text_style.font());
                 let line_height = 1.5;
                 let text_system = cx.text_system();
 
@@ -809,21 +807,20 @@ impl Element for TerminalElement {
                 // if we don't end up showing it.
                 let cursor_point = DisplayCursor::from(cursor.point, *display_offset);
                 let cursor_text = {
-                    let cursor_text = cursor_char.to_string();
-                    let len = cursor_text.len();
+                    let str_trxt = cursor_char.to_string();
+                    let len = str_trxt.len();
                     window.text_system().shape_line(
-                        cursor_text.into(),
+                        str_trxt.into(),
                         text_style.font_size.to_pixels(window.rem_size()),
                         &[TextRun {
                             len,
                             font: text_style.font(),
-                            color: hsla(220., 15., 10., 1.),
+                            color: theme.colors().terminal_ansi_background,
                             ..Default::default()
                         }],
                         None,
                     )
                 };
-
                 // For whitespace, use cell width to avoid cursor stretching.
                 // For other characters, use the larger of shaped width and cell width
                 // to properly cover wide characters like emojis.
@@ -839,25 +836,29 @@ impl Element for TerminalElement {
                         size: size(cursor_width.ceil(), dimensions.line_height),
                     });
 
-                let cursor = if matches!(cursor.shape, CursorShape::Hidden) {
+                let cursor = if let CursorShape::Hidden = cursor.shape {
                     None
                 } else {
-                    let cursor_shape = if self.focused {
-                        cursor.shape
-                    } else {
-                        CursorShape::HollowBlock
-                    };
-                    let cursor_text =
-                        matches!(cursor_shape, CursorShape::Block).then_some(cursor_text);
-
+                    let focused = self.focused;
                     ime_cursor_bounds.map(move |bounds| {
+                        let (shape, text) = match cursor.shape {
+                            CursorShape::Block if !focused => (EditorCursorShape::Hollow, None),
+                            CursorShape::Block => (EditorCursorShape::Block, Some(cursor_text)),
+                            CursorShape::Underline if !focused => (EditorCursorShape::Hollow, None),
+                            CursorShape::Underline => (EditorCursorShape::Underline, None),
+                            CursorShape::Bar if !focused => (EditorCursorShape::Hollow, None),
+                            CursorShape::Bar => (EditorCursorShape::Bar, None),
+                            CursorShape::HollowBlock => (EditorCursorShape::Hollow, None),
+                            CursorShape::Hidden => unreachable!(),
+                        };
+
                         CursorLayout::new(
                             bounds.origin,
                             bounds.size.width,
                             bounds.size.height,
-                            hsla(0., 0., 0.85, 1.),
-                            cursor_shape,
-                            cursor_text,
+                            theme.colors().link_text_hover,
+                            shape.into(),
+                            text,
                         )
                     })
                 };

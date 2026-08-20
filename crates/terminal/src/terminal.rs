@@ -394,7 +394,28 @@ impl Terminal {
         cx: &mut Context<Self>,
     ) {
         match event {
-            &InternalEvent::Resize(new_bounds) => {}
+            &InternalEvent::Resize(new_bounds) => {
+                let new_bounds = normalize_terminal_bounds(new_bounds);
+               
+                let columns_changed =
+                    self.last_content.terminal_bounds.num_columns() != new_bounds.num_columns();
+                self.last_content.terminal_bounds = new_bounds;
+
+                
+       
+                self.write_to_pty_resize(new_bounds);
+                // resize(term, new_bounds);
+                term.resize(new_bounds);
+                // if columns_changed { 
+                //     self.reset_cwd_history();
+                // }
+                // If there are matches we need to emit a wake up event to
+                // invalidate the matches and recalculate their locations
+                // in the new terminal layout
+                // if !self.matches.is_empty() {
+                //     cx.emit(Event::Wakeup);
+                // }
+            }
             InternalEvent::Clear => {}
             InternalEvent::Scroll(scroll) => {}
             InternalEvent::SetSelection(selection) => {}
@@ -447,6 +468,11 @@ impl Terminal {
     pub fn write_to_pty(&mut self, bytes: impl Into<Vec<u8>>) {
         if let Ok(backend) = self.backend.lock() {
             backend.send(SshMessage::Input(bytes.into()));
+        }
+    }
+        pub fn write_to_pty_resize(&mut self,new_bounds: TerminalBounds) {
+        if let Ok(backend) = self.backend.lock() {
+            backend.send(SshMessage::Resize(new_bounds. num_columns() as u16, new_bounds.num_lines()as u16));
         }
     }
     pub fn write_input(&mut self, input: impl Into<Cow<'static, [u8]>>) {
