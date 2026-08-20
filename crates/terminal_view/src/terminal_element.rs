@@ -12,12 +12,15 @@ use gpui::{
     px, relative, size,
 };
 use itertools::Itertools;
+use log::info;
 use settings::Settings;
+use terminal::terminal_settings::TerminalSettings;
 use terminal::{
     BASE_REM_SIZE_IN_PX, BlockContext, BlockProperties, Cell, Content, CursorShape, DisplayCursor,
     IndexedCell, Modes, Point, Range, is_blank,
 };
 use terminal::{Terminal, TerminalBounds};
+use theme::{ActiveTheme, Theme};
 use theme_settings::ThemeSettings;
 
 pub struct TerminalElement {
@@ -77,7 +80,7 @@ impl TerminalElement {
         Vec<BlockElementLayoutRect>,
     ) {
         let start_time = Instant::now();
-
+        let theme = cx.theme();
         // 内存预分配优化（pre-allocation）
         // 减少 Vec 在不断 push() 时触发扩容和内存搬迁。
         let estimated_cells = grid.size_hint().0;
@@ -193,7 +196,7 @@ impl TerminalElement {
                                 let mut new_batch = BatchedTextRun::new_from_char(
                                     cell_point,
                                     cell.character(),
-                                    TextRun::default(),
+                                    cell_style,
                                     text_style.font_size,
                                 );
                                 if let Some(chars) = zero_width_chars {
@@ -206,7 +209,7 @@ impl TerminalElement {
                             let mut new_batch = BatchedTextRun::new_from_char(
                                 cell_point,
                                 cell.character(),
-                                TextRun::default(),
+                                cell_style,
                                 text_style.font_size,
                             );
                             if let Some(chars) = zero_width_chars {
@@ -512,34 +515,6 @@ impl TerminalElement {
 
         Some(buffer_font_size * rem_size_scale)
     }
-
-    // fn input_for_keystroke(keystroke: &Keystroke) -> Option<Vec<u8>> {
-    //     let modifiers = &keystroke.modifiers;
-    //     let key = keystroke.key.as_str();
-
-    //     let mut input = if modifiers.control {
-    //         // control_input_for_key(key)
-    //     } else {
-    //         // special_input_for_key(key)
-    //         //     .map(str::as_bytes)
-    //         //     .map(ToOwned::to_owned)
-    //     };
-
-    //     if input.is_none() && (modifiers.alt || modifiers.function) {
-    //         input = keystroke
-    //             .key_char
-    //             .as_ref()
-    //             .filter(|text| !text.is_empty())
-    //             .map(|text| {
-    //                 let mut bytes = Vec::with_capacity(text.len() + 1);
-    //                 bytes.push(0x1b);
-    //                 bytes.extend_from_slice(text.as_bytes());
-    //                 bytes
-    //             });
-    //     }
-
-    //     input
-    // }
 }
 
 impl IntoElement for TerminalElement {
@@ -548,52 +523,7 @@ impl IntoElement for TerminalElement {
         self
     }
 }
-pub fn terminal_text_style() -> TextStyle {
-    TextStyle {
-        // 颜色：常用终端的经典绿/白/灰，这里用浅灰色作为示例
-        color: hsla(0.0, 0.0, 0.9, 1.0), // 90% 亮度的白色
 
-        // 字体系列：优先使用 Maple Mono NF CN，并设置合适的回退
-        font_family: "Maple Mono NF CN".into(),
-        font_features: FontFeatures::default(),
-
-        // 回退字体：保证中文和特殊字符正常显示
-        font_fallbacks: None,
-
-        // 字体大小：终端常用 14px
-        font_size: px(16.0).into(),
-
-        // 行高：终端通常用 1.2 ~ 1.4 倍字号，这里用 1.3
-        line_height: DefiniteLength::Fraction(1.3),
-
-        // 字重：终端一般用 Regular (400)
-        font_weight: FontWeight::NORMAL,
-
-        // 字体样式：标准，无斜体
-        font_style: FontStyle::Normal,
-
-        // 背景色：终端一般由终端背景色单独控制，这里留空
-        background_color: None,
-
-        // 无下划线（除非特定场景，如 git 状态）
-        underline: None,
-
-        // 无删除线
-        strikethrough: None,
-
-        // 终端通常保留空白符，用于对齐
-        white_space: WhiteSpace::Normal,
-
-        // 终端通常不截断文本，依赖滚动
-        text_overflow: None,
-
-        // 终端文本一般左对齐
-        text_align: TextAlign::Left,
-
-        // 不限制行数，显示所有内容
-        line_clamp: None,
-    }
-}
 impl Element for TerminalElement {
     type RequestLayoutState = ();
     type PrepaintState = MyPaintState;
@@ -609,8 +539,8 @@ impl Element for TerminalElement {
     // 通过 window.request_layout() 向 GPUI 的布局引擎（Taffy）注册布局信息
     fn request_layout(
         &mut self,
-        id: Option<&gpui::GlobalElementId>,
-        inspector_id: Option<&gpui::InspectorElementId>,
+        _id: Option<&gpui::GlobalElementId>,
+        _inspector_id: Option<&gpui::InspectorElementId>,
         window: &mut gpui::Window,
         cx: &mut gpui::App,
     ) -> (gpui::LayoutId, Self::RequestLayoutState) {
@@ -628,10 +558,11 @@ impl Element for TerminalElement {
         id: Option<&gpui::GlobalElementId>,
         inspector_id: Option<&gpui::InspectorElementId>,
         bounds: gpui::Bounds<gpui::Pixels>, // 这就是你的元素最终在屏幕上的位置和大小
-        request_layout: &mut Self::RequestLayoutState, // 来自 request_layout 的数据,
+        _request_layout: &mut Self::RequestLayoutState, // 来自 request_layout 的数据,
         window: &mut gpui::Window,
         cx: &mut gpui::App,
     ) -> Self::PrepaintState {
+        let rem_size = self.rem_size(cx);
         self.interactivity.prepaint(
             id,
             inspector_id,
@@ -639,86 +570,77 @@ impl Element for TerminalElement {
             bounds.size,
             window,
             cx,
-            |_, _, hitbox, window, cx| {
-                // let hitbox = Hitbox {
-                //     id: (),
-                //     bounds,
-                //     content_mask: (),
-                //     behavior: (),
-                // };
+            |_, _, _hitbox, window, cx| {
                 let hitbox = window.insert_hitbox(bounds, HitboxBehavior::Normal);
-                // let settings = ThemeSettings::get_global(cx).clone();
+                let settings = ThemeSettings::get_global(cx).clone();
 
-                // let buffer_font_size = settings.buffer_font_size(cx);
+                let buffer_font_size = settings.buffer_font_size(cx);
 
-                // let terminal_settings = TerminalSettings::get_global(cx);
-                // let minimum_contrast = terminal_settings.minimum_contrast;
+                let terminal_settings = TerminalSettings::get_global(cx);
 
-                // let font_family = terminal_settings.font_family.as_ref().map_or_else(
-                //     || settings.buffer_font.family.clone(),
-                //     |font_family| font_family.0.clone().into(),
-                // );
-                // let font_family=
+                let font_family = terminal_settings.font_family.as_ref().map_or_else(
+                    || settings.buffer_font.family.clone(),
+                    |font_family| font_family.0.clone().into(),
+                );
+                info!("font_fanily:{}", font_family);
+                let font_fallbacks = terminal_settings
+                    .font_fallbacks
+                    .as_ref()
+                    .or(settings.buffer_font.fallbacks.as_ref())
+                    .cloned();
 
-                // let font_fallbacks = terminal_settings
-                //     .font_fallbacks
-                //     .as_ref()
-                //     .or(settings.buffer_font.fallbacks.as_ref())
-                //     .cloned();
+                info!("font_fallbacks:{:?}", font_fallbacks);
+                let font_features = terminal_settings
+                    .font_features
+                    .as_ref()
+                    .unwrap_or(&FontFeatures::disable_ligatures())
+                    .clone();
 
-                // let font_features = terminal_settings
-                //     .font_features
-                //     .as_ref()
-                //     .unwrap_or(&FontFeatures::disable_ligatures())
-                //     .clone();
+                info!("font_features:{:?}", font_features);
+                let font_weight = terminal_settings.font_weight.unwrap_or_default();
 
-                // let font_weight = terminal_settings.font_weight.unwrap_or_default();
+                let line_height = terminal_settings.line_height.value();
 
-                // let line_height = terminal_settings.line_height.value();
+                let font_size = terminal_settings
+                    .font_size
+                    .map_or(buffer_font_size, |size| {
+                        theme_settings::adjusted_font_size(size, cx)
+                    });
 
-                // let font_size = match &self.mode {
-                //     TerminalMode::Embedded { .. } => {
-                //         window.text_style().font_size.to_pixels(window.rem_size())
-                //     }
-                //     TerminalMode::Standalone => terminal_settings
-                //         .font_size
-                //         .map_or(buffer_font_size, |size| {
-                //             theme_settings::adjusted_font_size(size, cx)
-                //         }),
-                // };
-
-                // let theme = cx.theme().clone();
+                let theme = cx.theme().clone();
 
                 let link_style = HighlightStyle {
-                    color: Some(Hsla {
-                        h: 0.,
-                        s: 0.,
-                        l: 0.,
-                        a: 0.,
-                    }),
-                    font_weight: Some(FontWeight::NORMAL),
+                    color: Some(theme.colors().link_text_hover),
+                    font_weight: Some(font_weight),
                     font_style: None,
                     background_color: None,
                     underline: Some(UnderlineStyle {
                         thickness: px(1.0),
-                        color: Some(Hsla {
-                            h: 0.,
-                            s: 0.,
-                            l: 0.,
-                            a: 0.,
-                        }),
+                        color: Some(theme.colors().link_text_hover),
                         wavy: false,
                     }),
                     strikethrough: None,
                     fade_out: None,
                 };
 
-                let text_style = terminal_text_style();
-
+                let text_style = TextStyle {
+                    font_family,
+                    font_features,
+                    font_weight,
+                    font_fallbacks,
+                    font_size: font_size.into(),
+                    font_style: FontStyle::Normal,
+                    line_height: px(line_height).into(),
+                    background_color: Some(theme.colors().terminal_ansi_background),
+                    white_space: WhiteSpace::Normal,
+                    // These are going to be overridden per-cell
+                    color: theme.colors().terminal_foreground,
+                    ..Default::default()
+                };
+                info!("font:{:?}", text_style.font());
                 let line_height = 1.5;
                 let text_system = cx.text_system();
-                // let player_color = theme.players().local();
-                // let match_color = theme.colors().search_match_background;
+
                 let gutter;
                 let (dimensions, line_height_px) = {
                     let rem_size = window.rem_size();
@@ -746,37 +668,34 @@ impl Element for TerminalElement {
                     let mut origin = bounds.origin;
                     origin.x += gutter;
 
-                    // if matches!(self.terminal_view.read(cx).mode, TerminalMode::Standalone) {
-                    //     let should_anchor_to_bottom = {
-                    //         let content = self.terminal.read(cx).last_content();
-                    //         content.mode.contains(Modes::ALT_SCREEN)
-                    //             || (content.scrolled_to_bottom && content.bottom_row_occupied)
-                    //     };
-                    //     let scale_factor = window.scale_factor();
-                    //     let line_height_pixels = px(line_height);
-                    //     let line_height_device_px = (f32::from(line_height_pixels) * scale_factor)
-                    //         .round()
-                    //         .max(1.0) as i32;
-                    //     let available_height_device_px =
-                    //         (f32::from(available_height) * scale_factor)
-                    //             .floor()
-                    //             .max(0.0) as i32;
+                    let should_anchor_to_bottom = {
+                        let content = self.terminal.read(cx).last_content();
+                        content.mode.contains(Modes::ALT_SCREEN)
+                            || (content.scrolled_to_bottom && content.bottom_row_occupied)
+                    };
+                    let scale_factor = window.scale_factor();
+                    let line_height_pixels = px(line_height);
+                    let line_height_device_px = (f32::from(line_height_pixels) * scale_factor)
+                        .round()
+                        .max(1.0) as i32;
+                    let available_height_device_px = (f32::from(available_height) * scale_factor)
+                        .floor()
+                        .max(0.0) as i32;
 
-                    //     let rows =
-                    //         ((available_height_device_px / line_height_device_px) as usize).max(1);
-                    //     let snapped_height_device_px = (rows as i32) * line_height_device_px;
-                    //     let padding_device_px =
-                    //         (available_height_device_px - snapped_height_device_px).max(0);
+                    let rows =
+                        ((available_height_device_px / line_height_device_px) as usize).max(1);
+                    let snapped_height_device_px = (rows as i32) * line_height_device_px;
+                    let padding_device_px =
+                        (available_height_device_px - snapped_height_device_px).max(0);
 
-                    //     let snapped_height =
-                    //         px(snapped_height_device_px as f32 / scale_factor.max(1.0));
-                    //     let padding = px(padding_device_px as f32 / scale_factor.max(1.0));
+                    let snapped_height =
+                        px(snapped_height_device_px as f32 / scale_factor.max(1.0));
+                    let padding = px(padding_device_px as f32 / scale_factor.max(1.0));
 
-                    //     size.height = snapped_height;
-                    //     if should_anchor_to_bottom {
-                    //         origin.y += padding;
-                    //     }
-                    // }
+                    size.height = snapped_height;
+                    if should_anchor_to_bottom {
+                        origin.y += padding;
+                    }
 
                     // Snap to device pixels to avoid subpixel jitter while resizing.
                     // Terminal rendering is grid-based; allowing fractional origins can cause the
@@ -794,47 +713,13 @@ impl Element for TerminalElement {
                     )
                 };
 
-                // let search_matches = self.terminal.read(cx).matches.clone();
+                let background_color = theme.colors().terminal_background;
 
-                let background_color = Hsla::black();
-
-                // let (last_hovered_word, hover_tooltip) =
                 self.terminal.update(cx, |terminal, cx| {
-                    // terminal.set_size(dimensions);
+                    terminal.set_size(dimensions);
                     terminal.sync(window, cx);
-
-                    // (None, None)
-                    // if window.modifiers().secondary()
-                    //     && bounds.contains(&window.mouse_position())
-                    //     && self.terminal_view.read(cx).hover.is_some()
-                    // {
-                    //     let registered_hover = self.terminal_view.read(cx).hover.as_ref();
-                    //     if terminal.last_content.last_hovered_word.as_ref()
-                    //         == registered_hover.map(|hover| &hover.hovered_word)
-                    //     {
-                    //         (
-                    //             terminal.last_content.last_hovered_word.clone(),
-                    //             registered_hover.map(|hover| hover.tooltip.clone()),
-                    //         )
-                    //     } else {
-                    //         (None, None)
-                    //     }
-                    // } else {
-                    //     (None, None)
-                    // }
                 });
 
-                // let scroll_top = self.terminal_view.read(cx).scroll_top;
-                // let hyperlink_tooltip = hover_tooltip.map(|hover_tooltip| {
-                //     let offset = dimensions.bounds.origin - point(px(0.), scroll_top);
-                //     let mut element = div()
-                //         .size_full()
-                //         .id("terminal-element")
-                //         .tooltip(Tooltip::text(hover_tooltip))
-                //         .into_any_element();
-                //     element.prepaint_as_root(offset, bounds.size.into(), window, cx);
-                //     element
-                // });
                 let Content {
                     cells,
                     // mode,
@@ -999,9 +884,9 @@ impl Element for TerminalElement {
                         let origin = GpuiPoint::new(bounds.origin.x, dimensions.bounds.origin.y)
                             + point(px(0.), target_line as f32 * dimensions.line_height())
                             - point(px(0.), px(0.));
-                        // window.with_rem_size(rem_size, |window| {
-                        //     element.prepaint_as_root(origin, available_space, window, cx);
-                        // });
+                        window.with_rem_size(rem_size, |window| {
+                            element.prepaint_as_root(origin, available_space, window, cx);
+                        });
                         Some(element)
                     } else {
                         None
@@ -1036,7 +921,7 @@ impl Element for TerminalElement {
         id: Option<&gpui::GlobalElementId>,
         inspector_id: Option<&gpui::InspectorElementId>,
         bounds: gpui::Bounds<gpui::Pixels>,
-        request_layout: &mut Self::RequestLayoutState,
+        _request_layout: &mut Self::RequestLayoutState,
         layout: &mut Self::PrepaintState,
         window: &mut gpui::Window,
         cx: &mut gpui::App,
@@ -1063,7 +948,6 @@ impl Element for TerminalElement {
             let terminal_input_handler = TerminalInputHandler {
                 terminal_view: self.terminal_view.clone(),
                 cursor_bounds: layout.ime_cursor_bounds.map(|bounds| bounds + origin),
-                // workspace: self.workspace.clone(),
             };
 
             // self.register_mouse_listeners(layout.mode, &layout.hitbox, window);
@@ -1098,32 +982,6 @@ impl Element for TerminalElement {
                 cx,
                 |_, window, cx| {
                     window.handle_input(&self.focus, terminal_input_handler, cx);
-                    window.on_key_event({
-                        let terminal = self.terminal.clone();
-                        let focus = self.focus.clone();
-                        move |event: &KeyDownEvent, phase, window, cx| {
-                            if phase != DispatchPhase::Bubble || !focus.is_focused(window) {
-                                return;
-                            }
-
-                            log::debug!(
-                                "Key event received: key={:?}, modifiers={:?}",
-                                event.keystroke.key,
-                                event.keystroke.modifiers
-                            );
-                            // if let Some(input) =
-                            // TerminalElement::input_for_keystroke(&event.keystroke)
-                            // {
-                            //     log::debug!("Converted key to input: {:?}", input);
-                            //     window.prevent_default();
-                            //     cx.stop_propagation();
-                            //     terminal.update(cx, |terminal, cx| {
-                            //         // terminal.write_input(input);
-                            //         cx.notify();
-                            //     });
-                            // }
-                        }
-                    });
 
                     window.on_key_event({
                         let this = self.terminal.clone();
@@ -1143,7 +1001,6 @@ impl Element for TerminalElement {
                         rect.paint(origin, &layout.dimensions, window);
                     }
 
-                    log::debug!("1dsf23123123iasasfsdf");
                     // for (relative_highlighted_range, color) in &layout.relative_highlighted_ranges {
                     //     if let Some((start_y, highlighted_range_lines)) =
                     //         to_highlighted_range_lines(relative_highlighted_range, layout, origin)
@@ -1166,78 +1023,72 @@ impl Element for TerminalElement {
                     // }
 
                     // Paint batched text runs instead of individual cells
-                    let text_paint_start = Instant::now();
 
                     for batch in &layout.batched_text_runs {
                         batch.paint(origin, &layout.dimensions, window, cx);
                     }
 
-                    for batch in &layout.batched_text_runs {
-                        for block_element_rect in &layout.block_element_rects {
-                            block_element_rect.paint(origin, &layout.dimensions, window);
-                        }
+                    for block_element_rect in &layout.block_element_rects {
+                        block_element_rect.paint(origin, &layout.dimensions, window);
+                    }
 
-                        let text_paint_time = text_paint_start.elapsed();
+                    if let Some(text_to_mark) = &marked_text_cloned
+                        && !text_to_mark.is_empty()
+                        && let Some(ime_bounds) = layout.ime_cursor_bounds
+                    {
+                        let ime_position = (ime_bounds + origin).origin;
+                        let mut ime_style = layout.base_text_style.clone();
+                        ime_style.underline = Some(UnderlineStyle {
+                            color: Some(ime_style.color),
+                            thickness: px(1.0),
+                            wavy: false,
+                        });
 
-                        if let Some(text_to_mark) = &marked_text_cloned
-                            && !text_to_mark.is_empty()
-                            && let Some(ime_bounds) = layout.ime_cursor_bounds
-                        {
-                            let ime_position = (ime_bounds + origin).origin;
-                            let mut ime_style = layout.base_text_style.clone();
-                            ime_style.underline = Some(UnderlineStyle {
-                                color: Some(ime_style.color),
-                                thickness: px(1.0),
-                                wavy: false,
-                            });
+                        let shaped_line = window.text_system().shape_line(
+                            text_to_mark.clone().into(),
+                            ime_style.font_size.to_pixels(window.rem_size()),
+                            &[TextRun {
+                                len: text_to_mark.len(),
+                                font: ime_style.font(),
+                                color: ime_style.color,
+                                underline: ime_style.underline,
+                                ..Default::default()
+                            }],
+                            None,
+                        );
 
-                            let shaped_line = window.text_system().shape_line(
-                                text_to_mark.clone().into(),
-                                ime_style.font_size.to_pixels(window.rem_size()),
-                                &[TextRun {
-                                    len: text_to_mark.len(),
-                                    font: ime_style.font(),
-                                    color: ime_style.color,
-                                    underline: ime_style.underline,
-                                    ..Default::default()
-                                }],
-                                None,
-                            );
+                        // Paint background to cover terminal text behind marked text
+                        let ime_background_bounds = Bounds::new(
+                            ime_position,
+                            size(shaped_line.width, layout.dimensions.line_height),
+                        );
+                        window.paint_quad(fill(ime_background_bounds, layout.background_color));
 
-                            // Paint background to cover terminal text behind marked text
-                            let ime_background_bounds = Bounds::new(
+                        shaped_line
+                            .paint(
                                 ime_position,
-                                size(shaped_line.width, layout.dimensions.line_height),
-                            );
-                            window.paint_quad(fill(ime_background_bounds, layout.background_color));
+                                layout.dimensions.line_height,
+                                gpui::TextAlign::Left,
+                                None,
+                                window,
+                                cx,
+                            )
+                            .unwrap();
+                    }
 
-                            shaped_line
-                                .paint(
-                                    ime_position,
-                                    layout.dimensions.line_height,
-                                    gpui::TextAlign::Left,
-                                    None,
-                                    window,
-                                    cx,
-                                )
-                                .unwrap();
-                        }
+                    if self.cursor_visible
+                        && marked_text_cloned.is_none()
+                        && let Some(mut cursor) = original_cursor
+                    {
+                        cursor.paint(origin, window, cx);
+                    }
 
-                        if self.cursor_visible
-                            && marked_text_cloned.is_none()
-                            && (!focused || cursor_blink_visible)
-                            && let Some(cursor) = &original_cursor
-                        {
-                            cursor.paint(origin, window, cx);
-                        }
+                    if let Some(mut element) = block_below_cursor_element {
+                        element.paint(window, cx);
+                    }
 
-                        // if let Some(mut element) = block_below_cursor_element {
-                        //     element.paint(window, cx);
-                        // }
-
-                        // if let Some(mut element) = hyperlink_tooltip {
-                        //     element.paint(window, cx);
-                        // }
+                    if let Some(mut element) = hyperlink_tooltip {
+                        element.paint(window, cx);
                     }
                 },
             );
@@ -1305,6 +1156,7 @@ impl InputHandler for TerminalInputHandler {
         cx: &mut App,
     ) {
         self.terminal_view.update(cx, |view, view_cx| {
+            view.clear_marked_text(view_cx);
             view.commit_text(text, view_cx);
         });
         window.invalidate_character_coordinates();
@@ -1321,7 +1173,7 @@ impl InputHandler for TerminalInputHandler {
         self.terminal_view.update(cx, |view, view_cx| {
             view.set_marked_text(new_text.to_string(), view_cx);
         });
-        window.invalidate_character_coordinates();
+        // window.invalidate_character_coordinates();
     }
 
     fn unmark_text(&mut self, window: &mut Window, cx: &mut App) {
@@ -1707,19 +1559,13 @@ impl BatchedTextRun {
             origin.x + self.start_point.column as f32 * dimensions.cell_width,
             origin.y + self.start_point.line as f32 * dimensions.line_height,
         );
-        let a = TextRun {
-            len: self.text.len(),
-            font: font("Maple Mono NF CN"),
-            color: Hsla::white(),
-            ..Default::default()
-        };
 
-        if let Err(e) = window
+        window
             .text_system()
             .shape_line(
                 self.text.clone().into(),
                 self.font_size.to_pixels(window.rem_size()),
-                std::slice::from_ref(&a),
+                std::slice::from_ref(&self.style),
                 Some(dimensions.cell_width),
             )
             .paint(
@@ -1730,10 +1576,7 @@ impl BatchedTextRun {
                 window,
                 cx,
             )
-        {
-            log::debug!("打印错误日志");
-        }
-        log::debug!("打印错误日志");
+            .unwrap();
     }
 }
 pub struct CursorLayout {

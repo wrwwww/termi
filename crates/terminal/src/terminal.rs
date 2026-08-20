@@ -351,7 +351,29 @@ impl Terminal {
             }
         }
     }
+    ///Resize the terminal and the PTY.
+    pub fn set_size(&mut self, new_bounds: TerminalBounds) {
+        let new_bounds = normalize_terminal_bounds(new_bounds);
 
+        let old_bounds = self.last_content.terminal_bounds;
+        self.last_content.terminal_bounds = new_bounds;
+
+        // Avoid spamming PTY resizes on pixel-level size changes (e.g. while dragging edges),
+        // since those can generate excessive SIGWINCH/reflows and cause visible flicker.
+        let requires_resize = old_bounds.num_lines() != new_bounds.num_lines()
+            || old_bounds.num_columns() != new_bounds.num_columns()
+            || old_bounds.cell_width != new_bounds.cell_width
+            || old_bounds.line_height != new_bounds.line_height;
+
+        if !requires_resize {
+            return;
+        }
+
+        match self.events.back_mut() {
+            Some(InternalEvent::Resize(pending_bounds)) => *pending_bounds = new_bounds,
+            _ => self.events.push_back(InternalEvent::Resize(new_bounds)),
+        }
+    }
     pub fn sync(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         let term = self.term.clone();
         let mut terminal = term.lock_unfair();
@@ -415,7 +437,6 @@ impl Terminal {
         // This bypasses the PTY/event loop for display-only terminals.
         let mut previous_byte_was_cr = false;
         let converted = convert_lf_to_crlf(bytes, &mut previous_byte_was_cr);
-        log::info!("将后端返回的字符串，写入到term中");
         let mut term = self.term.lock();
         self.output_processor.advance(&mut *term, &converted);
         drop(term);
@@ -424,12 +445,11 @@ impl Terminal {
     }
     // 监听键盘输入事件，将字符解析然后发送给后端
     pub fn write_to_pty(&mut self, bytes: impl Into<Vec<u8>>) {
-        // if let Ok(backend) = self.backend.lock() {
-        //     backend.send(SshMessage::Input(bytes.into()));
-        // }
+        if let Ok(backend) = self.backend.lock() {
+            backend.send(SshMessage::Input(bytes.into()));
+        }
     }
-    fn write_input(&mut self, input: impl Into<Cow<'static, [u8]>>) {
-        info!("write_input");
+    pub fn write_input(&mut self, input: impl Into<Cow<'static, [u8]>>) {
         let input = input.into();
         // if !self.is_remote_terminal && input.contains(&b'\r') {
         //     let term = self.term.lock_unfair();
@@ -584,7 +604,7 @@ fn new_term(
             scrolling_history: 2000,
             ..Config::default()
         },
-        &terminal_bounds,
+        &TerminalSize::new(100, 30),
         TerminalListener(events_tx),
     );
     Arc::new(FairMutex::new(term))
@@ -1675,7 +1695,13 @@ impl TerminalBuilder {
     pub fn subscribe(mut self,session:Session, events : UnboundedSender<SystemEvent>,cx: &Context<Terminal>) -> Terminal {  
         let cmd_rx=self.cmd_rx.take().unwrap();
         cx.spawn(async move|this,cx|{
-            open_session_terminal(events.clone(), session, "".to_string(), cmd_rx);
+
+            let runtime=tokio::runtime::Runtime::new().unwrap();
+            runtime.spawn(async move {
+
+                 open_session_terminal(events.clone(), session, "".to_string(), cmd_rx).await;
+            }).await.unwrap();
+     
         }).detach();  
         //Event loop
         self.terminal.event_loop_task = cx.spawn(async move |terminal, cx| {
@@ -1695,6 +1721,8 @@ impl TerminalBuilder {
                         futures::select_biased! {
                            
                             event = self.events_rx.next() => {
+
+                    info!("alactity event");
                                 if let Some(event) = event {
                                     if matches!(event, PtyEvent::Event(TerminalBackendEvent::Wakeup))
                                     {

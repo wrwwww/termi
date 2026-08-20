@@ -35,7 +35,7 @@ fn main() {
         info!("terminal settings {:#?}", settings);
         gpui_component::init(cx);
         // 在应用初始化时，将主题模式切换为 Dark
-        Theme::change(ThemeMode::Dark, None, cx);
+        // Theme::change(ThemeMode::Dark, None, cx);
 
         // terminal_view::init(cx);
         // theme_selector::init(cx);

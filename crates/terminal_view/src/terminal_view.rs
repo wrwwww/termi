@@ -66,13 +66,16 @@ impl TerminalView {
             .as_ref()
             .map(|state| 0..state.marked_text.encode_utf16().count())
     }
+    /// Sets the marked (pre-edit) text from the IME.
+    pub(crate) fn set_marked_text(&mut self, text: String, cx: &mut Context<Self>) {
+        if text.is_empty() {
+            return self.clear_marked_text(cx);
+        }
+        self.ime_state = Some(ImeState { marked_text: text });
+        cx.notify();
+    }
     pub(crate) fn terminal_bounds(&self, cx: &App) -> TerminalBounds {
         self.terminal.read(cx).last_content().terminal_bounds
-    }
-
-    pub(crate) fn set_marked_text(&mut self, marked_text: String, cx: &mut Context<Self>) {
-        self.ime_state = (!marked_text.is_empty()).then_some(ImeState { marked_text });
-        cx.notify();
     }
 
     pub(crate) fn clear_marked_text(&mut self, cx: &mut Context<Self>) {
@@ -84,7 +87,7 @@ impl TerminalView {
         self.clear_marked_text(cx);
         if !text.is_empty() {
             self.terminal.update(cx, |terminal, cx| {
-                // terminal.write_input(text.as_bytes().to_vec());
+                terminal.write_input(text.as_bytes().to_vec());
                 cx.notify();
             });
         }
@@ -123,7 +126,6 @@ impl TerminalView {
     }
 
     fn key_down(&mut self, event: &KeyDownEvent, window: &mut Window, cx: &mut Context<Self>) {
-        info!("key down ");
         self.clear_bell(cx);
         self.pause_cursor_blinking(window, cx);
 

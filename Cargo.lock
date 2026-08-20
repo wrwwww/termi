@@ -8505,6 +8505,7 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "indexmap",
+ "log",
  "rust-embed",
  "rustc-hash 2.1.3",
 ]

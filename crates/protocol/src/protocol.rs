@@ -3,6 +3,7 @@ pub mod ssh;
 use anyhow::Context;
 
 use futures::{SinkExt, channel::mpsc::UnboundedSender};
+use log::info;
 use russh::{
     ChannelMsg,
     client::{self},
@@ -58,7 +59,7 @@ impl BackendTx {
     }
 }
 
-pub fn open_session_terminal(
+pub async fn open_session_terminal(
     mut events: UnboundedSender<SystemEvent>,
     session: Session,
     tab_id: TabId,
@@ -140,15 +141,14 @@ pub fn open_session_terminal(
                 message=channel.wait()=>{
                     match message{
                        Some(ChannelMsg::Data { data }) | Some(ChannelMsg::ExtendedData { data, ext: _ }) => {
-                        // log::info!("ssh响应信息{:?}",data.clone().to_vec());
-                    let _=events.send( SystemEvent::Output{
+                        log::info!("ssh响应信息{:?}",data.clone().to_vec());
+                    events.send( SystemEvent::Output{
                             tab_id: tab_id.clone(),
                             bytes: data.to_vec(),
-                        }).await;
+                        }).await.unwrap();
                     // if let Err(e) = events.send(){
                     //         log::info!("发送错误：{:?}",e);
                     //     };
-                    //     log::info!("发送完成");
                     }
                     Some(ChannelMsg::ExitStatus { exit_status: _ }) | Some(ChannelMsg::Eof) => {
                     }
@@ -165,7 +165,7 @@ pub fn open_session_terminal(
                 }
             }
         }
-    });
+    }).await.unwrap();
 }
 struct ClientHandler;
 

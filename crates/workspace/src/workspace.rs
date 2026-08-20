@@ -71,8 +71,11 @@ impl WorkspaceView {
 
         let title_bar = cx.new(|cx| PlatformTitleBar::new("title_bar", cx));
         let tabsbar = cx.new(|cx| TabsBar::new(state.clone(), session_manager.clone()));
-        let terminal_pane =
-            cx.new(|cx| TerminalPane::new(state.clone(), session_manager.clone(), window, cx));
+        let terminal_pane = cx.new(|cx| {
+            let mut pane = TerminalPane::new(state.clone(), session_manager.clone(), window, cx);
+            pane.background_task(cx);
+            pane
+        });
         let files_pane = cx.new(|cx| FilesPane::new(state.clone()));
 
         let settings_view = cx.new(|cx| SettingsView::new(state.clone()));

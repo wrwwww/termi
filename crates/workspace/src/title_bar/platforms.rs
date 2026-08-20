@@ -2,6 +2,7 @@ use gpui::{
     App, Hsla, MAX_BUTTONS_PER_SIDE, Pixels, Rgba, Window, WindowButton, WindowButtonLayout,
     WindowControlArea, div, prelude::*, px,
 };
+use log::info;
 use theme::ActiveTheme;
 use ui::h_flex;
 
@@ -67,7 +68,7 @@ impl WindowsWindowControls {
     fn render_button(
         button: WindowButton,
         window: &mut Window,
-        cx: &mut App,
+        _cx: &mut App,
     ) -> Option<WindowsCaptionButton> {
         match button {
             WindowButton::Close => Some(WindowsCaptionButton::Close),
@@ -190,6 +191,7 @@ impl RenderOnce for WindowsCaptionButton {
         };
         let (hover_bg, hover_fg, active_bg, active_fg) = match self {
             Self::Close => {
+                // close 的红色
                 let color: Hsla = Rgba {
                     r: 232.0 / 255.0,
                     g: 17.0 / 255.0,
@@ -200,9 +202,9 @@ impl RenderOnce for WindowsCaptionButton {
 
                 (
                     color,
-                    gpui::white(),
+                    cx.theme().colors().text,
                     color.opacity(0.8),
-                    gpui::white().opacity(0.8),
+                    cx.theme().colors().text.opacity(0.8),
                 )
             }
             _ => (

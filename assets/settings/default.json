@@ -7,7 +7,7 @@
   // - "light": Use the theme indicated by the "light" field
   // - "dark": Use the theme indicated by the "dark" field
   "theme": {
-    "mode": "dark",
+    "mode": "light",
     "light": "Light",
     "dark": "Dark"
   },
@@ -2025,7 +2025,7 @@
     },
     // Set the terminal's font size. If this option is not included,
     // the terminal will default to matching the buffer's font size.
-    "font_size": 15,
+    "font_size": 13,
     // Set the terminal's font family. If this option is not included,
     // the terminal will default to matching the buffer's font family.
     "font_family": "JetBrains Mono",
@@ -2033,6 +2033,11 @@
     // the terminal will default to matching the buffer's font fallbacks.
     // This will be merged with the platform's default font fallbacks
     "font_fallbacks": [
+      "JetBrains Mono",
+      "ui-monospace",
+      "Menlo",
+      "Consolas",
+      "monospace",
       "FiraCode Nerd Fonts"
     ],
     // The weight of the editor font in standard CSS units from 100 to 900.

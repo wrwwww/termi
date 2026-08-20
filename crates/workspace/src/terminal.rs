@@ -28,7 +28,7 @@ pub struct TerminalPane {
     should_display_welcome_page: bool,
     welcome_page: Option<Entity<WelcomePage>>,
     // 接受从backend返回的事件
-    events_rx: UnboundedReceiver<SystemEvent>,
+    events_rx: Option<UnboundedReceiver<SystemEvent>>,
     event_loop_task: Task<Result<(), anyhow::Error>>,
 }
 
@@ -60,17 +60,19 @@ impl TerminalPane {
             items: item,
             active_item_index: 0,
             should_display_welcome_page: false,
-            events_rx,
+            events_rx: Some(events_rx),
             event_loop_task: Task::ready(Ok(())),
         }
     }
-    pub fn background_task(mut self, cx: &mut Context<Self>) {
+    pub fn background_task(&mut self, cx: &mut Context<Self>) {
+        let mut events_rx = self.events_rx.take().unwrap();
         self.event_loop_task = cx.spawn(async move |this, cx| {
-            while let Some(event) = self.events_rx.next().await {
+            while let Some(event) = events_rx.next().await {
                 this.update(cx, |this, cx| {
                     //write_output
                     this.process_event(event, cx);
-                });
+                })
+                .unwrap();
             }
             anyhow::Ok(())
         });
@@ -100,7 +102,6 @@ impl TerminalPane {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
-        info!("收到打开终端action");
         let session_id = self
             .session_manager
             .read(cx)
@@ -136,19 +137,20 @@ impl Render for TerminalPane {
                 |e| e.child(self.welcome_page.as_ref().unwrap().clone()),
                 |e| {
                     e.child(
-                        div()
-                            .id("terminal-viewport")
-                            .flex()
-                            .flex_col()
-                            .flex_1()
-                            .p(px(16.0))
-                            .px(px(20.0))
-                            .font_family("JetBrains Mono")
-                            .text_size(px(13.0))
-                            .line_height(px(20.15)) // matches 1.55 with 13px
-                            .text_color(t.colors().terminal_ansi_white)
-                            .overflow_y_scroll()
-                            .child(self.items[self.active_item_index].clone()), // .children(sample_lines(&t, active.as_deref())),
+                        // div()
+                        //     .id("terminal-viewport")
+                        //     .flex()
+                        //     .flex_col()
+                        //     .flex_1()
+                        //     .p(px(16.0))
+                        //     .px(px(20.0))
+                        //     .font_family("JetBrains Mono")
+                        //     .text_size(px(13.0))
+                        //     .line_height(px(20.15)) // matches 1.55 with 13px
+                        //     .text_color(t.colors().terminal_ansi_white)
+                        //     .overflow_y_scroll()
+                        // .child(
+                        self.items[self.active_item_index].clone(), // .children(sample_lines(&t, active.as_deref())),
                     )
                 },
             )
