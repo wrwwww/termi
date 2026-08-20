@@ -9,7 +9,7 @@ use log::info;
 use serde::Deserialize;
 use settings::Settings;
 use settings_content::terminal::TerminalBlink;
-use terminal::{CursorShape, Terminal, TerminalBounds, terminal_settings::TerminalSettings};
+use terminal::{CursorShape, Modes, Terminal, TerminalBounds, terminal_settings::TerminalSettings};
 
 use crate::{blink_manager::BlinkManager, terminal_element::TerminalElement};
 
@@ -159,10 +159,10 @@ impl TerminalView {
     }
 
     fn focus_in(&mut self, window: &mut Window, cx: &mut Context<Self>) {
-        // self.terminal.update(cx, |terminal, _| {
-        //     terminal.set_cursor_shape(self.cursor_shape);
-        //     terminal.focus_in();
-        // });
+        self.terminal.update(cx, |terminal, _| {
+            // terminal.set_cursor_shape(self.cursor_shape);
+            terminal.focus_in();
+        });
 
         let should_blink = match TerminalSettings::get_global(cx).blinking {
             TerminalBlink::Off => false,
@@ -171,6 +171,7 @@ impl TerminalView {
         };
 
         if should_blink {
+            info!("enable blinkManager");
             self.blink_manager.update(cx, BlinkManager::enable);
         }
 
@@ -188,10 +189,41 @@ impl TerminalView {
     fn focus_out(&mut self, _window: &mut Window, cx: &mut Context<Self>) {
         self.blink_manager.update(cx, BlinkManager::disable);
         self.terminal.update(cx, |terminal, _| {
-            // terminal.focus_out();
+            info!("enable blinkManager");
+            terminal.focus_out();
             // terminal.set_cursor_shape(CursorShape::Hollow);
         });
         cx.notify();
+    }
+    pub fn should_show_cursor(&self, focused: bool, cx: &mut Context<Self>) -> bool {
+        // Hide cursor when in embedded mode and not focused (read-only output like Agent panel)
+        // if let TerminalMode::Embedded { .. } = &self.mode {
+        //     if !focused {
+        //         return false;
+        //     }
+        // }
+
+        // For Standalone mode: always show cursor when not focused or in special modes
+        if !focused
+            || self
+                .terminal
+                .read(cx)
+                .last_content
+                .mode
+                .contains(Modes::ALT_SCREEN)
+        {
+            return true;
+        }
+
+        // When focused, check blinking settings and blink manager state
+        match TerminalSettings::get_global(cx).blinking {
+            TerminalBlink::Off => true,
+            TerminalBlink::TerminalControlled => {
+                // !self.blinking_terminal_enabled ||
+                self.blink_manager.read(cx).visible()
+            }
+            TerminalBlink::On => self.blink_manager.read(cx).visible(),
+        }
     }
 }
 /// Sends the specified text directly to the terminal.
@@ -226,7 +258,7 @@ impl Render for TerminalView {
                         terminal_view_handle,
                         self.focus_handle.clone(),
                         focused,
-                        true,
+                        self.should_show_cursor(focused, cx),
                         None,
                         )
                     }

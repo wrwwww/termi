@@ -248,6 +248,17 @@ pub enum TerminalEvent {
 }
 impl EventEmitter<TerminalEvent> for Terminal {}
 impl Terminal {
+        pub fn focus_in(& self) {
+        if self.last_content.mode.contains(Modes::FOCUS_IN_OUT) {
+            self.write_to_pty("\x1b[I".as_bytes());
+        }
+    }
+
+    pub fn focus_out(&mut self) {
+        if self.last_content.mode.contains(Modes::FOCUS_IN_OUT) {
+            self.write_to_pty("\x1b[O".as_bytes());
+        }
+    }
     pub fn try_keystroke(&mut self, keystroke: &Keystroke, option_as_meta: bool) -> bool {
         // if self.vi_mode_enabled {
         //     self.vi_motion(keystroke);
@@ -465,7 +476,7 @@ impl Terminal {
         // cx.emit(Event::Wakeup);
     }
     // 监听键盘输入事件，将字符解析然后发送给后端
-    pub fn write_to_pty(&mut self, bytes: impl Into<Vec<u8>>) {
+    pub fn write_to_pty(&self, bytes: impl Into<Vec<u8>>) {
         if let Ok(backend) = self.backend.lock() {
             backend.send(SshMessage::Input(bytes.into()));
         }

@@ -965,10 +965,7 @@ impl Element for TerminalElement {
             let hyperlink_tooltip = layout.hyperlink_tooltip.take();
             let block_below_cursor_element = layout.block_below_cursor_element.take();
             let focused = self.focus.is_focused(window);
-            let cursor_blink_visible = SystemTime::now()
-                .duration_since(UNIX_EPOCH)
-                .map(|duration| (duration.as_millis() / 500) % 2 == 0)
-                .unwrap_or(true);
+
             if focused && marked_text_cloned.is_none() {
                 window.request_animation_frame();
             }
@@ -1083,7 +1080,6 @@ impl Element for TerminalElement {
                     {
                         cursor.paint(origin, window, cx);
                     }
-
                     if let Some(mut element) = block_below_cursor_element {
                         element.paint(window, cx);
                     }
