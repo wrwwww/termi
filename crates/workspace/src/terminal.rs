@@ -29,6 +29,7 @@ pub struct TerminalPane {
     // 接受从backend返回的事件
     events_rx: Option<UnboundedReceiver<SystemEvent>>,
     events_tx: UnboundedSender<SystemEvent>,
+
     event_loop_task: Task<Result<(), anyhow::Error>>,
 }
 
@@ -55,13 +56,14 @@ impl TerminalPane {
             state,
             session_manager,
             welcome_page: Some(welcome_page),
-            // view: todo!(),
+
             focus_handle: cx.focus_handle(),
             items: vec![],
             active_item_index: 0,
             should_display_welcome_page: false,
             events_rx: Some(events_rx),
             events_tx: events_tx,
+
             event_loop_task: Task::ready(Ok(())),
         }
     }
@@ -129,6 +131,7 @@ impl Render for TerminalPane {
         // let terminal_settings = TerminalSettings::get_global(cx);
 
         div()
+            .track_focus(&self.focus_handle)
             .id("lumen-terminal")
             .on_action(cx.listener(Self::open_terminal))
             .flex()
@@ -136,11 +139,11 @@ impl Render for TerminalPane {
             .flex_1()
             .min_h_0()
             .bg(t.colors().terminal_background)
-        // .when_else(
-        //     self.should_display_welcome_page || self.items.is_empty(),
-        //     |e| e.child(self.welcome_page.as_ref().unwrap().clone()),
-        //     |e| e.child(self.items[self.active_item_index].clone()),
-        // )
+            .when_else(
+                self.should_display_welcome_page || self.items.is_empty(),
+                |e| e.child(self.welcome_page.as_ref().unwrap().clone()),
+                |e| e.child(self.items[self.active_item_index].clone()),
+            )
     }
 }
 

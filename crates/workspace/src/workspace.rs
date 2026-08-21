@@ -31,14 +31,8 @@ use crate::{
     settings::SettingsView, sidebar::Sidebar, state::AppState, statusbar::StatusBar, tabs::TabsBar,
     terminal::TerminalPane, title_bar::PlatformTitleBar,
 };
-use ::terminal::{TerminalBounds, TerminalBuilder};
 use ::theme::{ActiveTheme, Theme};
 use gpui::*;
-use gpui_component::{Root, TitleBar, white};
-use log::info;
-use schemars::JsonSchema;
-use serde::Deserialize;
-use terminal_view::TerminalView;
 
 // actions!(workspace, [OpenTerminal, OpenNewSession]);
 
@@ -51,7 +45,6 @@ pub struct WorkspaceView {
     files_pane: Entity<FilesPane>,
     settings_view: Entity<SettingsView>,
     status_bar: Entity<StatusBar>,
-
     monitor_panel: Entity<MonitorPanel>,
     session_manager: Entity<SessionManager>,
 }
@@ -95,15 +88,6 @@ impl WorkspaceView {
             session_manager,
         }
     }
-
-    // pub fn open_new_session(
-    //     &mut self,
-    //     action: &OpenNewSession,
-    //     window: &mut Window,
-    //     cx: &mut Context<Self>,
-    // ) {
-    //     info!("收到打开终端action");
-    // }
 }
 
 impl Render for WorkspaceView {
@@ -181,12 +165,6 @@ impl Render for WorkspaceView {
         div()
             .id("lumen-workspace")
             .flex()
-            // .on_action(cx.listener(Self::open_new_session))
-            // .on_action(
-            //     cx.listener(|this: &mut WorkspaceView, _: &OpenTerminal, _window, _cx| {
-            //         info!("收到 OpenTerminal");
-            //     }),
-            // )
             .flex_col()
             .size_full()
             .bg(t.colors().background)
@@ -209,7 +187,6 @@ impl Render for WorkspaceView {
 
 fn menu_button(label: &'static str, t: &Theme) -> impl IntoElement {
     div()
-        // .id(("menu", label))
         .px(px(10.0))
         .py(px(4.0))
         .rounded(px(4.0))

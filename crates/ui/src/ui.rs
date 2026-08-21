@@ -8,6 +8,7 @@ pub mod button;
 pub mod color;
 pub mod divider;
 pub mod label;
+pub mod pane;
 pub mod scroll_bar;
 pub mod typography;
 /// The base size of a rem, in pixels.
