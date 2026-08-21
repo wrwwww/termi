@@ -93,6 +93,7 @@ impl WorkspaceView {
 
 impl Render for WorkspaceView {
     fn render(&mut self, windows: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
+        info!("渲染");
         self.title_bar.update(cx, |this, cx| {
             let t = cx.theme();
             this.set_children([div()

@@ -343,8 +343,8 @@ impl RenderOnce for PaneLayout {
                 .when(self.direction.is_horizontal(), |this| this.w(size))
                 .when(!self.direction.is_horizontal(), |this| this.h(size))
                 .size_full()
-                .children(pane)
-                .refine_style(style);
+                .refine_style(style)
+                .children(pane);
 
             root = root.child(pane_element);
 
