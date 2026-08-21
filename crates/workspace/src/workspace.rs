@@ -59,6 +59,7 @@ impl WorkspaceView {
                 state.clone(),
                 // connection_dialog.clone(),
                 session_manager.clone(),
+                cx,
             )
         });
 

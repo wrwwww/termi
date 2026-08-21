@@ -42,16 +42,23 @@ pub struct Sidebar {
     // Persisted client-side UI state (not serialised).
     collapsed: std::collections::HashSet<String>,
     search_query: String,
-
     session_manager: Entity<SessionManager>,
+    focus: FocusHandle,
 }
 
 impl Sidebar {
-    pub fn new(state: Entity<AppState>, session_manager: Entity<SessionManager>) -> Self {
+    pub fn new(
+        state: Entity<AppState>,
+        session_manager: Entity<SessionManager>,
+        cx: &mut Context<'_, Sidebar>,
+    ) -> Self {
+        let handle = cx.focus_handle();
+
         let mut collapsed = std::collections::HashSet::new();
         collapsed.insert("Personal".into()); // match `preview.html` collapsed group
         Self {
             state,
+            focus: handle,
             collapsed,
             search_query: String::new(),
             session_manager,
@@ -93,6 +100,8 @@ impl Sidebar {
 
 impl Render for Sidebar {
     fn render(&mut self, windows: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
+        let b = self.focus.is_focused(windows);
+        info!("sidebar焦点{}", b);
         let t = cx.theme();
         let grouped = self.session_manager.read(cx).grouped_sessions();
         let active_id = self.state.read(cx).active_session_id.clone();
@@ -114,6 +123,7 @@ impl Render for Sidebar {
             .collect();
 
         div()
+            .track_focus(&self.focus)
             .on_action(cx.listener(Self::del_session))
             .on_action(cx.listener(Self::edit_session))
             .on_action(cx.listener(Self::copy_session))
