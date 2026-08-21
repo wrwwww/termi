@@ -1,4 +1,8 @@
+use std::os::windows;
+
 use gpui::{prelude::FluentBuilder, *};
+use gpui_component::StyledExt;
+use log::info;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum PaneDirection {
@@ -12,26 +16,9 @@ impl PaneDirection {
     }
 }
 
-/// Pane 的初始尺寸策略。
-#[derive(Clone, Copy, Debug)]
-pub enum PaneSize {
-    /// 默认参与剩余空间分配。
-    Flex(f32),
-
-    /// 初始/当前尺寸。
-    Fixed(Pixels),
-}
-
-impl Default for PaneSize {
-    fn default() -> Self {
-        Self::Flex(1.0)
-    }
-}
 pub struct Pane {
     style: StyleRefinement,
-    size: PaneSize,
-    min_size: Option<Pixels>,
-    max_size: Option<Pixels>,
+
     content: Option<AnyElement>,
 }
 
@@ -39,9 +26,6 @@ impl Pane {
     pub fn new() -> Self {
         let style = StyleRefinement::default().flex_1();
         Self {
-            size: PaneSize::Flex(1.0),
-            min_size: None,
-            max_size: None,
             content: None,
             style,
         }
@@ -85,6 +69,8 @@ impl PaneState {
         size
     }
 }
+
+#[derive(IntoElement)]
 pub struct PaneLayout {
     direction: PaneDirection,
 
@@ -137,46 +123,46 @@ impl PaneLayout {
 
         self
     }
-    fn initialize_sizes(&mut self, total_size: Pixels) {
-        let splitter_count = self.panes.len().saturating_sub(1);
+    // fn initialize_sizes(&mut self, total_size: Pixels) {
+    //     let splitter_count = self.panes.len().saturating_sub(1);
 
-        let splitter_size = px(5.0);
+    //     let splitter_size = px(5.0);
 
-        let available = total_size - splitter_size * splitter_count as f32;
+    //     let available = total_size - splitter_size * splitter_count as f32;
 
-        let mut fixed = px(0.0);
-        let mut flex_total = 0.0;
+    //     let mut fixed = px(0.0);
+    //     let mut flex_total = 0.0;
 
-        for pane in &self.panes {
-            match pane.size {
-                PaneSize::Fixed(size) => {
-                    fixed += size;
-                }
+    //     for pane in &self.panes {
+    //         match pane.size {
+    //             PaneSize::Fixed(size) => {
+    //                 fixed += size;
+    //             }
 
-                PaneSize::Flex(flex) => {
-                    flex_total += flex;
-                }
-            }
-        }
+    //             PaneSize::Flex(flex) => {
+    //                 flex_total += flex;
+    //             }
+    //         }
+    //     }
 
-        let remaining = (available - fixed).max(px(0.0));
+    //     let remaining = (available - fixed).max(px(0.0));
 
-        for (index, pane) in self.panes.iter().enumerate() {
-            let size = match pane.size {
-                PaneSize::Fixed(size) => size,
+    //     for (index, pane) in self.panes.iter().enumerate() {
+    //         let size = match pane.size {
+    //             PaneSize::Fixed(size) => size,
 
-                PaneSize::Flex(flex) => {
-                    if flex_total > 0.0 {
-                        remaining * (flex / flex_total)
-                    } else {
-                        px(0.0)
-                    }
-                }
-            };
+    //             PaneSize::Flex(flex) => {
+    //                 if flex_total > 0.0 {
+    //                     remaining * (flex / flex_total)
+    //                 } else {
+    //                     px(0.0)
+    //                 }
+    //             }
+    //         };
 
-            self.states[index].size = self.states[index].clamp_size(size);
-        }
-    }
+    //         self.states[index].size = self.states[index].clamp_size(size);
+    //     }
+    // }
     fn start_drag(&mut self, index: usize, position: Point<Pixels>, cx: &mut Context<Self>) {
         if index + 1 >= self.states.len() {
             return;
@@ -282,23 +268,21 @@ impl PaneLayout {
 }
 
 struct PaneSplitter {
-    layout: Entity<PaneLayout>,
     index: usize,
     direction: PaneDirection,
 }
-
+struct SplitterState {
+    should_move: bool,
+}
 impl PaneSplitter {
-    fn new(layout: Entity<PaneLayout>, index: usize, direction: PaneDirection) -> Self {
-        Self {
-            layout,
-            index,
-            direction,
-        }
+    fn new(index: usize, direction: PaneDirection) -> Self {
+        Self { index, direction }
     }
-    fn render(self, cx: &mut App) -> impl IntoElement {
+    fn render(self, window: &mut Window, cx: &mut App) -> impl IntoElement {
+        let state = window.use_state(cx, |_, _| SplitterState { should_move: false });
         let horizontal = self.direction.is_horizontal();
 
-        let layout = self.layout.clone();
+        // let layout = self.layout.clone();
         let index = self.index;
 
         div()
@@ -312,19 +296,33 @@ impl PaneSplitter {
             })
             .bg(rgb(0x303030))
             .hover(|this| this.bg(rgb(0x505050)))
-            .on_mouse_down(MouseButton::Left, move |event, window, cx| {
-                layout.update(cx, |layout, cx| {
-                    layout.start_drag(index, event.position, cx);
-                });
-
-                window.prevent_default();
-            })
-            // .on_drag_move(|event, window, cx| {});
+            .on_mouse_down(
+                MouseButton::Left,
+                window.listener_for(&state, |state, _, _, _| {
+                    state.should_move = true;
+                }),
+            )
+            .on_mouse_down_out(window.listener_for(&state, |state, _, _, _| {
+                state.should_move = false;
+            }))
+            .on_mouse_move(window.listener_for(&state, |state, e, _, _| {
+                if state.should_move {
+                    info!("move");
+                }
+            }))
+            .on_drag_move(
+                window.listener_for(&state, |state, e: &DragMoveEvent<()>, _, _| {
+                    info!("drag move")
+                }),
+            )
     }
 }
 
-impl Render for PaneLayout {
-    fn render(&mut self, _window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
+pub struct PaneLayoutState {}
+
+impl RenderOnce for PaneLayout {
+    fn render(mut self, window: &mut Window, cx: &mut App) -> impl IntoElement {
+        let state = window.use_state(cx, |_, _| PaneLayoutState {});
         let mut root = div().id("pane-layout").size_full().flex();
 
         root = match self.direction {
@@ -333,19 +331,20 @@ impl Render for PaneLayout {
             PaneDirection::Vertical => root.flex_col(),
         };
 
-        let layout_entity = cx.entity().clone();
+        // let layout_entity = cx.entity().clone();
 
         for index in 0..self.panes.len() {
             let size = self.states[index].size;
 
             let pane = self.panes[index].content.take();
-
+            let style = self.panes[index].style();
             let pane_element = div()
                 .flex_none()
                 .when(self.direction.is_horizontal(), |this| this.w(size))
                 .when(!self.direction.is_horizontal(), |this| this.h(size))
                 .size_full()
-                .children(pane);
+                .children(pane)
+                .refine_style(style);
 
             root = root.child(pane_element);
 
@@ -353,29 +352,10 @@ impl Render for PaneLayout {
              * 自动插入 Splitter
              */
             if index + 1 < self.panes.len() {
-                root = root.child(
-                    PaneSplitter::new(layout_entity.clone(), index, self.direction).render(cx),
-                );
+                root = root.child(PaneSplitter::new(index, self.direction).render(window, cx));
             }
         }
 
         root
     }
-}
-
-fn test() {
-    PaneLayout::horizontal()
-        .child(
-            Pane::new()
-                .size(px(240.))
-                .min_size(px(180.))
-                .child("left_sidebar"),
-        )
-        .child(Pane::new().min_size(px(400.)).child("terminal"))
-        .child(
-            Pane::new()
-                .size(px(300.))
-                .min_size(px(220.))
-                .child("right_sidebar"),
-        );
 }

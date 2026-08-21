@@ -21,3 +21,4 @@ theme_settings.workspace = true
 theme.workspace = true
 gpui-component-assets.workspace = true
 gpui-component.workspace = true
+log.workspace=true

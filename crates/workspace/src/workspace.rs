@@ -33,6 +33,7 @@ use crate::{
 };
 use ::theme::{ActiveTheme, Theme};
 use gpui::*;
+use ui::pane::{Pane, PaneLayout};
 
 // actions!(workspace, [OpenTerminal, OpenNewSession]);
 
@@ -142,25 +143,25 @@ impl Render for WorkspaceView {
         let t = cx.theme();
 
         // Choose the central canvas based on active_view.
-        let canvas: AnyElement = div()
-            .flex()
-            .flex_row()
-            .flex_1()
-            .min_h_0()
-            .child(self.sidebar.clone())
-            .child(
-                div()
-                    .flex()
-                    .flex_col()
-                    .flex_1()
-                    .min_w_0()
-                    .min_h_0()
-                    .bg(t.colors().background)
-                    .child(self.tabsbar.clone())
-                    .child(self.terminal_pane.clone()),
-            )
-            .child(self.files_pane.clone())
-            .into_any_element();
+        // let canvas: AnyElement = div()
+        //     .flex()
+        //     .flex_row()
+        //     .flex_1()
+        //     .min_h_0()
+        //     .child()
+        //     .child(
+        //         div()
+        //             .flex()
+        //             .flex_col()
+        //             .flex_1()
+        //             .min_w_0()
+        //             .min_h_0()
+        //             .bg(t.colors().background)
+        //             .child(self.tabsbar.clone())
+        //             .child(self.terminal_pane.clone()),
+        //     )
+        //     .child(self.files_pane.clone())
+        //     .into_any_element();
 
         div()
             .id("lumen-workspace")
@@ -177,9 +178,20 @@ impl Render for WorkspaceView {
             )
             // .child(render_header(&t, windows, cx))
             // ============== CANVAS ==============
-            .child(canvas)
+            // .child(canvas)
             // ============== MONITOR (workspace mode only) ==============
-            .child(self.monitor_panel.clone())
+            .child(
+                PaneLayout::vertical()
+                    .child(
+                        Pane::new().child(
+                            PaneLayout::horizontal()
+                                .child(Pane::new().child(self.sidebar.clone()))
+                                .child(Pane::new().child(self.terminal_pane.clone()))
+                                .child(Pane::new().child(self.files_pane.clone())),
+                        ),
+                    )
+                    .child(Pane::new().child(self.monitor_panel.clone())),
+            )
             // ============== STATUS BAR ==============
             .child(self.status_bar.clone())
     }

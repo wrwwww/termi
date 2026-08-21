@@ -8298,6 +8298,7 @@ dependencies = [
  "gpui",
  "gpui-component",
  "gpui-component-assets",
+ "log",
  "serde",
  "smallvec",
  "theme",
