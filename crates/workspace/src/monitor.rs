@@ -52,13 +52,11 @@ impl Render for MonitorPanel {
         } else {
             div()
                 .flex()
-                .flex_1()
                 .grid()
                 .grid_cols(4)
                 .gap(px(1.0))
                 .bg(t.colors().border)
                 .p(px(1.0))
-                .min_h_0()
                 .child(cpu_card(&t, snapshot.as_ref().map(|s| &s.cpu), window))
                 .child(memory_card(
                     &t,
@@ -75,9 +73,10 @@ impl Render for MonitorPanel {
 
         div()
             .id("lumen-monitor-panel")
+            .size_full()
             .flex()
             .flex_col()
-            .h(if collapsed { px(32.0) } else { px(192.0) })
+            // .h(if collapsed { px(32.0) } else { px(192.0) })
             .bg(t.colors().background)
             .border_t_1()
             .border_color(t.colors().border)

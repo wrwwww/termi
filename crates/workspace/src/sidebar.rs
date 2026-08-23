@@ -100,8 +100,8 @@ impl Sidebar {
 
 impl Render for Sidebar {
     fn render(&mut self, windows: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
-        let b = self.focus.is_focused(windows);
-        info!("sidebar焦点{}", b);
+        // let b = self.focus.is_focused(windows);
+        // info!("sidebar焦点{}", b);
         let t = cx.theme();
         let grouped = self.session_manager.read(cx).grouped_sessions();
         let active_id = self.state.read(cx).active_session_id.clone();
@@ -123,14 +123,13 @@ impl Render for Sidebar {
             .collect();
 
         div()
-            .track_focus(&self.focus)
+            // .track_focus(&self.focus)
             .on_action(cx.listener(Self::del_session))
             .on_action(cx.listener(Self::edit_session))
             .on_action(cx.listener(Self::copy_session))
             .flex()
             .flex_col()
-            .w(px(256.))
-            .h_full()
+            .w_full()
             .bg(t.colors().background)
             .border_r_1()
             .border_color(t.colors().border)
@@ -394,6 +393,7 @@ fn render_session_item(
         )
         .context_menu({
             let id = id.clone();
+
             move |menu, window, cx| {
                 menu.menu(
                     "编辑",

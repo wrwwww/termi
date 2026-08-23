@@ -22,8 +22,8 @@ impl Render for FilesPane {
             .id("lumen-files")
             .flex()
             .flex_col()
-            .w(px(280.))
-            .h_full()
+            // .h_full()
+            .w_full()
             .bg(t.colors().background)
             .border_l_1()
             .border_color(t.colors().border)
@@ -74,7 +74,7 @@ impl Render for FilesPane {
                     .flex()
                     .flex_col()
                     .flex_1()
-                    .min_h_0()
+                    // .min_h_0()
                     .overflow_y_scroll()
                     .py(px(4.0))
                     .font_family("JetBrains Mono")
@@ -135,18 +135,4 @@ fn row(t: &Theme, name: &str, perms: &str, size: &str, is_dir: bool) -> impl Int
         )
         // size
         .child(div().text_color(t.colors().icon_accent).child(text!(size)))
-}
-
-fn icon_btn(t: &Theme, glyph: &'static str) -> impl IntoElement {
-    div()
-        .size(px(24.0))
-        .flex()
-        .items_center()
-        .justify_center()
-        .rounded(px(4.0))
-        .text_color(t.colors().icon_accent)
-        .text_size(px(12.0))
-        .cursor_pointer()
-        .hover(|s| s.bg(t.colors().background).text_color(t.colors().text))
-        .child(glyph)
 }

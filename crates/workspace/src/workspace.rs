@@ -33,6 +33,7 @@ use crate::{
 };
 use ::theme::{ActiveTheme, Theme};
 use gpui::*;
+use gpui_component::resizable::{h_resizable, resizable_panel, v_resizable};
 
 // actions!(workspace, [OpenTerminal, OpenNewSession]);
 
@@ -108,9 +109,6 @@ impl Render for WorkspaceView {
                         // .h(px(t.layout.header_height))
                         .px(px(16.0))
                         .bg(t.colors().background)
-                        // .border_b_1()
-                        // .border_color(t.colors().border)
-                        // brand
                         .child(
                             div()
                                 .flex()
@@ -142,27 +140,6 @@ impl Render for WorkspaceView {
         });
         let t = cx.theme();
 
-        // Choose the central canvas based on active_view.
-        let canvas: AnyElement = div()
-            .flex()
-            .flex_row()
-            .flex_1()
-            .min_h_0()
-            .child(self.sidebar.clone())
-            .child(
-                div()
-                    .flex()
-                    .flex_col()
-                    .flex_1()
-                    .min_w_0()
-                    .min_h_0()
-                    .bg(t.colors().background)
-                    .child(self.tabsbar.clone())
-                    .child(self.terminal_pane.clone()),
-            )
-            .child(self.files_pane.clone())
-            .into_any_element();
-
         div()
             .id("lumen-workspace")
             .flex()
@@ -176,12 +153,45 @@ impl Render for WorkspaceView {
                     .border_b_1()
                     .border_color(t.colors().border),
             )
-            // .child(render_header(&t, windows, cx))
-            // ============== CANVAS ==============
-            .child(canvas)
-            // ============== MONITOR (workspace mode only) ==============
-            .child(self.monitor_panel.clone())
-            // ============== STATUS BAR ==============
+            .child(
+                div().flex_1().overflow_hidden().child(
+                    v_resizable("main-layout")
+                        .child(
+                            resizable_panel().overflow_hidden().child(
+                                h_resizable("nested-layout")
+                                    .child(
+                                        resizable_panel()
+                                            .size(px(300.))
+                                            .size_range(px(280.)..px(500.))
+                                            .child(self.sidebar.clone()),
+                                    )
+                                    .child(
+                                        resizable_panel().child(
+                                            div()
+                                                .flex()
+                                                .flex_col()
+                                                .size_full()
+                                                .bg(t.colors().background)
+                                                .child(self.tabsbar.clone())
+                                                .child(self.terminal_pane.clone()),
+                                        ),
+                                    )
+                                    .child(
+                                        resizable_panel()
+                                            // .size(px(300.))
+                                            // .size_range(px(300.)..px(500.))
+                                            .child(self.files_pane.clone()),
+                                    ),
+                            ),
+                        )
+                        .child(
+                            resizable_panel()
+                                .overflow_hidden()
+                                .size(px(192.))
+                                .child(self.monitor_panel.clone()),
+                        ),
+                ),
+            )
             .child(self.status_bar.clone())
     }
 }

@@ -414,7 +414,6 @@ impl Render for WelcomePage {
             // .on_action(cx.listener(Self::select_previous))
             // .on_action(cx.listener(Self::select_next))
             // .on_action(cx.listener(Self::open_recent_project))
-            .size_full()
             .bg(cx.theme().colors().terminal_background)
             .justify_center()
             .child(
