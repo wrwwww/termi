@@ -1732,10 +1732,8 @@ impl TerminalBuilder {
     pub fn subscribe(mut self,session:Session, tab_id: String, events : UnboundedSender<SystemEvent>,cx: &Context<Terminal>) -> Terminal {
         let cmd_rx=self.cmd_rx.take().unwrap();
         cx.spawn(async move|this,cx|{
-
             let runtime=tokio::runtime::Runtime::new().unwrap();
             runtime.spawn(async move {
-
                  open_session_terminal(events.clone(), session, tab_id, cmd_rx).await;
             }).await.unwrap();
      

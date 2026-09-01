@@ -4,18 +4,19 @@
 //! `vte::Parser` to translate ANSI escape sequences into styled glyphs.
 //! This reference paints a representative static frame.
 
+use crate::EditAction;
 use crate::{session_manager::SessionManager, state::AppState, welcome::WelcomePage};
 use anyhow::Ok;
 use futures::StreamExt;
 use futures::channel::mpsc::{UnboundedReceiver, UnboundedSender, unbounded};
 use gpui::{prelude::FluentBuilder, *};
-use log::info;
+use log::{error, info};
 use protocol::SystemEvent;
 use schemars::JsonSchema;
 use serde::Deserialize;
 use terminal::{TerminalBounds, TerminalBuilder};
 use terminal_view::TerminalView;
-use theme::ActiveTheme;
+use theme::{ActiveTheme, Theme};
 use uuid::Uuid;
 #[derive(Clone, Deserialize, PartialEq, JsonSchema, Action)]
 #[action(namespace = workspace)]
@@ -36,6 +37,7 @@ pub struct CloseTerminalAction {
 struct TerminalTab {
     tab_id: String,
     session_id: String,
+    title: SharedString,
     view: Entity<TerminalView>,
 }
 pub struct TerminalPane {
@@ -92,7 +94,7 @@ impl TerminalPane {
     pub fn process_event(&mut self, event: SystemEvent, cx: &mut Context<Self>) {
         match event {
             SystemEvent::Output { tab_id, bytes } => {
-                if let Some(tab) = self.items.iter().find(|tab| tab.session_id == tab_id) {
+                if let Some(tab) = self.items.iter().find(|tab| tab.tab_id == tab_id) {
                     tab.view.update(cx, |this, cx| {
                         this.terminal()
                             .update(cx, |this, _cx| this.write_output(&bytes))
@@ -100,14 +102,18 @@ impl TerminalPane {
                 }
             }
             SystemEvent::Status { tab_id, text } => {}
-            SystemEvent::Connected { tab_id } => {}
+            SystemEvent::Connected { tab_id } => {
+                info!("连接成功，tab_id: {}", tab_id);
+            }
             SystemEvent::Error { tab_id, message } => {
+                let output = format!("\r\n连接失败：{message}\r\n");
+                info!("{}", output);
                 if let Some(tab) = self.items.iter().find(|tab| tab.session_id == tab_id) {
-                    let output = format!("\r\n连接失败：{message}\r\n");
-                    tab.view.update(cx, |this, cx| {
-                        this.terminal()
-                            .update(cx, |this, _cx| this.write_output(output.as_bytes()))
-                    });
+
+                    // tab.view.update(cx, |this, cx| {
+                    //     this.terminal()
+                    //         .update(cx, |this, _cx| this.write_output(output.as_bytes()))
+                    // });
                 }
             }
             SystemEvent::CommandComplete(_) => {}
@@ -117,6 +123,7 @@ impl TerminalPane {
             SystemEvent::ProcessTerminated => {}
         }
     }
+
     pub fn open_terminal(
         &mut self,
         action: &OpenTerminalAction,
@@ -125,25 +132,14 @@ impl TerminalPane {
     ) {
         let tab_id = Uuid::new_v4().to_string();
         let session_id = action.session_id.clone();
-        if let Some(index) = self
-            .items
-            .iter()
-            .position(|tab| tab.session_id == action.session_id)
-        {
-            self.active_item_index = index;
-            self.state.update(cx, |state, cx| {
-                state.set_active_tab(&tab_id);
-                cx.notify();
-            });
-            cx.notify();
-            return;
-        }
+
         let session = self
             .session_manager
             .read(cx)
             .query(&action.session_id)
             .unwrap()
             .clone();
+        let title = session.name.clone().into();
         info!("接受到打开session{:?}", session);
         let builder = TerminalBuilder::new_terminal(TerminalBounds::default());
 
@@ -154,6 +150,7 @@ impl TerminalPane {
         self.items.push(TerminalTab {
             tab_id: tab_id.clone(),
             session_id: session_id.clone(),
+            title: title,
             view: terminal_view,
         });
         self.active_item_index = self.items.len() - 1;
@@ -218,26 +215,141 @@ impl TerminalPane {
 impl Render for TerminalPane {
     fn render(&mut self, windows: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         let t = cx.theme();
-        // info!("渲染");
-        // let terminal_settings = TerminalSettings::get_global(cx);
+        let state = self.state.read(cx);
+        let active_id = state.active_tab_id.clone();
 
         div()
-            // .on_action(cx.listener(Self::open_terminal))
             .on_action(cx.listener(Self::activate_terminal))
             .on_action(cx.listener(Self::close_terminal))
             .track_focus(&self.focus_handle)
-            .id("lumen-terminal")
-            .flex()
-            .flex_col()
             .flex_1()
-            .overflow_scroll()
-            .bg(t.colors().terminal_background)
-            .child(div().when_else(
+            .size_full()
+            .id("lumen-terminal")
+            .when_else(
                 self.should_display_welcome_page || self.items.is_empty(),
                 |e| e.child(self.welcome_page.as_ref().unwrap().clone()),
-                |e| e.child(self.items[self.active_item_index].view.clone()),
-            ))
+                |e| {
+                    e.flex()
+                        .flex_col()
+                        .size_full() // ← 关键：让列容器占满父容器
+                        .child(
+                            div()
+                                .id("terminal-tabs")
+                                .flex()
+                                .flex_row()
+                                .items_center()
+                                .h(px(36.))
+                                // ← 防止 tabs 被压缩
+                                .bg(t.colors().background)
+                                .border_b_1()
+                                .border_color(t.colors().border)
+                                .overflow_x_scroll()
+                                .children(
+                                    self.items
+                                        .iter()
+                                        .map(|tab| render_tab(tab, active_id.as_deref(), &t, &cx)),
+                                )
+                                .child(
+                                    div()
+                                        .px(px(12.))
+                                        .h_full()
+                                        .flex()
+                                        .items_center()
+                                        .text_color(t.colors().text_muted)
+                                        .child("+")
+                                        .on_mouse_down(
+                                            MouseButton::Left,
+                                            cx.listener(move |_this, _event, window, cx| {
+                                                window.dispatch_action(
+                                                    Box::new(EditAction { session_id: None }),
+                                                    cx,
+                                                );
+                                            }),
+                                        ),
+                                ),
+                        )
+                        .child(
+                            div()
+                                .id("terminal-content2")
+                                .flex_1() // ← 占据剩余空间
+                                .min_h_0() // ← 重要：允许 flex 子项收缩
+                                .bg(t.colors().terminal_background)
+                                .child(
+                                    self.items[self.active_item_index].view.clone(), // ← 确保完全填充
+                                ),
+                        )
+                },
+            )
     }
+}
+
+fn render_tab(
+    tab: &TerminalTab,
+    active_id: Option<&str>,
+    t: &Theme,
+    cx: &&mut Context<TerminalPane>,
+) -> AnyElement {
+    let tab_id = tab.tab_id.clone();
+    let is_active = active_id == Some(&tab_id.as_str());
+    let activate_id = tab_id.clone();
+    let close_id = tab_id.clone();
+    div()
+        .id(format!("terminal-tab-{activate_id}"))
+        .flex()
+        .items_center()
+        .gap(px(8.))
+        .px(px(12.))
+        .h_full()
+        .border_r_1()
+        .border_color(t.colors().border)
+        .bg(if is_active {
+            t.colors().element_background
+        } else {
+            Hsla::transparent_black()
+        })
+        .cursor_pointer()
+        .on_mouse_down(
+            MouseButton::Left,
+            cx.listener(move |_this, _event, window, cx| {
+                window.dispatch_action(
+                    Box::new(ActivateTerminalAction {
+                        tab_id: activate_id.clone(),
+                    }),
+                    cx,
+                );
+            }),
+        )
+        .child(div().size(px(6.)).rounded_full().bg(t.colors().icon_accent))
+        .child(
+            div()
+                .text_size(px(12.5))
+                .text_color(t.colors().text)
+                .child(tab.title.clone()),
+        )
+        .child(
+            div()
+                .id(format!("terminal-tab-close-{close_id}"))
+                .size(px(18.))
+                .flex()
+                .items_center()
+                .justify_center()
+                .rounded(px(4.))
+                .text_color(t.colors().text_placeholder)
+                .hover(|style| style.bg(t.colors().elevated_surface_background))
+                .child("×")
+                .on_mouse_down(
+                    MouseButton::Left,
+                    cx.listener(move |_this, _event: &MouseDownEvent, window, cx| {
+                        window.dispatch_action(
+                            Box::new(CloseTerminalAction {
+                                tab_id: close_id.clone(),
+                            }),
+                            cx,
+                        );
+                    }),
+                ),
+        )
+        .into_any_element()
 }
 
 // fn sample_lines(t: &Theme, _session: Option<&str>) -> Vec<AnyElement> {

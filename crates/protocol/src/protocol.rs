@@ -3,6 +3,7 @@ pub mod ssh;
 use anyhow::Context;
 
 use futures::{SinkExt, channel::mpsc::UnboundedSender};
+use log::info;
 use russh::{
     ChannelMsg,
     client::{self},
@@ -65,6 +66,7 @@ pub async fn open_session_terminal(
     mut cmd_rx: UnboundedReceiver<SshMessage>,
 ) {
     tokio::spawn(async move {
+      
         // connect
         let addr = format!("{}:{}", session.hostname, session.port);
         let stream = match tokio::net::TcpStream::connect(&addr).await {
@@ -74,6 +76,7 @@ pub async fn open_session_terminal(
                 return;
             }
         };
+        
         let config = Arc::new(client::Config::default());
         let mut handle = match client::connect_stream(config, stream, ClientHandler).await {
             Ok(handle) => handle,
@@ -82,7 +85,7 @@ pub async fn open_session_terminal(
                 return;
             }
         };
-
+       
         // Authenticate before opening a shell. Password authentication is the
         // first complete flow supported by the connection form.
         let auth_result = match session.auth {

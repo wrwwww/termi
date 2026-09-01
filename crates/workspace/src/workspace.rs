@@ -60,7 +60,7 @@ pub struct WorkspaceView {
     state: Entity<AppState>,
     title_bar: Entity<PlatformTitleBar>,
     sidebar: Entity<crate::sidebar::Sidebar>,
-    tabsbar: Entity<TabsBar>,
+    // tabsbar: Entity<TabsBar>,
     terminal_pane: Entity<TerminalPane>,
     files_pane: Entity<FilesPane>,
     settings_view: Entity<SettingsView>,
@@ -85,7 +85,7 @@ impl WorkspaceView {
         });
 
         let title_bar = cx.new(|cx| PlatformTitleBar::new("title_bar", cx));
-        let tabsbar = cx.new(|cx| TabsBar::new(state.clone(), session_manager.clone()));
+        // let tabsbar = cx.new(|cx| TabsBar::new(state.clone(), session_manager.clone()));
         let terminal_pane = cx.new(|cx| {
             let mut pane = TerminalPane::new(state.clone(), session_manager.clone(), window, cx);
             pane.background_task(cx);
@@ -101,7 +101,6 @@ impl WorkspaceView {
             state,
             title_bar,
             sidebar,
-            tabsbar,
             terminal_pane,
             files_pane,
             settings_view,
@@ -286,7 +285,6 @@ impl Render for WorkspaceView {
                                                 .flex_col()
                                                 .size_full()
                                                 .bg(t.colors().background)
-                                                .child(self.tabsbar.clone())
                                                 .child(self.terminal_pane.clone()),
                                         ),
                                     )

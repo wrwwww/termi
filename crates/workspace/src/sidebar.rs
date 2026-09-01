@@ -144,36 +144,6 @@ impl Sidebar {
     }
 
     // ========================================================================
-    // Create
-    // ========================================================================
-
-    // fn new_session(&mut self, window: &mut Window, cx: &mut Context<Self>) {
-    //     self.open_connection_dialog(None, window, cx);
-    // }
-
-    // ========================================================================
-    // Edit
-    // ========================================================================
-
-    // pub fn edit_session(
-    //     &mut self,
-    //     action: &EditAction,
-    //     window: &mut Window,
-    //     cx: &mut Context<Self>,
-    // ) {
-    //     let session_id = action.session_id.clone();
-    //     // // 先确认 Session 存在。
-    //     // let exists = self.session_manager.read(cx).query(&session_id).is_some();
-
-    //     // if !exists {
-    //     //     error!("cannot edit session `{}`: session not found", session_id);
-    //     //     return;
-    //     // }
-
-    //     self.open_connection_dialog(session_id, window, cx);
-    // }
-
-    // ========================================================================
     // Copy
     // ========================================================================
 
