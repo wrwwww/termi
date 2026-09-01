@@ -27,16 +27,35 @@ pub mod terminal;
 pub mod title_bar;
 pub mod welcome;
 use crate::{
-    files::FilesPane, monitor::MonitorPanel, session_manager::SessionManager,
-    settings::SettingsView, sidebar::Sidebar, state::AppState, statusbar::StatusBar, tabs::TabsBar,
-    terminal::TerminalPane, title_bar::PlatformTitleBar,
+    connection_dialog::ConnectionDialog,
+    files::FilesPane,
+    monitor::MonitorPanel,
+    session_manager::SessionManager,
+    settings::SettingsView,
+    sidebar::Sidebar,
+    state::AppState,
+    statusbar::StatusBar,
+    tabs::TabsBar,
+    terminal::{CloseTerminalAction, OpenTerminalAction, TerminalPane},
+    title_bar::PlatformTitleBar,
 };
+use ::settings::Settings;
 use ::theme::{ActiveTheme, Theme};
 use gpui::*;
-use gpui_component::resizable::{h_resizable, resizable_panel, v_resizable};
+use gpui_component::{
+    Root,
+    highlighter::DiagnosticSeverity::Info,
+    resizable::{h_resizable, resizable_panel, v_resizable},
+};
+use schemars::JsonSchema;
+use serde::Deserialize;
 
 // actions!(workspace, [OpenTerminal, OpenNewSession]);
-
+#[derive(Clone, Debug, Deserialize, PartialEq, Eq, JsonSchema, Action)]
+#[action(namespace = session_manager)]
+pub struct EditAction {
+    pub session_id: Option<String>,
+}
 pub struct WorkspaceView {
     state: Entity<AppState>,
     title_bar: Entity<PlatformTitleBar>,
@@ -54,12 +73,13 @@ impl WorkspaceView {
     pub fn new(state: Entity<AppState>, window: &mut Window, cx: &mut Context<Self>) -> Self {
         // Subscribe so any state changes re-render the chrome.
         cx.observe(&state, |_, _, cx| cx.notify()).detach();
-        let session_manager = cx.new(|cx| SessionManager::new());
+        let session_manager = cx.new(|cx| SessionManager::new(state.clone(), cx));
         let sidebar = cx.new(|cx| {
             Sidebar::new(
                 state.clone(),
                 // connection_dialog.clone(),
                 session_manager.clone(),
+                window,
                 cx,
             )
         });
@@ -90,10 +110,101 @@ impl WorkspaceView {
             session_manager,
         }
     }
+    fn open_connection_dialog(
+        &mut self,
+        session_id: Option<String>,
+        _window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        let session_manager = self.session_manager.clone();
+
+        cx.defer(move |cx| {
+            let current_rem_size: f32 = theme_settings::ThemeSettings::get_global(cx)
+                .ui_font_size(cx)
+                .into();
+
+            let default_bounds = DEFAULT_ADDITIONAL_WINDOW_SIZE;
+
+            let default_rem_size = 16.0_f32;
+
+            let scale_factor = current_rem_size / default_rem_size;
+
+            let scaled_bounds: gpui::Size<Pixels> = default_bounds.map(|axis| axis * scale_factor);
+
+            let result = cx.open_window(
+                WindowOptions {
+                    titlebar: None,
+
+                    focus: true,
+
+                    show: true,
+
+                    is_movable: true,
+
+                    kind: WindowKind::Dialog,
+
+                    window_background: cx.theme().window_background_appearance(),
+
+                    window_bounds: Some(WindowBounds::centered(scaled_bounds, cx)),
+
+                    ..Default::default()
+                },
+                move |window, cx| {
+                    let dialog =
+                        cx.new(|cx| ConnectionDialog::new(window, cx, session_manager, session_id));
+
+                    cx.new(|cx| Root::new(dialog, window, cx))
+                },
+            );
+
+            if let Err(error) = result {
+                log::error!("failed to open connection dialog: {}", error);
+            }
+        });
+    }
+
+    pub fn open_terminal(
+        &mut self,
+        action: &OpenTerminalAction,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        log::info!("Workspace: open_terminal {}", action.session_id);
+        self.terminal_pane.update(cx, |pane, cx| {
+            pane.open_terminal(action, window, cx);
+        });
+    }
+    pub fn close_terminal(
+        &mut self,
+        action: &CloseTerminalAction,
+        _window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        log::info!("Workspace: close_terminal {}", action.tab_id);
+        self.terminal_pane.update(cx, |pane, cx| {
+            pane.close_terminal(action, _window, cx);
+        });
+    }
+    pub fn edit_session(
+        &mut self,
+        action: &EditAction,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        self.open_connection_dialog(action.session_id.clone(), window, cx);
+    }
 }
 
 impl Render for WorkspaceView {
     fn render(&mut self, windows: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
+        if let Some(session_id) = self
+            .state
+            .update(cx, |state, _cx| state.pending_open_session_id.take())
+        {
+            self.terminal_pane.update(cx, |pane, cx| {
+                pane.open_terminal(&OpenTerminalAction { session_id }, windows, cx);
+            });
+        }
         self.title_bar.update(cx, |this, cx| {
             let t = cx.theme();
             this.set_children([div()
@@ -142,6 +253,9 @@ impl Render for WorkspaceView {
 
         div()
             .id("lumen-workspace")
+            .on_action(cx.listener(Self::open_terminal))
+            .on_action(cx.listener(Self::close_terminal))
+            .on_action(cx.listener(Self::edit_session))
             .flex()
             .flex_col()
             .size_full()

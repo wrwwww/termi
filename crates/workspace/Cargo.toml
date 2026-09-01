@@ -35,5 +35,6 @@ strum.workspace=true
 futures.workspace = true
 tokio.workspace = true
 protocol.workspace=true
+uuid.workspace=true
 [target.'cfg(windows)'.dependencies]
 windows.workspace = true

@@ -3,7 +3,7 @@
 //! Held inside a single `Entity<AppState>` that views observe and mutate
 //! via GPUI's standard model notification API.
 
-use protocol::{Session, SessionStatus};
+use protocol::{AuthMethod, Session, SessionStatus};
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
 use strum::{Display, EnumIter, EnumString};
@@ -12,7 +12,13 @@ use strum::{Display, EnumIter, EnumString};
 pub struct AppState {
     pub sessions: Vec<Session>,
     pub groups: Vec<String>,
-    pub active_session_id: Option<String>,
+    /// Session ids that currently have a terminal tab. This is deliberately
+    /// runtime-only: reopening the app must not reconnect to hosts silently.
+    #[serde(skip)]
+    pub open_session_ids: Vec<String>,
+    #[serde(skip)]
+    pub pending_open_session_id: Option<String>,
+    pub active_tab_id: Option<String>,
     pub active_view: ActiveView,
     pub settings: Settings,
     /// Live server metrics for the currently active session. `None` while
@@ -202,32 +208,46 @@ impl Default for MonitorWindow {
 }
 
 impl AppState {
+    fn state_file() -> Option<std::path::PathBuf> {
+        std::env::var_os("APPDATA")
+            .or_else(|| std::env::var_os("USERPROFILE"))
+            .map(|base| {
+                std::path::PathBuf::from(base)
+                    .join("termi")
+                    .join("state.json")
+            })
+    }
+
     /// Load sessions + settings from disk; fall back to a demo dataset on first run.
     pub fn load() -> Self {
         // let path = directories::ProjectDirs::from("dev", "lumen", "Lumen")
         //     .map(|d| d.config_dir().join("state.json"));
 
-        // if let Some(path) = path.as_ref() {
-        //     if path.exists() {
-        //         if let Ok(text) = std::fs::read_to_string(path) {
-        //             if let Ok(parsed) = serde_json::from_str::<AppState>(&text) {
-        //                 return parsed;
-        //             }
-        //         }
-        //     }
-        // }
+        if let Some(path) = Self::state_file()
+            && let Ok(text) = std::fs::read_to_string(path)
+            && let Ok(mut parsed) = serde_json::from_str::<AppState>(&text)
+        {
+            // Runtime tabs are never restored: reopening an app must not make
+            // background connections to remote hosts.
+            parsed.open_session_ids.clear();
+            parsed.pending_open_session_id = None;
+            parsed.active_tab_id = None;
+            return parsed;
+        }
 
         // Demo data so the first run isn't empty.
         let mut groups: Vec<String> =
             vec!["Production".into(), "Staging".into(), "Personal".into()];
         groups.sort();
         let sessions = vec![];
-        let active_session_id = Some("s1".into());
+        let active_tab_id = None;
 
         Self {
             sessions,
             groups,
-            active_session_id,
+            open_session_ids: Vec::new(),
+            pending_open_session_id: None,
+            active_tab_id,
             active_view: ActiveView::Workspace,
             settings: Settings::default(),
             monitor: Some(MonitorSnapshot::default()),
@@ -239,20 +259,37 @@ impl AppState {
     }
 
     pub fn save(&self) {
-        // if let Some(dir) = directories::ProjectDirs::from("dev", "lumen", "Lumen") {
-        //     let path = dir.config_dir().join("state.json");
-        //     std::fs::create_dir_all(dir.config_dir()).ok();
-        //     if let Ok(text) = serde_json::to_string_pretty(self) {
-        //         std::fs::write(path, text).ok();
-        //     }
-        // }
+        let Some(path) = Self::state_file() else {
+            return;
+        };
+        let Some(parent) = path.parent() else {
+            return;
+        };
+
+        // Keep endpoint metadata between launches, but never write secrets in
+        // clear text. A password or key passphrase is intentionally requested
+        // again after an application restart.
+        let mut persisted = self.clone();
+        for session in &mut persisted.sessions {
+            match &mut session.auth {
+                AuthMethod::Password { password } => password.clear(),
+                AuthMethod::PublicKey { passphrase, .. } => *passphrase = None,
+                AuthMethod::Agent | AuthMethod::KeyboardInteractive => {}
+            }
+        }
+
+        if std::fs::create_dir_all(parent).is_ok()
+            && let Ok(text) = serde_json::to_string_pretty(&persisted)
+        {
+            let _ = std::fs::write(path, text);
+        }
     }
 
     pub fn set_active_view(&mut self, v: ActiveView) {
         self.active_view = v;
     }
 
-    pub fn set_active_session(&mut self, id: &str) {
-        self.active_session_id = Some(id.into());
+    pub fn set_active_tab(&mut self, id: &str) {
+        self.active_tab_id = Some(id.into());
     }
 }

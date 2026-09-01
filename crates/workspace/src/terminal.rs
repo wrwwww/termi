@@ -16,23 +16,39 @@ use serde::Deserialize;
 use terminal::{TerminalBounds, TerminalBuilder};
 use terminal_view::TerminalView;
 use theme::ActiveTheme;
+use uuid::Uuid;
 #[derive(Clone, Deserialize, PartialEq, JsonSchema, Action)]
 #[action(namespace = workspace)]
 pub struct OpenTerminalAction {
     pub session_id: String,
 }
+#[derive(Clone, Deserialize, PartialEq, JsonSchema, Action)]
+#[action(namespace = workspace)]
+pub struct ActivateTerminalAction {
+    pub tab_id: String,
+}
+#[derive(Clone, Deserialize, PartialEq, JsonSchema, Action)]
+#[action(namespace = workspace)]
+pub struct CloseTerminalAction {
+    pub tab_id: String,
+}
+
+struct TerminalTab {
+    tab_id: String,
+    session_id: String,
+    view: Entity<TerminalView>,
+}
 pub struct TerminalPane {
     state: Entity<AppState>,
     session_manager: Entity<SessionManager>,
     focus_handle: FocusHandle,
-    items: Vec<Entity<TerminalView>>,
+    items: Vec<TerminalTab>,
     active_item_index: usize,
     should_display_welcome_page: bool,
     welcome_page: Option<Entity<WelcomePage>>,
     // 接受从backend返回的事件
     events_rx: Option<UnboundedReceiver<SystemEvent>>,
     events_tx: UnboundedSender<SystemEvent>,
-
     event_loop_task: Task<Result<(), anyhow::Error>>,
 }
 
@@ -76,15 +92,24 @@ impl TerminalPane {
     pub fn process_event(&mut self, event: SystemEvent, cx: &mut Context<Self>) {
         match event {
             SystemEvent::Output { tab_id, bytes } => {
-                self.items[0].update(cx, |this, cx| {
-                    this.terminal().update(cx, |this, cx| {
-                        this.write_output(&bytes);
-                    })
-                });
+                if let Some(tab) = self.items.iter().find(|tab| tab.session_id == tab_id) {
+                    tab.view.update(cx, |this, cx| {
+                        this.terminal()
+                            .update(cx, |this, _cx| this.write_output(&bytes))
+                    });
+                }
             }
             SystemEvent::Status { tab_id, text } => {}
             SystemEvent::Connected { tab_id } => {}
-            SystemEvent::Error(_) => {}
+            SystemEvent::Error { tab_id, message } => {
+                if let Some(tab) = self.items.iter().find(|tab| tab.session_id == tab_id) {
+                    let output = format!("\r\n连接失败：{message}\r\n");
+                    tab.view.update(cx, |this, cx| {
+                        this.terminal()
+                            .update(cx, |this, _cx| this.write_output(output.as_bytes()))
+                    });
+                }
+            }
             SystemEvent::CommandComplete(_) => {}
             SystemEvent::TitleUpdate { tab_id, title } => {}
             SystemEvent::ClearScreen => {}
@@ -98,6 +123,21 @@ impl TerminalPane {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
+        let tab_id = Uuid::new_v4().to_string();
+        let session_id = action.session_id.clone();
+        if let Some(index) = self
+            .items
+            .iter()
+            .position(|tab| tab.session_id == action.session_id)
+        {
+            self.active_item_index = index;
+            self.state.update(cx, |state, cx| {
+                state.set_active_tab(&tab_id);
+                cx.notify();
+            });
+            cx.notify();
+            return;
+        }
         let session = self
             .session_manager
             .read(cx)
@@ -106,12 +146,72 @@ impl TerminalPane {
             .clone();
         info!("接受到打开session{:?}", session);
         let builder = TerminalBuilder::new_terminal(TerminalBounds::default());
-        let terminal = cx.new(|cx| builder.subscribe(session, self.events_tx.clone(), cx));
+
+        let terminal =
+            cx.new(|cx| builder.subscribe(session, tab_id.clone(), self.events_tx.clone(), cx));
 
         let terminal_view = cx.new(|cx| TerminalView::new(terminal.clone(), window, cx));
-        self.items.push(terminal_view);
+        self.items.push(TerminalTab {
+            tab_id: tab_id.clone(),
+            session_id: session_id.clone(),
+            view: terminal_view,
+        });
         self.active_item_index = self.items.len() - 1;
+        self.should_display_welcome_page = false;
+        self.state.update(cx, |state, cx| {
+            if !state.open_session_ids.contains(&tab_id) {
+                state.open_session_ids.push(tab_id.clone());
+            }
+            state.set_active_tab(&tab_id);
+            cx.notify();
+        });
         cx.notify();
+    }
+    pub fn activate_terminal(
+        &mut self,
+        action: &ActivateTerminalAction,
+        _window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        if let Some(index) = self
+            .items
+            .iter()
+            .position(|tab| tab.tab_id == action.tab_id)
+        {
+            self.active_item_index = index;
+            self.state.update(cx, |state, cx| {
+                state.set_active_tab(&action.tab_id);
+                cx.notify();
+            });
+            cx.notify();
+        }
+    }
+    pub fn close_terminal(
+        &mut self,
+        action: &CloseTerminalAction,
+        _window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        if let Some(index) = self
+            .items
+            .iter()
+            .position(|tab| tab.tab_id == action.tab_id)
+        {
+            self.items.remove(index);
+            self.active_item_index = self
+                .active_item_index
+                .saturating_sub(usize::from(index <= self.active_item_index));
+            let next_id = self
+                .items
+                .get(self.active_item_index)
+                .map(|tab| tab.tab_id.clone());
+            self.state.update(cx, |state, cx| {
+                state.open_session_ids.retain(|id| id != &action.tab_id);
+                state.active_tab_id = next_id;
+                cx.notify();
+            });
+            cx.notify();
+        }
     }
 }
 
@@ -120,18 +220,11 @@ impl Render for TerminalPane {
         let t = cx.theme();
         // info!("渲染");
         // let terminal_settings = TerminalSettings::get_global(cx);
-        let mut row = div()
-            .id("lumen-tabs")
-            .flex()
-            .flex_row()
-            .items_center()
-            .h(px(36.))
-            .bg(t.colors().background)
-            .border_b_1()
-            .border_color(t.colors().border)
-            .overflow_x_scroll();
+
         div()
-            .on_action(cx.listener(Self::open_terminal))
+            // .on_action(cx.listener(Self::open_terminal))
+            .on_action(cx.listener(Self::activate_terminal))
+            .on_action(cx.listener(Self::close_terminal))
             .track_focus(&self.focus_handle)
             .id("lumen-terminal")
             .flex()
@@ -139,11 +232,10 @@ impl Render for TerminalPane {
             .flex_1()
             .overflow_scroll()
             .bg(t.colors().terminal_background)
-            // .child()
             .child(div().when_else(
                 self.should_display_welcome_page || self.items.is_empty(),
                 |e| e.child(self.welcome_page.as_ref().unwrap().clone()),
-                |e| e.child(self.items[self.active_item_index].clone()),
+                |e| e.child(self.items[self.active_item_index].view.clone()),
             ))
     }
 }

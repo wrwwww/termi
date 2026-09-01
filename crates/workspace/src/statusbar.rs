@@ -44,13 +44,13 @@ impl Render for StatusBar {
         let t = cx.theme();
         let state = self.state.read(cx);
         let active = state
-            .active_session_id
+            .active_tab_id
             .as_ref()
             .and_then(|id| state.sessions.iter().find(|s| &s.id == id));
 
-        let connected = active
-            .map(|s| s.status == SessionStatus::Connected)
-            .unwrap_or(false);
+        let connected = true;
+        // .map(|s| s.status == SessionStatus::Connected)
+        // .unwrap_or(false);
         let latency_text = active
             .and_then(|s| s.latencies_ms.last().copied())
             .map(|ms| format!("{} ms", ms))
