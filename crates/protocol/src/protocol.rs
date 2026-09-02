@@ -111,35 +111,6 @@ pub async fn open_session_terminal(
 
         let _ = events.unbounded_send(SystemEvent::Connected { tab_id: tab_id.clone() });
 
-        // auth
-        // let a = match session.auth {
-        //     AuthMethod::Password { password } => handle
-        //         .authenticate_password(session.username.clone(), password)
-        //         .await
-        //         .context("context")
-        //         .unwrap(),
-        //     AuthMethod::PublicKey {
-        //         private_key,
-        //         passphrase_secret_id,
-        //     } => handle
-        //         .authenticate_password("".to_string(), "".to_string())
-        //         .await
-        //         .context("context")
-        //         .unwrap(),
-        //     // AuthMethod::KeyboardInteractive => handle
-        //     //     .authenticate_password("".to_string(), "".to_string())
-        //     //     .await
-        //     //     .context("context")
-        //     //     .unwrap(),
-        //     // AuthMethod::GssApi => handle
-        //     //     .authenticate_password("".to_string(), "".to_string())
-        //     //     .await
-        //     //     .context("context")
-        //     //     .unwrap(),
-        // };
-        // if !a.success() {
-        //     // 没有成功，发送授权失败事件
-        // }
         let handle = Arc::new(Mutex::new(handle));
         let mut channel = handle.lock().await.channel_open_session().await.unwrap();
         channel
