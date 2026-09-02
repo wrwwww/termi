@@ -109,15 +109,16 @@ impl SessionManager {
             runtimes: HashMap::default(),
         }
     }
-    pub async fn connect(&mut self, session: Session) -> anyhow::Result<SessionRuntimeHandle> {
-        let connection = SshConnection::connect(&session).await?;
+    // pub async fn connect(&mut self, session: Session) -> anyhow::Result<SessionRuntimeHandle> {
+    //     let connection = SshConnection::connect(&session).await?;
 
-        let (runtime, handle, _) = SessionRuntime::new(session.clone(), connection);
+    //     let (runtime, handle, _) = SessionRuntime::new(session.clone(), connection);
 
-        self.runtimes.insert(session.id.clone(), runtime);
+    //     self.runtimes.insert(session.id.clone(), runtime);
+    //     // tokio::spawn(runtime.run());
 
-        Ok(handle)
-    }
+    //     Ok(handle)
+    // }
     fn sync_state(&self, cx: &mut Context<Self>) {
         let sessions = self.sessions.clone();
         self.state.update(cx, |state, cx| {

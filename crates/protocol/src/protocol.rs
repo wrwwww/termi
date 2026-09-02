@@ -105,8 +105,8 @@ pub enum RuntimeCommand {
 pub enum TerminalCommand {
     Open {
         tab_id: TabId,
-        cols: u16,
-        rows: u16,
+        // cols: u16,
+        // rows: u16,
     },
 
     Input {
@@ -161,7 +161,9 @@ pub enum RuntimeEvent {
     // Runtime
     // =========================
 
-    Connected,
+    Connected{
+        session_id: SessionId,
+    },
 
     Disconnected,
 
