@@ -11,7 +11,7 @@ use futures::StreamExt;
 use futures::channel::mpsc::{UnboundedReceiver, UnboundedSender, unbounded};
 use gpui::{prelude::FluentBuilder, *};
 use log::{error, info};
-use protocol::SystemEvent;
+use protocol::{SessionId, SystemEvent, TabId};
 use schemars::JsonSchema;
 use serde::Deserialize;
 use terminal::{TerminalBounds, TerminalBuilder};
@@ -21,22 +21,22 @@ use uuid::Uuid;
 #[derive(Clone, Deserialize, PartialEq, JsonSchema, Action)]
 #[action(namespace = workspace)]
 pub struct OpenTerminalAction {
-    pub session_id: String,
+    pub session_id: SessionId,
 }
 #[derive(Clone, Deserialize, PartialEq, JsonSchema, Action)]
 #[action(namespace = workspace)]
 pub struct ActivateTerminalAction {
-    pub tab_id: String,
+    pub tab_id: TabId,
 }
 #[derive(Clone, Deserialize, PartialEq, JsonSchema, Action)]
 #[action(namespace = workspace)]
 pub struct CloseTerminalAction {
-    pub tab_id: String,
+    pub tab_id: TabId,
 }
 
 struct TerminalTab {
-    tab_id: String,
-    session_id: String,
+    tab_id: TabId,
+    session_id: SessionId,
     title: SharedString,
     view: Entity<TerminalView>,
 }
@@ -103,12 +103,12 @@ impl TerminalPane {
             }
             SystemEvent::Status { tab_id, text } => {}
             SystemEvent::Connected { tab_id } => {
-                info!("连接成功，tab_id: {}", tab_id);
+                info!("连接成功，tab_id: {:?}", tab_id);
             }
             SystemEvent::Error { tab_id, message } => {
                 let output = format!("\r\n连接失败：{message}\r\n");
                 info!("{}", output);
-                if let Some(tab) = self.items.iter().find(|tab| tab.session_id == tab_id) {
+                if let Some(tab) = self.items.iter().find(|tab| tab.tab_id == tab_id) {
 
                     // tab.view.update(cx, |this, cx| {
                     //     this.terminal()
@@ -130,13 +130,13 @@ impl TerminalPane {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
-        let tab_id = Uuid::new_v4().to_string();
+        let tab_id = TabId::new();
         let session_id = action.session_id.clone();
 
         let session = self
             .session_manager
             .read(cx)
-            .query(&action.session_id)
+            .query(action.session_id)
             .unwrap()
             .clone();
         let title = session.name.clone().into();
@@ -149,7 +149,7 @@ impl TerminalPane {
         let terminal_view = cx.new(|cx| TerminalView::new(terminal.clone(), window, cx));
         self.items.push(TerminalTab {
             tab_id: tab_id.clone(),
-            session_id: session_id.clone(),
+            session_id: session_id,
             title: title,
             view: terminal_view,
         });
@@ -247,7 +247,7 @@ impl Render for TerminalPane {
                                 .children(
                                     self.items
                                         .iter()
-                                        .map(|tab| render_tab(tab, active_id.as_deref(), &t, &cx)),
+                                        .map(|tab| render_tab(tab, active_id, &t, &cx)),
                                 )
                                 .child(
                                     div()
@@ -285,16 +285,16 @@ impl Render for TerminalPane {
 
 fn render_tab(
     tab: &TerminalTab,
-    active_id: Option<&str>,
+    active_id: Option<TabId>,
     t: &Theme,
     cx: &&mut Context<TerminalPane>,
 ) -> AnyElement {
-    let tab_id = tab.tab_id.clone();
-    let is_active = active_id == Some(&tab_id.as_str());
+    let tab_id = tab.tab_id;
+    let is_active = active_id == Some(tab_id);
     let activate_id = tab_id.clone();
     let close_id = tab_id.clone();
     div()
-        .id(format!("terminal-tab-{activate_id}"))
+        .id(format!("terminal-tab-{}", activate_id.to_string()))
         .flex()
         .items_center()
         .gap(px(8.))
@@ -328,7 +328,7 @@ fn render_tab(
         )
         .child(
             div()
-                .id(format!("terminal-tab-close-{close_id}"))
+                .id(format!("terminal-tab-close-{}", close_id.to_string()))
                 .size(px(18.))
                 .flex()
                 .items_center()

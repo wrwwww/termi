@@ -3,7 +3,7 @@
 //! Held inside a single `Entity<AppState>` that views observe and mutate
 //! via GPUI's standard model notification API.
 
-use protocol::{AuthMethod, Session, SessionStatus};
+use protocol::{AuthMethod, Session, SessionId, SessionStatus, TabId};
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
 use strum::{Display, EnumIter, EnumString};
@@ -15,10 +15,10 @@ pub struct AppState {
     /// Session ids that currently have a terminal tab. This is deliberately
     /// runtime-only: reopening the app must not reconnect to hosts silently.
     #[serde(skip)]
-    pub open_session_ids: Vec<String>,
+    pub open_session_ids: Vec<TabId>,
     #[serde(skip)]
-    pub pending_open_session_id: Option<String>,
-    pub active_tab_id: Option<String>,
+    pub pending_open_session_id: Option<SessionId>,
+    pub active_tab_id: Option<TabId>,
     pub active_view: ActiveView,
     pub settings: Settings,
     /// Live server metrics for the currently active session. `None` while
@@ -289,7 +289,7 @@ impl AppState {
         self.active_view = v;
     }
 
-    pub fn set_active_tab(&mut self, id: &str) {
-        self.active_tab_id = Some(id.into());
+    pub fn set_active_tab(&mut self, id: &TabId) {
+        self.active_tab_id = Some(*id);
     }
 }

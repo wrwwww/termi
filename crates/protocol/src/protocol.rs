@@ -1,26 +1,235 @@
-use std::sync::Arc;
+use std::{fmt::Display, sync::Arc};
 pub mod ssh;
 use anyhow::Context;
-
+pub mod monitor;
+pub mod file;
 use futures::{SinkExt, channel::mpsc::UnboundedSender};
-use log::info;
+ 
 use russh::{
     ChannelMsg,
     client::{self},
     keys::ssh_key,
 };
+use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use strum::{Display, EnumIter, EnumString};
 use tokio::sync::{
     Mutex,
     mpsc::{Sender, UnboundedReceiver},
 };
+use uuid::Uuid;
 
-pub type TabId = String;
+use crate::{file::RemoteFile, monitor::MetricSnapshot};
+
+#[derive(
+    Debug,
+    Clone,
+    Copy,
+    PartialEq,
+    Eq,
+    Hash,
+    Deserialize, Serialize ,JsonSchema
+)]
+#[schemars(transparent)]
+#[serde(transparent)]
+pub struct SessionId(#[schemars(with = "String")] Uuid);
+impl SessionId {
+    pub fn new() -> Self {
+        Self(Uuid::new_v4())
+    }
+    pub fn to_string(&self) -> String {
+        self.0.to_string()
+    }
+}
+impl Display for SessionId {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", self.0)
+    }
+}
+impl Display for TabId {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", self.0)
+    }
+}
+#[derive(
+    Debug,
+    Clone,
+    Copy,
+    PartialEq,
+    Eq,
+    Hash,
+    Deserialize, Serialize ,JsonSchema
+)]
+#[schemars(transparent)]
+#[serde(transparent)]
+pub struct  TransferId(#[schemars(with = "String")] Uuid);
+impl TransferId {
+    pub fn new() -> Self {
+        Self(Uuid::new_v4())
+    }
+    pub fn to_string(&self) -> String {
+        self.0.to_string()
+    }
+}
+impl Display for  TransferId {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", self.0)
+    }
+}
+
+#[derive(
+    Debug,
+    Clone,
+    Copy,
+    PartialEq,
+    Eq,
+    Hash,Deserialize, Serialize ,JsonSchema
+)]
+#[serde(transparent)]
+#[schemars(transparent)]
+pub struct TabId(#[schemars(with = "String")] Uuid);
+impl TabId {
+    pub fn new() -> Self {
+        Self(Uuid::new_v4())
+    }
+    pub fn to_string(&self) -> String {
+        self.0.to_string()
+    }
+}
+pub enum RuntimeCommand {
+    Terminal(TerminalCommand),
+    Monitor(MonitorCommand),
+    Files(FileCommand),
+    Disconnect,
+}
+pub enum TerminalCommand {
+    Open {
+        tab_id: TabId,
+        cols: u16,
+        rows: u16,
+    },
+
+    Input {
+        tab_id: TabId,
+        data: Vec<u8>,
+    },
+
+    Resize {
+        tab_id: TabId,
+        cols: u16,
+        rows: u16,
+    },
+
+    Close {
+        tab_id: TabId,
+    },
+}
+pub enum MonitorCommand {
+    Start,
+    Stop,
+    Refresh,
+}
+pub enum FileCommand {
+    List {
+        path: String,
+    },
+
+    Mkdir {
+        path: String,
+    },
+
+    Delete {
+        path: String,
+    },
+
+    Rename {
+        from: String,
+        to: String,
+    },
+}
+pub enum RuntimeState {
+    Connecting,
+    Authenticating,
+    Connected,
+    Disconnected,
+    Failed,
+}
+
+#[derive(Debug)]
+pub enum RuntimeEvent {
+    // =========================
+    // Runtime
+    // =========================
+
+    Connected,
+
+    Disconnected,
+
+    Error {
+        message: String,
+    },
+
+    // =========================
+    // Terminal
+    // =========================
+
+    TerminalOutput {
+        tab_id: TabId,
+        bytes: Vec<u8>,
+    },
+
+    TerminalExit {
+        tab_id: TabId,
+    },
+
+    // =========================
+    // Monitor
+    // =========================
+
+    MetricsUpdated {
+        metrics: MetricSnapshot,
+    },
+
+    // =========================
+    // File
+    // =========================
+
+    DirectoryListed {
+        path: String,
+        entries: Vec<RemoteFile>,
+    },
+
+    // =========================
+    // Transfer
+    // =========================
+
+    TransferStarted {
+        transfer_id: TransferId,
+    },
+
+    TransferProgress {
+        transfer_id: TransferId,
+        transferred: u64,
+        total: Option<u64>,
+    },
+
+    TransferCompleted {
+        transfer_id: TransferId,
+    },
+
+    TransferFailed {
+        transfer_id: TransferId,
+        message: String,
+    },
+}
+
+
+
+
 #[derive(Clone)]
 pub enum SystemEvent {
     Output { tab_id: TabId, bytes: Vec<u8> },
-    Status { tab_id: String, text: String },
+    Status { tab_id: TabId, text: String },
     Connected { tab_id: TabId },
     Error { tab_id: TabId, message: String },
     CommandComplete(String),
@@ -367,7 +576,7 @@ impl Default for AuthenticationType {
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct Session {
     /// 唯一 ID。
-    pub id: String,
+    pub id: SessionId,
 
     /// UI 中显示的会话名称。
     pub name: String,

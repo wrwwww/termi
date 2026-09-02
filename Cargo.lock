@@ -5744,6 +5744,7 @@ dependencies = [
  "futures",
  "log",
  "russh",
+ "schemars",
  "serde",
  "strum 0.28.0",
  "tokio",

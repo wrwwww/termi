@@ -17,12 +17,15 @@ pub mod connection_dialog;
 pub mod files;
 pub mod item;
 pub mod monitor;
+pub mod monitor_manager;
+pub mod runtime_manager;
 pub mod session_manager;
 pub mod settings;
 pub mod sidebar;
 pub mod state;
 pub mod statusbar;
-pub mod tabs;
+pub mod transfer_manager;
+
 pub mod terminal;
 pub mod title_bar;
 pub mod welcome;
@@ -35,7 +38,6 @@ use crate::{
     sidebar::Sidebar,
     state::AppState,
     statusbar::StatusBar,
-    tabs::TabsBar,
     terminal::{CloseTerminalAction, OpenTerminalAction, TerminalPane},
     title_bar::PlatformTitleBar,
 };
@@ -44,9 +46,9 @@ use ::theme::{ActiveTheme, Theme};
 use gpui::*;
 use gpui_component::{
     Root,
-    highlighter::DiagnosticSeverity::Info,
     resizable::{h_resizable, resizable_panel, v_resizable},
 };
+use protocol::SessionId;
 use schemars::JsonSchema;
 use serde::Deserialize;
 
@@ -54,7 +56,7 @@ use serde::Deserialize;
 #[derive(Clone, Debug, Deserialize, PartialEq, Eq, JsonSchema, Action)]
 #[action(namespace = session_manager)]
 pub struct EditAction {
-    pub session_id: Option<String>,
+    pub session_id: Option<SessionId>,
 }
 pub struct WorkspaceView {
     state: Entity<AppState>,
@@ -111,7 +113,7 @@ impl WorkspaceView {
     }
     fn open_connection_dialog(
         &mut self,
-        session_id: Option<String>,
+        session_id: Option<SessionId>,
         _window: &mut Window,
         cx: &mut Context<Self>,
     ) {
@@ -168,7 +170,7 @@ impl WorkspaceView {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
-        log::info!("Workspace: open_terminal {}", action.session_id);
+        log::info!("Workspace: open_terminal {}", action.session_id.to_string());
         self.terminal_pane.update(cx, |pane, cx| {
             pane.open_terminal(action, window, cx);
         });
@@ -179,7 +181,7 @@ impl WorkspaceView {
         _window: &mut Window,
         cx: &mut Context<Self>,
     ) {
-        log::info!("Workspace: close_terminal {}", action.tab_id);
+        log::info!("Workspace: close_terminal {}", action.tab_id.to_string());
         self.terminal_pane.update(cx, |pane, cx| {
             pane.close_terminal(action, _window, cx);
         });
@@ -190,7 +192,7 @@ impl WorkspaceView {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
-        self.open_connection_dialog(action.session_id.clone(), window, cx);
+        self.open_connection_dialog(action.session_id, window, cx);
     }
 }
 

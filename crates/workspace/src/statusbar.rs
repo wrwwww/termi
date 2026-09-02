@@ -6,7 +6,7 @@
 use crate::state::AppState;
 
 use gpui::*;
-use protocol::SessionStatus;
+use protocol::{SessionId, SessionStatus, TabId};
 use settings::Settings;
 use settings_content::theme::ThemeAppearanceMode;
 use termi_action::theme::ToggleMode;
@@ -46,7 +46,7 @@ impl Render for StatusBar {
         let active = state
             .active_tab_id
             .as_ref()
-            .and_then(|id| state.sessions.iter().find(|s| &s.id == id));
+            .and_then(|id| state.sessions.iter().find(|s| s.id == SessionId::new()));
 
         let connected = true;
         // .map(|s| s.status == SessionStatus::Connected)

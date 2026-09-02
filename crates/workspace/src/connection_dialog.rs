@@ -34,7 +34,7 @@ use gpui_component::{
     tab::TabBar,
 };
 
-use protocol::{AuthMethod, Protocol, Session};
+use protocol::{AuthMethod, Protocol, Session, SessionId};
 
 use strum::IntoEnumIterator;
 use theme::{ActiveTheme, Theme};
@@ -121,7 +121,7 @@ pub struct ConnectionDialog {
     ///
     /// Some(id):
     ///     编辑已有会话
-    session_id: Option<String>,
+    session_id: Option<SessionId>,
 
     // ------------------------------------------------------------------------
     // Basic
@@ -167,10 +167,9 @@ impl ConnectionDialog {
         window: &mut Window,
         cx: &mut Context<Self>,
         session_manager: Entity<SessionManager>,
-        session_id: Option<String>,
+        session_id: Option<SessionId>,
     ) -> Self {
         let session = session_id
-            .as_deref()
             .and_then(|id| session_manager.read(cx).query(id).cloned())
             .unwrap_or_else(Self::default_session);
 
@@ -277,7 +276,7 @@ impl ConnectionDialog {
 
     fn default_session() -> Session {
         Session {
-            id: String::new(),
+            id: SessionId::new(),
 
             name: String::new(),
 
@@ -455,10 +454,7 @@ impl ConnectionDialog {
     fn build_session(&self, cx: &Context<Self>) -> Result<Session, String> {
         self.validate(cx)?;
 
-        let id = self
-            .session_id
-            .clone()
-            .unwrap_or_else(|| Uuid::new_v4().to_string());
+        let id = self.session_id.clone().unwrap_or_else(|| SessionId::new());
 
         let name = self.name.read(cx).value().trim().to_string();
 

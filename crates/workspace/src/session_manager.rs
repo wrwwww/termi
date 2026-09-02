@@ -1,6 +1,9 @@
-use crate::state::AppState;
-use gpui::{accesskit::Uuid, Context, Entity};
-use protocol::Session;
+use crate::{
+    runtime_manager::{SessionRuntime, SessionRuntimeHandle},
+    state::AppState,
+};
+use gpui::{Context, Entity, accesskit::Uuid};
+use protocol::{Session, SessionId, ssh::SshConnection};
 use utils::collections::HashMap;
 
 // pub struct SessionManager {
@@ -88,19 +91,33 @@ use utils::collections::HashMap;
 // }
 
 pub struct SessionManager {
-    sessions: Vec<Session>,
+    sessions: HashMap<SessionId, Session>,
     state: Entity<AppState>,
+    runtimes: HashMap<SessionId, SessionRuntime>,
 }
 
 impl SessionManager {
     pub fn new(state: Entity<AppState>, cx: &Context<Self>) -> Self {
         let sessions = state.read(cx).sessions.clone();
+        let sessions = sessions
+            .into_iter()
+            .map(|session| (session.id.clone(), session))
+            .collect::<HashMap<_, _>>();
         Self {
             sessions,
             state,
+            runtimes: HashMap::default(),
         }
     }
+    pub async fn connect(&mut self, session: Session) -> anyhow::Result<SessionRuntimeHandle> {
+        let connection = SshConnection::connect(&session).await?;
 
+        let (runtime, handle, _) = SessionRuntime::new(session.clone(), connection);
+
+        self.runtimes.insert(session.id.clone(), runtime);
+
+        Ok(handle)
+    }
     fn sync_state(&self, cx: &mut Context<Self>) {
         let sessions = self.sessions.clone();
         self.state.update(cx, |state, cx| {
@@ -121,19 +138,19 @@ impl SessionManager {
         &self.sessions
     }
 
-    pub fn query(&self, session_id: &str) -> Option<&Session> {
+    pub fn query(&self, session_id: SessionId) -> Option<&Session> {
         self.sessions
             .iter()
             .find(|session| session.id == session_id)
     }
 
-    pub fn query_mut(&mut self, session_id: &str) -> Option<&mut Session> {
+    pub fn query_mut(&mut self, session_id: SessionId) -> Option<&mut Session> {
         self.sessions
             .iter_mut()
             .find(|session| session.id == session_id)
     }
 
-    pub fn del_session(&mut self, session_id: &str, cx: &mut Context<Self>) -> bool {
+    pub fn del_session(&mut self, session_id: SessionId, cx: &mut Context<Self>) -> bool {
         let old_len = self.sessions.len();
 
         self.sessions.retain(|session| session.id != session_id);
@@ -145,14 +162,18 @@ impl SessionManager {
         deleted
     }
 
-    pub fn copy_session(&mut self, session_id: &str, cx: &mut Context<Self>) -> Option<String> {
+    pub fn copy_session(
+        &mut self,
+        session_id: SessionId,
+        cx: &mut Context<Self>,
+    ) -> Option<SessionId> {
         let source = self.query(session_id)?.clone();
 
-        let new_id = Uuid::new_v4().to_string();
+        let new_id = SessionId::new();
 
         let mut copied = source;
 
-        copied.id = new_id.clone();
+        copied.id = new_id;
 
         copied.name = format!("{} Copy", copied.name);
 
@@ -166,7 +187,7 @@ impl SessionManager {
         Some(new_id)
     }
 
-    pub fn open_session(&mut self, session_id: String) {
+    pub fn open_session(&mut self, session_id: SessionId) {
         // 这里不要启动真正的 SSH 连接。
         //
         // SessionManager 只负责管理 session 生命周期。
@@ -177,15 +198,15 @@ impl SessionManager {
         //     -> Actor
         //     -> SSH Task
         //
-        if let Some(session) = self.query_mut(&session_id) {
-            // session.status = protocol::SessionStatus::Disconnected;
-        }
+        // if let Some(session) = self.query_mut(&session_id) {
+        // session.status = protocol::SessionStatus::Disconnected;
+        // }
     }
 
     pub fn save_session(&mut self, session: Session, is_connect: bool, cx: &mut Context<Self>) {
         let id = session.id.clone();
 
-        match self.query_mut(&id) {
+        match self.query_mut(id) {
             Some(existing) => {
                 *existing = session;
             }

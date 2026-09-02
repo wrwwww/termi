@@ -52,7 +52,7 @@ use gpui_component::{
 
 use log::{error, info};
 
-use protocol::Session;
+use protocol::{Session, SessionId};
 use schemars::JsonSchema;
 use serde::Deserialize;
 
@@ -65,13 +65,13 @@ use theme::ActiveTheme;
 #[derive(Clone, Debug, Deserialize, PartialEq, Eq, JsonSchema, Action)]
 #[action(namespace = session_manager)]
 pub struct CopyAction {
-    pub session_id: String,
+    pub session_id: SessionId,
 }
 
 #[derive(Clone, Debug, Deserialize, PartialEq, Eq, JsonSchema, Action)]
 #[action(namespace = session_manager)]
 pub struct DeleteAction {
-    pub session_id: String,
+    pub session_id: SessionId,
 }
 
 // ============================================================================
@@ -154,16 +154,19 @@ impl Sidebar {
         cx: &mut Context<Self>,
     ) {
         let session_id = action.session_id.clone();
-        info!("Sidebar: EditAction {}", action.session_id);
-        let exists = self.session_manager.read(cx).query(&session_id).is_some();
+        info!("Sidebar: EditAction {:?}", action.session_id);
+        let exists = self.session_manager.read(cx).query(session_id).is_some();
 
         if !exists {
-            error!("cannot copy session `{}`: session not found", session_id);
+            error!(
+                "cannot copy session `{}`: session not found",
+                session_id.to_string()
+            );
             return;
         }
 
         self.session_manager.update(cx, |manager, _cx| {
-            manager.copy_session(&session_id, _cx);
+            manager.copy_session(session_id, _cx);
         });
 
         cx.notify();
@@ -180,16 +183,19 @@ impl Sidebar {
         cx: &mut Context<Self>,
     ) {
         let session_id = action.session_id.clone();
-        info!("Sidebar: EditAction {}", action.session_id);
-        let exists = self.session_manager.read(cx).query(&session_id).is_some();
+        info!("Sidebar: EditAction {}", action.session_id.to_string());
+        let exists = self.session_manager.read(cx).query(session_id).is_some();
 
         if !exists {
-            error!("cannot delete session `{}`: session not found", session_id);
+            error!(
+                "cannot delete session `{}`: session not found",
+                session_id.to_string()
+            );
             return;
         }
 
         self.session_manager.update(cx, |manager, _cx| {
-            manager.del_session(&session_id, _cx);
+            manager.del_session(session_id, _cx);
         });
 
         // window.dispatch_action(Box::new(CloseTerminalAction { tab_id: session_id }), cx);
@@ -211,10 +217,10 @@ impl Sidebar {
     // Open
     // ========================================================================
 
-    fn open_session(&mut self, session_id: String, window: &mut Window, cx: &mut Context<Self>) {
+    fn open_session(&mut self, session_id: SessionId, window: &mut Window, cx: &mut Context<Self>) {
         // 更新 SessionManager 中的状态。
         self.session_manager.update(cx, |manager, _cx| {
-            manager.open_session(session_id.clone());
+            manager.open_session(session_id);
         });
 
         // 更新 AppState。
@@ -225,7 +231,7 @@ impl Sidebar {
         //
         // 所以这里恢复使用这个设计。
         self.state.update(cx, |state, cx| {
-            state.set_active_tab(&session_id);
+            // state.set_active_tab(&session_id);
 
             cx.notify();
         });
@@ -337,7 +343,7 @@ impl Render for Sidebar {
             // ================================================================
             // Session List
             // ================================================================
-            .child(self.render_groups(groups, active_id, cx))
+            .child(self.render_groups(groups, cx))
     }
 }
 
@@ -471,7 +477,7 @@ impl Sidebar {
     fn render_groups(
         &self,
         groups: Vec<(String, Vec<Session>)>,
-        active_id: Option<String>,
+        // active_id: Option<SessionId>,
         cx: &mut Context<Self>,
     ) -> AnyElement {
         if groups.is_empty() {
@@ -507,9 +513,11 @@ impl Sidebar {
             .flex_1()
             .min_h_0()
             .py(px(6.0))
-            .children(groups.into_iter().map(|(group_name, sessions)| {
-                self.render_group(group_name, sessions, active_id.clone(), cx)
-            }))
+            .children(
+                groups
+                    .into_iter()
+                    .map(|(group_name, sessions)| self.render_group(group_name, sessions, cx)),
+            )
             .into_any_element()
     }
 
@@ -517,7 +525,7 @@ impl Sidebar {
         &self,
         group_name: String,
         sessions: Vec<Session>,
-        active_id: Option<String>,
+        // active_id: Option<SessionId>,
         cx: &mut Context<Self>,
     ) -> AnyElement {
         let t = cx.theme();
@@ -585,7 +593,8 @@ impl Sidebar {
 
         if !collapsed {
             for session in sessions {
-                let is_active = active_id.as_deref() == Some(session.id.as_str());
+                // let is_active = active_id.as_deref() == Some(session.id);
+                let is_active = false;
 
                 element = element.child(self.render_session_item(session, is_active, cx));
             }
@@ -608,7 +617,7 @@ impl Sidebar {
     ) -> AnyElement {
         let t = cx.theme();
 
-        let session_id = session.id.clone();
+        let session_id = session.id;
 
         let context_menu_id = session.id.clone();
 
@@ -641,7 +650,7 @@ impl Sidebar {
         // ---------------------------------------------------------------
 
         div()
-            .id(session_id.clone())
+            .id(format!("session-item-{}", session_id.to_string()))
             .flex()
             .items_center()
             .gap(px(8.0))
@@ -667,11 +676,11 @@ impl Sidebar {
 
                     // 双击 -> 打开终端。
                     if event.click_count == 2 {
-                        this.open_session(session_id.clone(), window, cx);
+                        this.open_session(session_id, window, cx);
                     } else {
                         // 单击 -> 只选中。
                         this.state.update(cx, |state, cx| {
-                            state.set_active_tab(&session_id);
+                            // state.set_active_tab(&session_id);
 
                             cx.notify();
                         });
@@ -710,7 +719,7 @@ impl Sidebar {
                     menu.menu(
                         "编辑",
                         Box::new(EditAction {
-                            session_id: Some(id.clone()),
+                            session_id: Some(id),
                         }),
                     )
                     .separator()

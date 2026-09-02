@@ -39,7 +39,7 @@ use gpui::{
     Window, accesskit::Uuid, div, fill, font, hsla, point, px, relative, rgba, size,
 };
 use itertools::Itertools;
-use protocol::{BackendTx, Session, SshMessage, SystemEvent, open_session_terminal,   };
+use protocol::{BackendTx, Session, SshMessage, SystemEvent, TabId, open_session_terminal,   };
 use serde::{Deserialize, Serialize};
 use vte::ansi::{Attr, Color, Handler, NamedColor, Processor, Rgb, StdSyncHandler};
 
@@ -1729,7 +1729,7 @@ impl TerminalBuilder {
         }
     }
 
-    pub fn subscribe(mut self,session:Session, tab_id: String, events : UnboundedSender<SystemEvent>,cx: &Context<Terminal>) -> Terminal {
+    pub fn subscribe(mut self,session:Session, tab_id: TabId, events : UnboundedSender<SystemEvent>,cx: &Context<Terminal>) -> Terminal {
         let cmd_rx=self.cmd_rx.take().unwrap();
         cx.spawn(async move|this,cx|{
             let runtime=tokio::runtime::Runtime::new().unwrap();
