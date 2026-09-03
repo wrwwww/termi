@@ -1,4 +1,4 @@
-use std::{fmt::Display, sync::Arc};
+use std::{default, fmt::Display, sync::Arc};
 pub mod ssh;
 use anyhow::Context;
 pub mod monitor;
@@ -97,32 +97,27 @@ impl TabId {
     }
 }
 pub enum RuntimeCommand {
-    Terminal(TerminalCommand),
+       Terminal {
+        tab_id: TabId,
+        command: TerminalCommand,
+    },
     Monitor(MonitorCommand),
     Files(FileCommand),
     Disconnect,
 }
 pub enum TerminalCommand {
-    Open {
-        tab_id: TabId,
-        // cols: u16,
-        // rows: u16,
-    },
+    Open ,
 
     Input {
-        tab_id: TabId,
         data: Vec<u8>,
     },
 
     Resize {
-        tab_id: TabId,
         cols: u16,
         rows: u16,
     },
 
-    Close {
-        tab_id: TabId,
-    },
+    Close  ,
 }
 pub enum MonitorCommand {
     Start,
@@ -439,9 +434,13 @@ pub enum Protocol {
 pub enum SessionStatus {
     Connected,
     Idle,
-
     Disconnected,
     Error,
+}
+impl Default for SessionStatus {
+    fn default() -> Self {
+        Self::Disconnected
+    }
 }
 
 /// SSH 会话认证方式。
@@ -604,8 +603,8 @@ pub struct Session {
     /// 当前连接状态。
     ///
     /// 这种运行时状态通常不建议持久化。
-    // #[serde(skip)]
-    // pub status: SessionStatus,
+    #[serde(skip)]
+    pub status: SessionStatus,
 
     /// 延迟历史。
     ///

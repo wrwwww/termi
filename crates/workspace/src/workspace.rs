@@ -33,7 +33,7 @@ use crate::{
     connection_dialog::ConnectionDialog,
     files::FilesPane,
     monitor::MonitorPanel,
-    session_manager::SessionManager,
+    session_manager::SessionStore,
     settings::SettingsView,
     sidebar::Sidebar,
     state::AppState,
@@ -58,6 +58,7 @@ use serde::Deserialize;
 pub struct EditAction {
     pub session_id: Option<SessionId>,
 }
+
 pub struct WorkspaceView {
     state: Entity<AppState>,
     title_bar: Entity<PlatformTitleBar>,
@@ -68,26 +69,24 @@ pub struct WorkspaceView {
     settings_view: Entity<SettingsView>,
     status_bar: Entity<StatusBar>,
     monitor_panel: Entity<MonitorPanel>,
-    session_manager: Entity<SessionManager>,
+    session_manager: Entity<SessionStore>,
+    runtime_manager: Entity<runtime_manager::RuntimeManager>,
 }
 
 impl WorkspaceView {
     pub fn new(state: Entity<AppState>, window: &mut Window, cx: &mut Context<Self>) -> Self {
+        let (event_tx, event_rx) = futures::channel::mpsc::unbounded();
         // Subscribe so any state changes re-render the chrome.
         cx.observe(&state, |_, _, cx| cx.notify()).detach();
-        let session_manager = cx.new(|cx| SessionManager::new(state.clone(), cx));
-        let sidebar = cx.new(|cx| {
-            Sidebar::new(
-                state.clone(),
-                // connection_dialog.clone(),
-                session_manager.clone(),
-                window,
-                cx,
-            )
+        let session_manager = cx.new(|cx| SessionStore::new(state.clone(), cx));
+        let runtime_manager = cx.new(|cx| {
+            let mut runtime = runtime_manager::RuntimeManager::new(event_tx.clone());
+
+            runtime
         });
+        let sidebar = cx.new(|cx| Sidebar::new(state.clone(), session_manager.clone(), window, cx));
 
         let title_bar = cx.new(|cx| PlatformTitleBar::new("title_bar", cx));
-        // let tabsbar = cx.new(|cx| TabsBar::new(state.clone(), session_manager.clone()));
         let terminal_pane = cx.new(|cx| {
             let mut pane = TerminalPane::new(state.clone(), session_manager.clone(), window, cx);
             pane.background_task(cx);
@@ -109,6 +108,7 @@ impl WorkspaceView {
             status_bar,
             monitor_panel,
             session_manager,
+            runtime_manager,
         }
     }
     fn open_connection_dialog(
@@ -171,6 +171,15 @@ impl WorkspaceView {
         cx: &mut Context<Self>,
     ) {
         log::info!("Workspace: open_terminal {}", action.session_id.to_string());
+        let session = self
+            .session_manager
+            .read(cx)
+            .query(action.session_id)
+            .expect("")
+            .clone();
+        self.runtime_manager.update(cx, |manager, cx| {
+            let _ = manager.open_session(session);
+        });
         self.terminal_pane.update(cx, |pane, cx| {
             pane.open_terminal(action, window, cx);
         });

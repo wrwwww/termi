@@ -151,16 +151,30 @@ impl TerminalChannel {
         Self { channel }
     }
 
-    // pub async fn write(&mut self, data: &[u8]) -> Result<()> {
-    //     self.channel
-    //         .data(data)
-    //         .await
-    //         .context("向 SSH terminal channel 写入数据失败")?;
-    //     Ok(())
-    // }
+    pub async fn write(&mut self, data: &[u8]) -> Result<()> {
+        self.channel
+            .data(data)
+            .await
+            .context("向 SSH terminal channel 写入数据失败")?;
+        Ok(())
+    }
 
     pub async fn read(&mut self) -> Option<ChannelMsg> {
         self.channel.wait().await
+    }
+    pub async fn window_change(&mut self, cols: u32, rows: u32) -> Result<()> {
+        self.channel
+            .window_change(cols, rows, 0, 0)
+            .await
+            .context("向 SSH terminal channel 发送 window change 失败")?;
+        Ok(())
+    }
+    pub async fn eof(&mut self) -> Result<()> {
+        self.channel
+            .eof()
+            .await
+            .context("向 SSH terminal channel 发送 EOF 失败")?;
+        Ok(())
     }
 }
 pub struct CommandOutput {

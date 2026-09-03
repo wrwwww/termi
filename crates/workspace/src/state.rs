@@ -3,20 +3,26 @@
 //! Held inside a single `Entity<AppState>` that views observe and mutate
 //! via GPUI's standard model notification API.
 
-use protocol::{AuthMethod, Session, SessionId, SessionStatus, TabId};
+use futures::channel::mpsc::UnboundedReceiver;
+use gpui::{Context, Entity};
+use protocol::{AuthMethod, RuntimeEvent, Session, SessionId, SessionStatus, TabId};
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
 use strum::{Display, EnumIter, EnumString};
+use utils::collections::HashMap;
 
-#[derive(Clone, Debug, Default, Serialize, Deserialize)]
+use crate::{runtime_manager::RuntimeManager, session_manager::SessionStore};
+
 pub struct AppState {
+    runtime_manager: RuntimeManager,
+    session_store: Entity<SessionStore>,
+
     pub sessions: Vec<Session>,
+
     pub groups: Vec<String>,
-    /// Session ids that currently have a terminal tab. This is deliberately
-    /// runtime-only: reopening the app must not reconnect to hosts silently.
-    #[serde(skip)]
+
     pub open_session_ids: Vec<TabId>,
-    #[serde(skip)]
+
     pub pending_open_session_id: Option<SessionId>,
     pub active_tab_id: Option<TabId>,
     pub active_view: ActiveView,
@@ -208,6 +214,54 @@ impl Default for MonitorWindow {
 }
 
 impl AppState {
+    pub fn start_event_dispatcher(
+        this: Entity<Self>,
+        mut rx: UnboundedReceiver<RuntimeEvent>,
+        cx: &mut Context<Self>,
+    ) {
+        cx.spawn(async move |_, cx| {
+            while let Ok(event) = rx.recv().await {
+                this.update(cx, |app, cx| {
+                    app.dispatch_event(event, cx);
+                });
+            }
+
+            anyhow::Ok(())
+        })
+        .detach();
+    }
+    fn dispatch_event(&mut self, event: RuntimeEvent, cx: &mut Context<Self>) {
+        match event {
+            RuntimeEvent::Connected { session_id } => {
+                log::info!("RuntimeManager: Connected: {:?}", session_id);
+                self.session_store.update(cx, |store, cx| {
+                    if let Some(session) = store.query_mut(session_id) {
+                        session.status = SessionStatus::Connected;
+                    }
+                    cx.notify();
+                });
+            }
+            RuntimeEvent::Disconnected => {
+                log::info!("RuntimeManager: Disconnected");
+            }
+            RuntimeEvent::Error { message } => todo!(),
+            RuntimeEvent::TerminalOutput { tab_id, bytes } => todo!(),
+            RuntimeEvent::TerminalExit { tab_id } => todo!(),
+            RuntimeEvent::MetricsUpdated { metrics } => todo!(),
+            RuntimeEvent::DirectoryListed { path, entries } => todo!(),
+            RuntimeEvent::TransferStarted { transfer_id } => todo!(),
+            RuntimeEvent::TransferProgress {
+                transfer_id,
+                transferred,
+                total,
+            } => todo!(),
+            RuntimeEvent::TransferCompleted { transfer_id } => todo!(),
+            RuntimeEvent::TransferFailed {
+                transfer_id,
+                message,
+            } => todo!(),
+        }
+    }
     fn state_file() -> Option<std::path::PathBuf> {
         std::env::var_os("APPDATA")
             .or_else(|| std::env::var_os("USERPROFILE"))
@@ -271,11 +325,11 @@ impl AppState {
         // again after an application restart.
         let mut persisted = self.clone();
         for session in &mut persisted.sessions {
-            match &mut session.auth {
-                AuthMethod::Password { password } => password.clear(),
-                AuthMethod::PublicKey { passphrase, .. } => *passphrase = None,
-                AuthMethod::Agent | AuthMethod::KeyboardInteractive => {}
-            }
+            // match &mut session.auth {
+            //     AuthMethod::Password { password } => password.clear(),
+            //     AuthMethod::PublicKey { passphrase, .. } => *passphrase = None,
+            //     AuthMethod::Agent | AuthMethod::KeyboardInteractive => {}
+            // }
         }
 
         if std::fs::create_dir_all(parent).is_ok()

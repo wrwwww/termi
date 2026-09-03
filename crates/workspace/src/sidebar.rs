@@ -37,7 +37,7 @@ use std::collections::HashSet;
 use crate::{
     EditAction,
     connection_dialog::ConnectionDialog,
-    session_manager::SessionManager,
+    session_manager::SessionStore,
     state::AppState,
     terminal::{CloseTerminalAction, OpenTerminalAction},
 };
@@ -89,7 +89,7 @@ pub struct Sidebar {
     search_input: Entity<InputState>,
 
     /// SessionManager。
-    session_manager: Entity<SessionManager>,
+    session_manager: Entity<SessionStore>,
 
     /// Sidebar 自己的 focus。
     ///
@@ -107,7 +107,7 @@ pub struct Sidebar {
 impl Sidebar {
     pub fn new(
         state: Entity<AppState>,
-        session_manager: Entity<SessionManager>,
+        session_manager: Entity<SessionStore>,
         window: &mut Window,
         cx: &mut Context<Self>,
     ) -> Self {

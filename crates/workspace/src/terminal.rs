@@ -5,7 +5,7 @@
 //! This reference paints a representative static frame.
 
 use crate::EditAction;
-use crate::{session_manager::SessionManager, state::AppState, welcome::WelcomePage};
+use crate::{session_manager::SessionStore, state::AppState, welcome::WelcomePage};
 use anyhow::Ok;
 use futures::StreamExt;
 use futures::channel::mpsc::{UnboundedReceiver, UnboundedSender, unbounded};
@@ -42,7 +42,7 @@ struct TerminalTab {
 }
 pub struct TerminalPane {
     state: Entity<AppState>,
-    session_manager: Entity<SessionManager>,
+    session_manager: Entity<SessionStore>,
     focus_handle: FocusHandle,
     items: Vec<TerminalTab>,
     active_item_index: usize,
@@ -57,7 +57,7 @@ pub struct TerminalPane {
 impl TerminalPane {
     pub fn new(
         state: Entity<AppState>,
-        session_manager: Entity<SessionManager>,
+        session_manager: Entity<SessionStore>,
         windows: &mut Window,
         cx: &mut Context<Self>,
     ) -> Self {

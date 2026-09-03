@@ -26,7 +26,7 @@
 //!
 //! AuthMethod::KeyboardInteractive
 
-use gpui::{accesskit::Uuid, prelude::FluentBuilder, *};
+use gpui::{prelude::FluentBuilder, *};
 
 use gpui_component::{
     input::{Input, InputState},
@@ -34,13 +34,13 @@ use gpui_component::{
     tab::TabBar,
 };
 
-use protocol::{AuthMethod, Protocol, Session, SessionId};
+use protocol::{AuthMethod, Protocol, Session, SessionId, SessionStatus};
 
 use strum::IntoEnumIterator;
 use theme::{ActiveTheme, Theme};
 
 use crate::{
-    session_manager::SessionManager,
+    session_manager::SessionStore,
     title_bar::{self, PlatformTitleBar},
 };
 
@@ -154,7 +154,7 @@ pub struct ConnectionDialog {
     // ------------------------------------------------------------------------
     // Backend
     // ------------------------------------------------------------------------
-    session_manager: Entity<SessionManager>,
+    session_manager: Entity<SessionStore>,
     validation_error: Option<String>,
 }
 
@@ -166,7 +166,7 @@ impl ConnectionDialog {
     pub fn new(
         window: &mut Window,
         cx: &mut Context<Self>,
-        session_manager: Entity<SessionManager>,
+        session_manager: Entity<SessionStore>,
         session_id: Option<SessionId>,
     ) -> Self {
         let session = session_id
@@ -294,7 +294,7 @@ impl ConnectionDialog {
                 password: String::new(),
             },
 
-            // status: SessionStatus::Disconnected,
+            status: SessionStatus::Disconnected,
             latencies_ms: Vec::new(),
         }
     }
@@ -491,7 +491,7 @@ impl ConnectionDialog {
 
             auth,
 
-            // status: SessionStatus::Disconnected,
+            status: SessionStatus::Disconnected,
             latencies_ms: Vec::new(),
         })
     }

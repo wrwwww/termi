@@ -1,8 +1,10 @@
+use anyhow::Ok;
 use futures::{
     SinkExt, StreamExt,
     channel::mpsc::{UnboundedReceiver, UnboundedSender},
 };
 
+use gpui::{Context, Entity, Task};
 use protocol::{
     RuntimeCommand, RuntimeEvent, Session, SessionId, TabId, TerminalCommand, TransferId,
     ssh::{SftpClient, SshConnection, TerminalChannel},
@@ -12,7 +14,10 @@ use russh::ChannelMsg;
 
 use utils::collections::HashMap;
 
-use crate::{monitor_manager::MonitorRuntime, transfer_manager::TransferRuntime};
+use crate::{
+    monitor_manager::MonitorRuntime, session_manager::SessionStore,
+    transfer_manager::TransferRuntime,
+};
 
 // ============================================================
 // RuntimeManager
@@ -20,41 +25,91 @@ use crate::{monitor_manager::MonitorRuntime, transfer_manager::TransferRuntime};
 
 pub struct RuntimeManager {
     runtimes: HashMap<SessionId, SessionRuntimeHandle>,
+    event_tx: UnboundedSender<RuntimeEvent>,
+    event_loop_task: Task<Result<(), anyhow::Error>>,
 }
 
 impl RuntimeManager {
-    pub fn new() -> Self {
+    pub fn new(event_tx: UnboundedSender<RuntimeEvent>) -> Self {
         Self {
             runtimes: HashMap::default(),
+            event_tx,
+            event_loop_task: Task::ready(Ok(())),
         }
     }
+    // pub async fn background_task(
+    //     &mut self,
+    //     mut event_rx: UnboundedReceiver<RuntimeEvent>,
+    //     cx: &mut Context<'_, RuntimeManager>,
+    // ) {
+    //     self.event_loop_task = cx.spawn(async move |this, cx| {
+    //         while let Ok(event) = event_rx.recv().await {
+    //             this.update(cx, |this, cx| {
+    //                 this.process_event(event, cx);
+    //             })
+    //             .unwrap();
+    //         }
+    //         anyhow::Ok(())
+    //     });
+    // }
 
-    pub async fn open(&mut self, session: Session) -> anyhow::Result<SessionRuntimeHandle> {
-        let (runtime, handle, event_rx) = SessionRuntime::new(session.clone());
+    pub async fn open_session(&mut self, session: Session) -> anyhow::Result<TabId> {
+        let runtime = self.get_or_create(session.clone()).await?;
 
-        let session_id = session.id.clone();
+        let tab_id = TabId::new();
 
-        self.runtimes.insert(session_id, handle.clone());
+        runtime.open_terminal(tab_id.clone());
 
-        // 启动 Runtime 主循环
-        tokio::spawn(async move {
-            runtime.run().await;
-        });
-
-        // event_rx 后面可以交给你的 GPUI / EventDispatcher
-        //
-        // 例如：
-        //
-        // tokio::spawn(async move {
-        //     while let Some(event) = event_rx.next().await {
-        //         ...
-        //     }
-        // });
-
-        let _ = event_rx;
-
-        Ok(handle)
+        Ok(tab_id)
     }
+    pub async fn get_or_create(
+        &mut self,
+        session: Session,
+    ) -> anyhow::Result<SessionRuntimeHandle> {
+        let session_id = session.id.clone();
+        if let None = self.runtimes.get(&session_id) {
+            let (runtime, handle) = SessionRuntime::new(session.clone(), self.event_tx.clone());
+            self.runtimes.insert(session_id, handle);
+            // 启动 Runtime 主循环
+            tokio::spawn(async move {
+                runtime.run().await;
+            });
+        }
+        if let Some(handle) = self.runtimes.get(&session_id) {
+            return Ok(handle.clone());
+        }
+        anyhow::bail!("Session not found")
+    }
+    // pub async fn open_terminal(
+    //     &mut self,
+    //     tab_id: TabId,
+    //     session: Session,
+    // ) -> anyhow::Result<SessionRuntimeHandle> {
+    //     let (runtime, handle, event_rx) = SessionRuntime::new(session.clone());
+
+    //     let session_id = session.id.clone();
+
+    //     self.runtimes.insert(session_id, handle.clone());
+
+    //     // 启动 Runtime 主循环
+    //     tokio::spawn(async move {
+    //         runtime.run().await;
+    //     });
+
+    //     // event_rx 后面可以交给你的 GPUI / EventDispatcher
+    //     //
+    //     // 例如：
+    //     //
+    //     // tokio::spawn(async move {
+    //     //     while let Some(event) = event_rx.next().await {
+    //     //         ...
+    //     //     }
+    //     // });
+
+    //     let _ = event_rx;
+
+    //     Ok(handle)
+    // }
 
     pub fn get(&self, session_id: &SessionId) -> Option<SessionRuntimeHandle> {
         self.runtimes.get(session_id).cloned()
@@ -83,27 +138,32 @@ impl SessionRuntimeHandle {
     pub fn new(tx: UnboundedSender<RuntimeCommand>) -> Self {
         Self { tx }
     }
+    pub fn open_terminal(&self, tab_id: TabId) {
+        let _ = self.tx.unbounded_send(RuntimeCommand::Terminal {
+            tab_id,
+            command: TerminalCommand::Open,
+        });
+    }
 
-    pub fn terminal_input(&self, data: Vec<u8>) {
-        let _ = self
-            .tx
-            .unbounded_send(RuntimeCommand::Terminal(TerminalCommand::Input { data }));
+    pub fn terminal_input(&self, tab_id: TabId, data: Vec<u8>) {
+        let _ = self.tx.unbounded_send(RuntimeCommand::Terminal {
+            tab_id,
+            command: TerminalCommand::Input { data },
+        });
     }
 
     pub fn terminal_resize(&self, tab_id: TabId, cols: u16, rows: u16) {
-        let _ = self
-            .tx
-            .unbounded_send(RuntimeCommand::Terminal(TerminalCommand::Resize {
-                tab_id,
-                cols,
-                rows,
-            }));
+        let _ = self.tx.unbounded_send(RuntimeCommand::Terminal {
+            tab_id,
+            command: TerminalCommand::Resize { cols, rows },
+        });
     }
 
     pub fn terminal_close(&self, tab_id: TabId) {
-        let _ = self
-            .tx
-            .unbounded_send(RuntimeCommand::Terminal(TerminalCommand::Close { tab_id }));
+        let _ = self.tx.unbounded_send(RuntimeCommand::Terminal {
+            tab_id,
+            command: TerminalCommand::Close,
+        });
     }
 
     pub fn start_monitor(&self) {
@@ -175,7 +235,9 @@ impl TerminalHandle {
         Self { cmd_tx }
     }
 
-    pub fn input(&self, data: Vec<u8>) {}
+    pub fn input(&self, data: Vec<u8>) {
+        let _ = self.cmd_tx.unbounded_send(TerminalCommand::Input { data });
+    }
 }
 
 // ============================================================
@@ -183,10 +245,13 @@ impl TerminalHandle {
 // ============================================================
 
 impl SessionRuntime {
-    pub fn new(session: Session) -> (Self, SessionRuntimeHandle, UnboundedReceiver<RuntimeEvent>) {
+    pub fn new(
+        session: Session,
+        event_tx: UnboundedSender<RuntimeEvent>,
+    ) -> (Self, SessionRuntimeHandle) {
         let (command_tx, command_rx) = futures::channel::mpsc::unbounded();
 
-        let (event_tx, event_rx) = futures::channel::mpsc::unbounded();
+        // let (event_tx, event_rx) = futures::channel::mpsc::unbounded();
 
         let runtime = Self {
             session,
@@ -208,7 +273,7 @@ impl SessionRuntime {
 
         let handle = SessionRuntimeHandle::new(command_tx);
 
-        (runtime, handle, event_rx)
+        (runtime, handle)
     }
 
     // ========================================================
@@ -266,8 +331,8 @@ impl SessionRuntime {
             // ------------------------------------------------
             // Terminal
             // ------------------------------------------------
-            RuntimeCommand::Terminal(command) => {
-                self.handle_terminal_command(command).await?;
+            RuntimeCommand::Terminal { tab_id, command } => {
+                self.handle_terminal_command(tab_id, command).await?;
             }
 
             // ------------------------------------------------
@@ -301,52 +366,51 @@ impl SessionRuntime {
     // Terminal
     // ========================================================
 
-    async fn handle_terminal_command(&mut self, command: TerminalCommand) -> anyhow::Result<()> {
+    async fn handle_terminal_command(
+        &mut self,
+        tab_id: TabId,
+        command: TerminalCommand,
+    ) -> anyhow::Result<()> {
         match command {
             // ------------------------------------------------
             // 打开 Terminal
             // ------------------------------------------------
-            TerminalCommand::Open { tab_id } => {
+            TerminalCommand::Open => {
                 self.open_terminal(tab_id).await?;
             }
 
             // ------------------------------------------------
             // 输入
             // ------------------------------------------------
-            TerminalCommand::Input { tab_id, data } => {
+            TerminalCommand::Input { data } => {
                 let terminal = self
                     .terminals
                     .get(&tab_id)
                     .ok_or_else(|| anyhow::anyhow!("Terminal 不存在: {:?}", tab_id))?;
 
                 let _ = terminal.input(data);
-                // .cmd_tx
-                // .unbounded_send(TerminalCommand::Input { tab_id, data });
             }
 
             // ------------------------------------------------
             // Resize
             // ------------------------------------------------
-            TerminalCommand::Resize { tab_id, cols, rows } => {
+            TerminalCommand::Resize { cols, rows } => {
                 let terminal = self
                     .terminals
                     .get(&tab_id)
                     .ok_or_else(|| anyhow::anyhow!("Terminal 不存在: {:?}", tab_id))?;
 
-                let _ =
-                    terminal
-                        .cmd_tx
-                        .unbounded_send(TerminalCommand::Resize { tab_id, cols, rows });
+                let _ = terminal
+                    .cmd_tx
+                    .unbounded_send(TerminalCommand::Resize { cols, rows });
             }
 
             // ------------------------------------------------
             // Close
             // ------------------------------------------------
-            TerminalCommand::Close { tab_id } => {
+            TerminalCommand::Close => {
                 if let Some(terminal) = self.terminals.remove(&tab_id) {
-                    let _ = terminal
-                        .cmd_tx
-                        .unbounded_send(TerminalCommand::Close { tab_id });
+                    let _ = terminal.cmd_tx.unbounded_send(TerminalCommand::Close);
                 }
             }
         }
@@ -468,9 +532,7 @@ impl SessionRuntime {
     async fn shutdown(&mut self) {
         // 关闭所有 Terminal
         for (_, terminal) in self.terminals.drain() {
-            let _ = terminal
-                .cmd_tx
-                .unbounded_send(TerminalCommand::Close { tab_id: todo!() });
+            let _ = terminal.cmd_tx.unbounded_send(TerminalCommand::Close);
         }
 
         self.monitor = None;
@@ -522,7 +584,7 @@ async fn run_terminal(
 
                         if let Err(error) =
                             terminal
-                                .data_bytes(data)
+                                .write(&data)
                                 .await
                         {
                             log::error!(
@@ -536,7 +598,6 @@ async fn run_terminal(
 
                     Some(
                         TerminalCommand::Resize {
-                            tab_id: _,
                             cols,
                             rows,
                         }
@@ -546,9 +607,7 @@ async fn run_terminal(
                             terminal
                                 .window_change(
                                     cols.into(),
-                                    rows.into(),
-                                    0,
-                                    0,
+                                    rows.into()
                                 )
                                 .await
                         {
@@ -560,13 +619,11 @@ async fn run_terminal(
 
 
                     Some(
-                        TerminalCommand::Close {
-                            tab_id: _,
-                        }
+                        TerminalCommand::Close
                     )
                     | None => {
 
-                        terminal.eof();
+                        terminal.eof().await.ok();
 
                         break;
                     }
@@ -644,9 +701,7 @@ async fn run_terminal(
 
                         let _ =
                             event_tx.unbounded_send(
-                                RuntimeEvent::TerminalClosed {
-                                    tab_id: tab_id.clone(),
-                                }
+                                RuntimeEvent::TerminalExit { tab_id }
                             );
 
                         break;
@@ -655,6 +710,46 @@ async fn run_terminal(
 
                     _ => {}
                 }
+            }
+        }
+    }
+}
+
+pub struct EventDispatcher {
+    event_rx: UnboundedReceiver<RuntimeEvent>,
+    session_manager: Entity<SessionStore>,
+}
+impl EventDispatcher {
+    pub fn new(
+        event_rx: UnboundedReceiver<RuntimeEvent>,
+        session_manager: Entity<SessionStore>,
+    ) -> Self {
+        Self {
+            event_rx,
+            session_manager,
+        }
+    }
+    pub async fn run(&mut self) {
+        while let Some(event) = self.event_rx.next().await {
+            match event {
+                RuntimeEvent::Connected { session_id } => {}
+                RuntimeEvent::Disconnected => todo!(),
+                RuntimeEvent::Error { message } => todo!(),
+                RuntimeEvent::TerminalOutput { tab_id, bytes } => todo!(),
+                RuntimeEvent::TerminalExit { tab_id } => todo!(),
+                RuntimeEvent::MetricsUpdated { metrics } => todo!(),
+                RuntimeEvent::DirectoryListed { path, entries } => todo!(),
+                RuntimeEvent::TransferStarted { transfer_id } => todo!(),
+                RuntimeEvent::TransferProgress {
+                    transfer_id,
+                    transferred,
+                    total,
+                } => todo!(),
+                RuntimeEvent::TransferCompleted { transfer_id } => todo!(),
+                RuntimeEvent::TransferFailed {
+                    transfer_id,
+                    message,
+                } => todo!(),
             }
         }
     }
