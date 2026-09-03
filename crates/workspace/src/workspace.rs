@@ -19,7 +19,7 @@ pub mod item;
 pub mod monitor;
 pub mod monitor_manager;
 pub mod runtime_manager;
-pub mod session_manager;
+pub mod session_store;
 pub mod settings;
 pub mod sidebar;
 pub mod state;
@@ -33,7 +33,7 @@ use crate::{
     connection_dialog::ConnectionDialog,
     files::FilesPane,
     monitor::MonitorPanel,
-    session_manager::SessionStore,
+    session_store::SessionStore,
     settings::SettingsView,
     sidebar::Sidebar,
     state::AppState,

@@ -37,7 +37,7 @@ use std::collections::HashSet;
 use crate::{
     EditAction,
     connection_dialog::ConnectionDialog,
-    session_manager::SessionStore,
+    session_store::SessionStore,
     state::AppState,
     terminal::{CloseTerminalAction, OpenTerminalAction},
 };

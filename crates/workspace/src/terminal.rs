@@ -5,7 +5,7 @@
 //! This reference paints a representative static frame.
 
 use crate::EditAction;
-use crate::{session_manager::SessionStore, state::AppState, welcome::WelcomePage};
+use crate::{session_store::SessionStore, state::AppState, welcome::WelcomePage};
 use anyhow::Ok;
 use futures::StreamExt;
 use futures::channel::mpsc::{UnboundedReceiver, UnboundedSender, unbounded};

@@ -40,7 +40,7 @@ use strum::IntoEnumIterator;
 use theme::{ActiveTheme, Theme};
 
 use crate::{
-    session_manager::SessionStore,
+    session_store::SessionStore,
     title_bar::{self, PlatformTitleBar},
 };
 

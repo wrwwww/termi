@@ -11,7 +11,7 @@ use std::collections::BTreeMap;
 use strum::{Display, EnumIter, EnumString};
 use utils::collections::HashMap;
 
-use crate::{runtime_manager::RuntimeManager, session_manager::SessionStore};
+use crate::{runtime_manager::RuntimeManager, session_store::SessionStore};
 
 pub struct AppState {
     runtime_manager: RuntimeManager,
@@ -309,6 +309,8 @@ impl AppState {
             monitor_window: MonitorWindow::FiveMin,
             monitor_collapsed: false,
             monitor_paused: false,
+            runtime_manager: todo!(),
+            session_store: todo!(),
         }
     }
 
