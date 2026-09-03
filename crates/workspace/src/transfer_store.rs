@@ -1,5 +1,5 @@
 use protocol::{SessionId, TransferId};
-
+pub struct TransferStore {}
 pub struct TransferRuntime {
     pub id: TransferId,
 

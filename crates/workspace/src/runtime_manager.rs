@@ -15,7 +15,7 @@ use russh::ChannelMsg;
 use utils::collections::HashMap;
 
 use crate::{
-    monitor_manager::MonitorRuntime, session_store::SessionStore, transfer_manager::TransferRuntime,
+    monitor_store::MonitorRuntime, session_store::SessionStore, transfer_store::TransferRuntime,
 };
 
 // ============================================================
@@ -713,7 +713,6 @@ async fn run_terminal(
         }
     }
 }
-
 pub struct EventDispatcher {
     event_rx: UnboundedReceiver<RuntimeEvent>,
     session_manager: Entity<SessionStore>,

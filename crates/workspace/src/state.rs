@@ -11,12 +11,17 @@ use std::collections::BTreeMap;
 use strum::{Display, EnumIter, EnumString};
 use utils::collections::HashMap;
 
-use crate::{runtime_manager::RuntimeManager, session_store::SessionStore};
+use crate::{
+    monitor_store::MonitorStore, runtime_manager::RuntimeManager, session_store::SessionStore,
+    terminal_store::TerminalStore, transfer_store::TransferStore,
+};
 
 pub struct AppState {
-    runtime_manager: RuntimeManager,
-    session_store: Entity<SessionStore>,
-
+    pub runtime_manager: RuntimeManager,
+    pub session_store: Entity<SessionStore>,
+    pub terminal_store: Entity<TerminalStore>,
+    pub monitor_store: Entity<MonitorStore>,
+    pub transfer_store: Entity<TransferStore>,
     pub sessions: Vec<Session>,
 
     pub groups: Vec<String>,

@@ -17,14 +17,15 @@ pub mod connection_dialog;
 pub mod files;
 pub mod item;
 pub mod monitor;
-pub mod monitor_manager;
+pub mod monitor_store;
 pub mod runtime_manager;
 pub mod session_store;
 pub mod settings;
 pub mod sidebar;
 pub mod state;
 pub mod statusbar;
-pub mod transfer_manager;
+pub mod terminal_store;
+pub mod transfer_store;
 
 pub mod terminal;
 pub mod title_bar;
@@ -43,14 +44,17 @@ use crate::{
 };
 use ::settings::Settings;
 use ::theme::{ActiveTheme, Theme};
-use gpui::*;
+use gpui::{prelude::FluentBuilder, *};
 use gpui_component::{
     Root,
     resizable::{h_resizable, resizable_panel, v_resizable},
+    tab::Tab,
 };
-use protocol::SessionId;
+use protocol::{SessionId, TabId};
 use schemars::JsonSchema;
 use serde::Deserialize;
+use terminal_view::TerminalView;
+use utils::collections::HashMap;
 
 // actions!(workspace, [OpenTerminal, OpenNewSession]);
 #[derive(Clone, Debug, Deserialize, PartialEq, Eq, JsonSchema, Action)]
@@ -63,7 +67,6 @@ pub struct WorkspaceView {
     state: Entity<AppState>,
     title_bar: Entity<PlatformTitleBar>,
     sidebar: Entity<crate::sidebar::Sidebar>,
-    // tabsbar: Entity<TabsBar>,
     terminal_pane: Entity<TerminalPane>,
     files_pane: Entity<FilesPane>,
     settings_view: Entity<SettingsView>,
@@ -71,6 +74,8 @@ pub struct WorkspaceView {
     monitor_panel: Entity<MonitorPanel>,
     session_manager: Entity<SessionStore>,
     runtime_manager: Entity<runtime_manager::RuntimeManager>,
+    tabs: Vec<TabId>,
+    active_tab: Option<TabId>,
 }
 
 impl WorkspaceView {
@@ -195,6 +200,11 @@ impl WorkspaceView {
             pane.close_terminal(action, _window, cx);
         });
     }
+    fn activate_tab(&mut self, tab_id: TabId, _window: &mut Window, cx: &mut Context<Self>) {
+        self.active_tab = Some(tab_id);
+
+        cx.notify();
+    }
     pub fn edit_session(
         &mut self,
         action: &EditAction,
@@ -202,6 +212,100 @@ impl WorkspaceView {
         cx: &mut Context<Self>,
     ) {
         self.open_connection_dialog(action.session_id, window, cx);
+    }
+    fn render_tab_bar(&mut self, window: &mut Window, cx: &mut Context<Self>) -> AnyElement {
+        let t = cx.theme();
+        let ls = self.tabs;
+        let ls: Vec<&terminal_store::TerminalEntry> = ls
+            .iter()
+            .filter_map(|e| self.state.read(cx).terminal_store.read(cx).get(e))
+            .collect();
+        let active_tab = self.active_tab;
+        div()
+            .id("terminal-tabs")
+            .flex()
+            .flex_row()
+            .items_center()
+            .h(px(36.))
+            // ← 防止 tabs 被压缩
+            .bg(t.colors().background)
+            .border_b_1()
+            .border_color(t.colors().border)
+            .overflow_x_scroll()
+            .when_some(self.active_tab, |e, active_tab| {
+                e.children(self.tabs.iter().map(|tab_id| {
+                    let terminal = self.state.read(cx).terminal_store.read(cx).get(tab_id);
+                    div()
+                        .id(format!("terminal-tab-{}", tab_id))
+                        .flex()
+                        .items_center()
+                        .gap(px(8.))
+                        .px(px(12.))
+                        .h_full()
+                        .border_r_1()
+                        .border_color(t.colors().border)
+                        .bg(if active_tab == *tab_id {
+                            t.colors().element_background
+                        } else {
+                            Hsla::transparent_black()
+                        })
+                        .cursor_pointer()
+                        .on_mouse_down(
+                            MouseButton::Left,
+                            cx.listener(move |this, _event, window, cx| {
+                                this.activate_tab(*tab_id, window, cx);
+                            }),
+                        )
+                        .child(div().size(px(6.)).rounded_full().bg(t.colors().icon_accent))
+                        .child(
+                            div()
+                                .text_size(px(12.5))
+                                .text_color(t.colors().text)
+                                .child(tab.title.clone()),
+                        )
+                        .child(
+                            div()
+                                .id(format!("terminal-tab-close-{}", tab_id.to_string()))
+                                .size(px(18.))
+                                .flex()
+                                .items_center()
+                                .justify_center()
+                                .rounded(px(4.))
+                                .text_color(t.colors().text_placeholder)
+                                .hover(|style| style.bg(t.colors().elevated_surface_background))
+                                .child("×")
+                                .on_mouse_down(
+                                    MouseButton::Left,
+                                    cx.listener(
+                                        move |_this, _event: &MouseDownEvent, window, cx| {
+                                            window.dispatch_action(
+                                                Box::new(CloseTerminalAction {
+                                                    tab_id: tab_id.clone(),
+                                                }),
+                                                cx,
+                                            );
+                                        },
+                                    ),
+                                ),
+                        )
+                }))
+            })
+            .child(
+                div()
+                    .px(px(12.))
+                    .h_full()
+                    .flex()
+                    .items_center()
+                    .text_color(t.colors().text_muted)
+                    .child("+")
+                    .on_mouse_down(
+                        MouseButton::Left,
+                        cx.listener(move |_this, _event, window, cx| {
+                            window.dispatch_action(Box::new(EditAction { session_id: None }), cx);
+                        }),
+                    ),
+            )
+            .into_any_element()
     }
 }
 
@@ -296,6 +400,7 @@ impl Render for WorkspaceView {
                                                 .flex_col()
                                                 .size_full()
                                                 .bg(t.colors().background)
+                                                .child(self.render_tab_bar(windows, cx))
                                                 .child(self.terminal_pane.clone()),
                                         ),
                                     )
@@ -329,4 +434,8 @@ fn menu_button(label: &'static str, t: &Theme) -> impl IntoElement {
         .cursor_pointer()
         .hover(|s| s.bg(t.colors().background).text_color(t.colors().text))
         .child(label)
+}
+
+pub struct ViewRegistry {
+    terminal_views: HashMap<TabId, Entity<TerminalView>>,
 }

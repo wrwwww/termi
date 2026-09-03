@@ -17,7 +17,6 @@ use serde::Deserialize;
 use terminal::{TerminalBounds, TerminalBuilder};
 use terminal_view::TerminalView;
 use theme::{ActiveTheme, Theme};
-use uuid::Uuid;
 #[derive(Clone, Deserialize, PartialEq, JsonSchema, Action)]
 #[action(namespace = workspace)]
 pub struct OpenTerminalAction {
