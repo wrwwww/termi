@@ -1,21 +1,26 @@
+use std::collections::VecDeque;
+
 use anyhow::Ok;
 use futures::{
-    SinkExt, StreamExt,
+    StreamExt,
     channel::mpsc::{UnboundedReceiver, UnboundedSender},
 };
 
-use gpui::{Context, Entity, Task};
+use gpui::Task;
 use protocol::{
     RuntimeCommand, RuntimeEvent, Session, SessionId, TabId, TerminalCommand, TransferId,
-    ssh::{SftpClient, SshConnection, TerminalChannel},
+    ssh::{SshConnection, TerminalChannel},
 };
 
 use russh::ChannelMsg;
 
+use terminal::{Content, Terminal, TerminalBounds, new_term, normalize_terminal_bounds};
 use utils::collections::HashMap;
+use vte::ansi::{Processor, StdSyncHandler};
 
 use crate::{
-    monitor_store::MonitorRuntime, session_store::SessionStore, transfer_store::TransferRuntime,
+    monitor_store::MonitorRuntimeHandle,
+    transfer_store::{SftpRuntimeHandle, TransferRuntimeHandle},
 };
 
 // ============================================================
@@ -36,21 +41,6 @@ impl RuntimeManager {
             event_loop_task: Task::ready(Ok(())),
         }
     }
-    // pub async fn background_task(
-    //     &mut self,
-    //     mut event_rx: UnboundedReceiver<RuntimeEvent>,
-    //     cx: &mut Context<'_, RuntimeManager>,
-    // ) {
-    //     self.event_loop_task = cx.spawn(async move |this, cx| {
-    //         while let Ok(event) = event_rx.recv().await {
-    //             this.update(cx, |this, cx| {
-    //                 this.process_event(event, cx);
-    //             })
-    //             .unwrap();
-    //         }
-    //         anyhow::Ok(())
-    //     });
-    // }
 
     pub async fn open_session(&mut self, session: Session) -> anyhow::Result<TabId> {
         let runtime = self.get_or_create(session.clone()).await?;
@@ -79,36 +69,6 @@ impl RuntimeManager {
         }
         anyhow::bail!("Session not found")
     }
-    // pub async fn open_terminal(
-    //     &mut self,
-    //     tab_id: TabId,
-    //     session: Session,
-    // ) -> anyhow::Result<SessionRuntimeHandle> {
-    //     let (runtime, handle, event_rx) = SessionRuntime::new(session.clone());
-
-    //     let session_id = session.id.clone();
-
-    //     self.runtimes.insert(session_id, handle.clone());
-
-    //     // 启动 Runtime 主循环
-    //     tokio::spawn(async move {
-    //         runtime.run().await;
-    //     });
-
-    //     // event_rx 后面可以交给你的 GPUI / EventDispatcher
-    //     //
-    //     // 例如：
-    //     //
-    //     // tokio::spawn(async move {
-    //     //     while let Some(event) = event_rx.next().await {
-    //     //         ...
-    //     //     }
-    //     // });
-
-    //     let _ = event_rx;
-
-    //     Ok(handle)
-    // }
 
     pub fn get(&self, session_id: &SessionId) -> Option<SessionRuntimeHandle> {
         self.runtimes.get(session_id).cloned()
@@ -199,22 +159,29 @@ impl SessionRuntimeHandle {
 // ============================================================
 
 pub struct SessionRuntime {
+    /// 持久化的 Session 配置
     session: Session,
 
+    /// 接收外部控制命令
     command_rx: UnboundedReceiver<RuntimeCommand>,
 
+    /// 向应用层发送运行时事件
     event_tx: UnboundedSender<RuntimeEvent>,
 
+    /// 一个 Session 对应一个 SSH 长连接
     connection: Option<SshConnection>,
 
-    // 这里保存的是 Handle，不是 Channel
+    /// 当前 Session 创建的 Terminal
     terminals: HashMap<TabId, TerminalHandle>,
 
-    monitor: Option<MonitorRuntime>,
+    /// 监控子系统
+    monitor: Option<MonitorRuntimeHandle>,
 
-    sftp: Option<SftpClient>,
+    /// SFTP 子系统
+    sftp: Option<SftpRuntimeHandle>,
 
-    transfers: HashMap<TransferId, TransferRuntime>,
+    /// 当前进行中的文件传输
+    transfers: HashMap<TransferId, TransferRuntimeHandle>,
 }
 
 // ============================================================
@@ -440,9 +407,37 @@ impl SessionRuntime {
 
         let (cmd_tx, cmd_rx) = futures::channel::mpsc::unbounded();
 
-        let handle = TerminalHandle::new(cmd_tx);
+        // let terminal_bounds = normalize_terminal_bounds(TerminalBounds::default());
+        // // 放到alac 中的消息通道，用来把alacrity term中解析出来的事件响应给前端ui界面处理
+        // let (events_tx, events_rx) = futures::channel::mpsc::unbounded();
+        // let term = new_term(terminal_bounds, events_tx.clone());
 
+        // let handle = TerminalHandle {
+        //     term,
+        //     event_loop_task: Task::ready(Ok(())),
+        //     id: String::new(),
+        //     title: String::new(),
+        //     dynamic_title: String::new(),
+        //     status: String::new(),
+        //     connected: false,
+        //     last_content: Content {
+        //         terminal_bounds,
+        //         ..Default::default()
+        //     },
+        //     disconnected_reason: None,
+        //     backend_generation: 0,
+        //     backend_initialized: false,
+        //     output_processor: Processor::<StdSyncHandler>::new(),
+        //     events: VecDeque::with_capacity(10),
+        //     keyboard_input_sent: false,
+        //     init_command_startup_marker: None,
+        //     init_command_startup_tx: None,
+
+        //     scroll_pixel_y: 0.,
+        //     backend: cmd_tx,
+        // };
         // Runtime 只保存 Handle
+        let handle = TerminalHandle::new(cmd_tx);
         self.terminals.insert(tab_id.clone(), handle);
 
         let event_tx = self.event_tx.clone();
@@ -709,45 +704,6 @@ async fn run_terminal(
 
                     _ => {}
                 }
-            }
-        }
-    }
-}
-pub struct EventDispatcher {
-    event_rx: UnboundedReceiver<RuntimeEvent>,
-    session_manager: Entity<SessionStore>,
-}
-impl EventDispatcher {
-    pub fn new(
-        event_rx: UnboundedReceiver<RuntimeEvent>,
-        session_manager: Entity<SessionStore>,
-    ) -> Self {
-        Self {
-            event_rx,
-            session_manager,
-        }
-    }
-    pub async fn run(&mut self) {
-        while let Some(event) = self.event_rx.next().await {
-            match event {
-                RuntimeEvent::Connected { session_id } => {}
-                RuntimeEvent::Disconnected => todo!(),
-                RuntimeEvent::Error { message } => todo!(),
-                RuntimeEvent::TerminalOutput { tab_id, bytes } => todo!(),
-                RuntimeEvent::TerminalExit { tab_id } => todo!(),
-                RuntimeEvent::MetricsUpdated { metrics } => todo!(),
-                RuntimeEvent::DirectoryListed { path, entries } => todo!(),
-                RuntimeEvent::TransferStarted { transfer_id } => todo!(),
-                RuntimeEvent::TransferProgress {
-                    transfer_id,
-                    transferred,
-                    total,
-                } => todo!(),
-                RuntimeEvent::TransferCompleted { transfer_id } => todo!(),
-                RuntimeEvent::TransferFailed {
-                    transfer_id,
-                    message,
-                } => todo!(),
             }
         }
     }

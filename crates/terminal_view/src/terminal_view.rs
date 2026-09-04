@@ -38,12 +38,7 @@ impl Focusable for TerminalView {
 }
 
 impl TerminalView {
-    pub fn new(
-        terminal: Entity<Terminal>,
-        window: &mut Window,
-        cx: &mut Context<Self>,
-        // config_manager: Entity<AppState>,
-    ) -> Self {
+    pub fn new(terminal: Entity<Terminal>, window: &mut Window, cx: &mut Context<Self>) -> Self {
         let focus_handle = cx.focus_handle();
         let focus_in = cx.on_focus_in(&focus_handle, window, |terminal_view, window, cx| {
             terminal_view.focus_in(window, cx);
@@ -76,7 +71,6 @@ impl TerminalView {
         ];
         Self {
             scroll_top: Pixels::ZERO,
-
             terminal,
             ime_state: None,
             focus_handle,

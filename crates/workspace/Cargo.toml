@@ -37,5 +37,7 @@ tokio.workspace = true
 protocol.workspace=true
 uuid.workspace=true
 russh.workspace=true
+alacritty_terminal.workspace = true
+vte.workspace = true 
 [target.'cfg(windows)'.dependencies]
 windows.workspace = true

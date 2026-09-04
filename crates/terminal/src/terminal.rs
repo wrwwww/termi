@@ -39,7 +39,7 @@ use gpui::{
     Window, accesskit::Uuid, div, fill, font, hsla, point, px, relative, rgba, size,
 };
 use itertools::Itertools;
-use protocol::{BackendTx, Session, SshMessage, SystemEvent, TabId, open_session_terminal,   };
+use protocol::{BackendTx, Session, SshMessage, SystemEvent, TabId, TerminalCommand, open_session_terminal,   };
 use serde::{Deserialize, Serialize};
 use vte::ansi::{Attr, Color, Handler, NamedColor, Processor, Rgb, StdSyncHandler};
 
@@ -61,15 +61,16 @@ pub struct Terminal {
     /// before the new backend has started producing output.
     pub backend_initialized: bool,
     // pub session: Option<Session>,
-    output_processor: Processor,
-    events: VecDeque<InternalEvent>,
-    term: Arc<FairMutex<Term<TerminalListener>>>,
-    keyboard_input_sent: bool,
-    init_command_startup_marker: Option<String>,
-    init_command_startup_tx: Option<Sender<()>>,
+    pub output_processor: Processor,
+   pub events: VecDeque<InternalEvent>,
+   pub term: Arc<FairMutex<Term<TerminalListener>>>,
+   pub keyboard_input_sent: bool,
+   pub init_command_startup_marker: Option<String>,
+ pub   init_command_startup_tx: Option<Sender<()>>,
 
-    event_loop_task: Task<Result<(), anyhow::Error>>,
-    pub backend: std::sync::Arc<std::sync::Mutex<BackendTx>>,
+ pub   event_loop_task: Task<Result<(), anyhow::Error>>,
+    pub backend: UnboundedSender<TerminalCommand>,
+    // pub backend: std::sync::Arc<std::sync::Mutex<BackendTx>>,
     pub scroll_pixel_y: f32,
     // backend: std::sync::Arc<std::sync::Mutex<BackendTx>>,
     // pub(crate) highlight_cache: std::cell::RefCell<
@@ -632,7 +633,7 @@ impl EventListener for TerminalListener {
     }
 }
 
-fn new_term(
+pub fn new_term(
     terminal_bounds: TerminalBounds,
     events_tx: UnboundedSender<PtyEvent>,
 ) -> Arc<FairMutex<Term<TerminalListener>>> {
@@ -884,7 +885,7 @@ impl Default for TerminalBounds {
     }
 }
 
-fn normalize_terminal_bounds(mut bounds: TerminalBounds) -> TerminalBounds {
+pub fn normalize_terminal_bounds(mut bounds: TerminalBounds) -> TerminalBounds {
     bounds.bounds.size.height = cmp::max(bounds.line_height, bounds.height());
     bounds.bounds.size.width = cmp::max(bounds.cell_width, bounds.width());
     bounds
@@ -1730,14 +1731,14 @@ impl TerminalBuilder {
     }
 
     pub fn subscribe(mut self,session:Session, tab_id: TabId, events : UnboundedSender<SystemEvent>,cx: &Context<Terminal>) -> Terminal {
-        let cmd_rx=self.cmd_rx.take().unwrap();
-        cx.spawn(async move|this,cx|{
-            let runtime=tokio::runtime::Runtime::new().unwrap();
-            runtime.spawn(async move {
-                 open_session_terminal(events.clone(), session, tab_id, cmd_rx).await;
-            }).await.unwrap();
+        // let cmd_rx=self.cmd_rx.take().unwrap();
+        // cx.spawn(async move|this,cx|{
+        //     let runtime=tokio::runtime::Runtime::new().unwrap();
+        //     runtime.spawn(async move {
+        //          open_session_terminal(events.clone(), session, tab_id, cmd_rx).await;
+        //     }).await.unwrap();
      
-        }).detach();  
+        // }).detach();  
         //Event loop
         self.terminal.event_loop_task = cx.spawn(async move |terminal, cx| {
             while let Some(event) = self.events_rx.next().await {

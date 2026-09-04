@@ -48,7 +48,6 @@ use gpui::{prelude::FluentBuilder, *};
 use gpui_component::{
     Root,
     resizable::{h_resizable, resizable_panel, v_resizable},
-    tab::Tab,
 };
 use protocol::{SessionId, TabId};
 use schemars::JsonSchema;
@@ -76,6 +75,7 @@ pub struct WorkspaceView {
     runtime_manager: Entity<runtime_manager::RuntimeManager>,
     tabs: Vec<TabId>,
     active_tab: Option<TabId>,
+    views: ViewRegistry,
 }
 
 impl WorkspaceView {
@@ -84,11 +84,7 @@ impl WorkspaceView {
         // Subscribe so any state changes re-render the chrome.
         cx.observe(&state, |_, _, cx| cx.notify()).detach();
         let session_manager = cx.new(|cx| SessionStore::new(state.clone(), cx));
-        let runtime_manager = cx.new(|cx| {
-            let mut runtime = runtime_manager::RuntimeManager::new(event_tx.clone());
-
-            runtime
-        });
+        let runtime_manager = cx.new(|cx| runtime_manager::RuntimeManager::new(event_tx.clone()));
         let sidebar = cx.new(|cx| Sidebar::new(state.clone(), session_manager.clone(), window, cx));
 
         let title_bar = cx.new(|cx| PlatformTitleBar::new("title_bar", cx));
@@ -114,6 +110,9 @@ impl WorkspaceView {
             monitor_panel,
             session_manager,
             runtime_manager,
+            tabs: vec![],
+            active_tab: None,
+            views: todo!(),
         }
     }
     fn open_connection_dialog(
@@ -182,9 +181,20 @@ impl WorkspaceView {
             .query(action.session_id)
             .expect("")
             .clone();
-        self.runtime_manager.update(cx, |manager, cx| {
-            let _ = manager.open_session(session);
+        self.runtime_manager.update(
+            cx,
+            |manager, cx| {
+                if let Ok(tab_id) = manager.open_session(session) {}
+            },
+        );
+        // ① 创建 TerminalView
+        // let view = cx.new(|cx| TerminalView::new(tab_id.clone(), cx));
+
+        // ② 注册 View
+        self.views.update(cx, |registry, _| {
+            registry.register_terminal(tab_id.clone(), view);
         });
+
         self.terminal_pane.update(cx, |pane, cx| {
             pane.open_terminal(action, window, cx);
         });
@@ -215,12 +225,7 @@ impl WorkspaceView {
     }
     fn render_tab_bar(&mut self, window: &mut Window, cx: &mut Context<Self>) -> AnyElement {
         let t = cx.theme();
-        let ls = self.tabs;
-        let ls: Vec<&terminal_store::TerminalEntry> = ls
-            .iter()
-            .filter_map(|e| self.state.read(cx).terminal_store.read(cx).get(e))
-            .collect();
-        let active_tab = self.active_tab;
+
         div()
             .id("terminal-tabs")
             .flex()
@@ -234,7 +239,7 @@ impl WorkspaceView {
             .overflow_x_scroll()
             .when_some(self.active_tab, |e, active_tab| {
                 e.children(self.tabs.iter().map(|tab_id| {
-                    let terminal = self.state.read(cx).terminal_store.read(cx).get(tab_id);
+                    let tab_id = tab_id.clone(); // 复制一份
                     div()
                         .id(format!("terminal-tab-{}", tab_id))
                         .flex()
@@ -244,7 +249,7 @@ impl WorkspaceView {
                         .h_full()
                         .border_r_1()
                         .border_color(t.colors().border)
-                        .bg(if active_tab == *tab_id {
+                        .bg(if active_tab == tab_id {
                             t.colors().element_background
                         } else {
                             Hsla::transparent_black()
@@ -253,7 +258,7 @@ impl WorkspaceView {
                         .on_mouse_down(
                             MouseButton::Left,
                             cx.listener(move |this, _event, window, cx| {
-                                this.activate_tab(*tab_id, window, cx);
+                                this.activate_tab(tab_id, window, cx);
                             }),
                         )
                         .child(div().size(px(6.)).rounded_full().bg(t.colors().icon_accent))
@@ -261,7 +266,10 @@ impl WorkspaceView {
                             div()
                                 .text_size(px(12.5))
                                 .text_color(t.colors().text)
-                                .child(tab.title.clone()),
+                                .when_some(
+                                    self.state.read(cx).terminal_store.read(cx).get(&tab_id),
+                                    |e, terminal| e.child(terminal.title.clone()),
+                                ), // .when_none(&terminal, |e| e.child(tab_id.to_string())),
                         )
                         .child(
                             div()
@@ -306,6 +314,15 @@ impl WorkspaceView {
                     ),
             )
             .into_any_element()
+    }
+    fn render_content(&self, _window: &mut Window, _cx: &mut Context<Self>) -> impl IntoElement {
+        if let Some(tab_id) = self.active_tab {
+            if let Some(view) = self.views.get_terminal(&tab_id) {
+                return div().size_full().child(view.clone()).into_any_element();
+            }
+        }
+
+        div().size_full().into_any_element()
     }
 }
 
@@ -401,7 +418,8 @@ impl Render for WorkspaceView {
                                                 .size_full()
                                                 .bg(t.colors().background)
                                                 .child(self.render_tab_bar(windows, cx))
-                                                .child(self.terminal_pane.clone()),
+                                                .child(self.render_content(windows, cx)),
+                                            // .child(self.terminal_pane.clone()),
                                         ),
                                     )
                                     .child(
@@ -438,4 +456,21 @@ fn menu_button(label: &'static str, t: &Theme) -> impl IntoElement {
 
 pub struct ViewRegistry {
     terminal_views: HashMap<TabId, Entity<TerminalView>>,
+}
+impl ViewRegistry {
+    pub fn new() -> Self {
+        Self {
+            terminal_views: HashMap::default(),
+        }
+    }
+
+    pub fn register_terminal(&mut self, tab_id: TabId, view: Entity<TerminalView>) {
+        self.terminal_views.insert(tab_id, view);
+    }
+    pub fn get_terminal(&self, tab_id: &TabId) -> Option<&Entity<TerminalView>> {
+        self.terminal_views.get(tab_id)
+    }
+    pub fn remove_terminal(&mut self, tab_id: &TabId) -> Option<Entity<TerminalView>> {
+        self.terminal_views.remove(tab_id)
+    }
 }

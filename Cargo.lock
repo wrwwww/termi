@@ -9592,6 +9592,7 @@ dependencies = [
 name = "workspace"
 version = "0.1.0"
 dependencies = [
+ "alacritty_terminal",
  "anyhow",
  "futures",
  "gpui",
@@ -9617,6 +9618,7 @@ dependencies = [
  "ui",
  "utils",
  "uuid",
+ "vte",
  "windows 0.61.3",
 ]
 

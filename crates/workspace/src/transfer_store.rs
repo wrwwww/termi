@@ -1,6 +1,6 @@
 use protocol::{SessionId, TransferId};
 pub struct TransferStore {}
-pub struct TransferRuntime {
+pub struct TransferRuntimeHandle {
     pub id: TransferId,
 
     pub session_id: SessionId,
@@ -27,3 +27,4 @@ pub enum TransferStatus {
     Failed,
     Cancelled,
 }
+pub struct SftpRuntimeHandle {}
