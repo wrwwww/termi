@@ -21,7 +21,16 @@ pub struct MetricSnapshot {
     pub network_tx: u64,
 }
 pub struct MonitorStore {
-    current: Option<MetricSnapshot>,
+    pub current: Option<MetricSnapshot>,
 
-    history: VecDeque<MetricSnapshot>,
+    pub history: VecDeque<MetricSnapshot>,
+}
+
+impl MonitorStore {
+    pub fn new() -> Self {
+        Self {
+            current: None,
+            history: VecDeque::new(),
+        }
+    }
 }

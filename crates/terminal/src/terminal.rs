@@ -39,13 +39,85 @@ use gpui::{
     Window, accesskit::Uuid, div, fill, font, hsla, point, px, relative, rgba, size,
 };
 use itertools::Itertools;
-use protocol::{BackendTx, Session, SshMessage, SystemEvent, TabId, TerminalCommand, open_session_terminal,   };
+use protocol::{
+    BackendTx, RuntimeCommand, Session, SshMessage, SystemEvent, TabId, TerminalCommand,
+    open_session_terminal,
+};
 use serde::{Deserialize, Serialize};
 use vte::ansi::{Attr, Color, Handler, NamedColor, Processor, Rgb, StdSyncHandler};
 
 use crate::alacritty::{last_non_empty_lines, window_size_from_terminal_bounds};
+// ============================================================
+// SessionRuntimeHandle
+//
+// UI 持有这个 Handle。
+// UI 不直接接触 SessionRuntime / SSH Channel。
+// ============================================================
+
+#[derive(Clone)]
+pub struct SessionRuntimeHandle {
+    tx: UnboundedSender<RuntimeCommand>,
+}
+
+impl SessionRuntimeHandle {
+    pub fn new(tx: UnboundedSender<RuntimeCommand>) -> Self {
+        Self { tx }
+    }
+    pub fn open_terminal(&self, tab_id: TabId) {
+        let _ = self.tx.unbounded_send(RuntimeCommand::Terminal {
+            tab_id,
+            command: TerminalCommand::Open,
+        });
+    }
+
+    pub fn terminal_input(&self, tab_id: TabId, data: Vec<u8>) {
+        let _ = self.tx.unbounded_send(RuntimeCommand::Terminal {
+            tab_id,
+            command: TerminalCommand::Input { data },
+        });
+    }
+
+    pub fn terminal_resize(&self, tab_id: TabId, cols: u16, rows: u16) {
+        let _ = self.tx.unbounded_send(RuntimeCommand::Terminal {
+            tab_id,
+            command: TerminalCommand::Resize { cols, rows },
+        });
+    }
+
+    pub fn terminal_close(&self, tab_id: TabId) {
+        let _ = self.tx.unbounded_send(RuntimeCommand::Terminal {
+            tab_id,
+            command: TerminalCommand::Close,
+        });
+    }
+
+    pub fn start_monitor(&self) {
+        let _ = self
+            .tx
+            .unbounded_send(RuntimeCommand::Monitor(protocol::MonitorCommand::Start));
+    }
+
+    pub fn stop_monitor(&self) {
+        let _ = self
+            .tx
+            .unbounded_send(RuntimeCommand::Monitor(protocol::MonitorCommand::Stop));
+    }
+
+    pub fn list_directory(&self, path: impl Into<String>) {
+        let _ = self
+            .tx
+            .unbounded_send(RuntimeCommand::Files(protocol::FileCommand::List {
+                path: path.into(),
+            }));
+    }
+
+    pub fn disconnect(&self) {
+        let _ = self.tx.unbounded_send(RuntimeCommand::Disconnect);
+    }
+}
+
 pub struct Terminal {
-    pub id: String,
+    pub tab_id: TabId,
     pub title: String,
     pub dynamic_title: String,
     // pub kind: TabKind,
@@ -62,15 +134,15 @@ pub struct Terminal {
     pub backend_initialized: bool,
     // pub session: Option<Session>,
     pub output_processor: Processor,
-   pub events: VecDeque<InternalEvent>,
-   pub term: Arc<FairMutex<Term<TerminalListener>>>,
-   pub keyboard_input_sent: bool,
-   pub init_command_startup_marker: Option<String>,
- pub   init_command_startup_tx: Option<Sender<()>>,
+    pub events: VecDeque<InternalEvent>,
+    pub term: Arc<FairMutex<Term<TerminalListener>>>,
+    pub keyboard_input_sent: bool,
+    pub init_command_startup_marker: Option<String>,
+    pub init_command_startup_tx: Option<Sender<()>>,
 
- pub   event_loop_task: Task<Result<(), anyhow::Error>>,
+    pub event_loop_task: Task<Result<(), anyhow::Error>>,
     // pub backend: UnboundedSender<TerminalCommand>,
-    pub backend: std::sync::Arc<std::sync::Mutex<BackendTx>>,
+    pub backend: SessionRuntimeHandle,
     pub scroll_pixel_y: f32,
     // backend: std::sync::Arc<std::sync::Mutex<BackendTx>>,
     // pub(crate) highlight_cache: std::cell::RefCell<
@@ -104,7 +176,7 @@ type ColorFormatter = Arc<dyn Fn(Rgb) -> String + Sync + Send + 'static>;
 type TextAreaSizeFormatter = Arc<dyn Fn(TerminalBounds) -> String + Sync + Send + 'static>;
 
 #[derive(Clone)]
-pub(crate) enum TerminalBackendEvent {
+pub enum TerminalBackendEvent {
     MouseCursorDirty,
     Title(String),
     ResetTitle,
@@ -171,7 +243,7 @@ impl From<AlacTermEvent> for TerminalBackendEvent {
         }
     }
 }
-enum PtyEvent {
+pub enum PtyEvent {
     Event(TerminalBackendEvent),
 }
 
@@ -249,7 +321,7 @@ pub enum TerminalEvent {
 }
 impl EventEmitter<TerminalEvent> for Terminal {}
 impl Terminal {
-        pub fn focus_in(& self) {
+    pub fn focus_in(&self) {
         if self.last_content.mode.contains(Modes::FOCUS_IN_OUT) {
             self.write_to_pty("\x1b[I".as_bytes());
         }
@@ -293,13 +365,13 @@ impl Terminal {
         }
     }
     // 后台任务处理，alacrity解析的事件
-    fn process_pty_event(&mut self, event: PtyEvent, cx: &mut Context<Self>) {
+    pub fn process_pty_event(&mut self, event: PtyEvent, cx: &mut Context<Self>) {
         match event {
             PtyEvent::Event(event) => self.process_event(event, cx),
         }
     }
 
-    fn process_event(&mut self, event: TerminalBackendEvent, cx: &mut Context<Self>) {
+    pub fn process_event(&mut self, event: TerminalBackendEvent, cx: &mut Context<Self>) {
         match event {
             TerminalBackendEvent::Title(title) => {
                 cx.emit(TerminalEvent::BreadcrumbsChanged);
@@ -408,17 +480,15 @@ impl Terminal {
         match event {
             &InternalEvent::Resize(new_bounds) => {
                 let new_bounds = normalize_terminal_bounds(new_bounds);
-               
+
                 let columns_changed =
                     self.last_content.terminal_bounds.num_columns() != new_bounds.num_columns();
                 self.last_content.terminal_bounds = new_bounds;
 
-                
-       
                 self.write_to_pty_resize(new_bounds);
                 // resize(term, new_bounds);
                 term.resize(new_bounds);
-                // if columns_changed { 
+                // if columns_changed {
                 //     self.reset_cwd_history();
                 // }
                 // If there are matches we need to emit a wake up event to
@@ -478,14 +548,20 @@ impl Terminal {
     }
     // 监听键盘输入事件，将字符解析然后发送给后端
     pub fn write_to_pty(&self, bytes: impl Into<Vec<u8>>) {
-        if let Ok(backend) = self.backend.lock() {
-            backend.send(SshMessage::Input(bytes.into()));
-        }
+        // if let Ok(backend) = 
+        self.backend.terminal_input(self.tab_id, bytes.into());
+        //  {
+            // backend.send(SshMessage::Input(bytes.into()));
+        // }
     }
-        pub fn write_to_pty_resize(&mut self,new_bounds: TerminalBounds) {
-        if let Ok(backend) = self.backend.lock() {
-            backend.send(SshMessage::Resize(new_bounds. num_columns() as u16, new_bounds.num_lines()as u16));
-        }
+    pub fn write_to_pty_resize(&mut self, new_bounds: TerminalBounds) {
+        // self.backend.
+        // if let Ok(backend) = self.backend.lock() {
+        //     backend.send(SshMessage::Resize(
+        //         new_bounds.num_columns() as u16,
+        //         new_bounds.num_lines() as u16,
+        //     ));
+        // }
     }
     pub fn write_input(&mut self, input: impl Into<Cow<'static, [u8]>>) {
         let input = input.into();
@@ -619,13 +695,10 @@ fn convert_lf_to_crlf(bytes: &[u8], previous_byte_was_cr: &mut bool) -> Vec<u8> 
     converted
 }
 
-
-
-
 #[derive(Clone)]
 struct TerminalListener(UnboundedSender<PtyEvent>);
-// 一个在后台独立运行的 “PTY 读取线程”（PTY reader thread）会持续不断地从 SSH 或本地 Shell 
-// 进程的输出中读取原始的字节流数据 
+// 一个在后台独立运行的 “PTY 读取线程”（PTY reader thread）会持续不断地从 SSH 或本地 Shell
+// 进程的输出中读取原始的字节流数据
 // 负责“通知”的部门，它把分拣好的物品清单（Event）派发给真正需要它们的部门（比如渲染器）去执行。
 impl EventListener for TerminalListener {
     fn send_event(&self, event: Event) {
@@ -1674,20 +1747,19 @@ fn modifier_code(keystroke: &Keystroke) -> u32 {
     }
     modifier_code + 1
 }
-
 pub struct TerminalBuilder {
     terminal: Terminal,
     events_rx: UnboundedReceiver<PtyEvent>,
-    cmd_rx:Option< tokio::sync::mpsc::UnboundedReceiver<SshMessage>>
+    // cmd_rx:Option< tokio::sync::mpsc::UnboundedReceiver<SshMessage>>
 }
 
 impl TerminalBuilder {
-    pub fn new_terminal(terminal_bounds: TerminalBounds,  
+    pub fn new_terminal(tab_id:TabId,terminal_bounds: TerminalBounds,handle: SessionRuntimeHandle
  ) -> Self {
         let terminal_bounds = normalize_terminal_bounds(terminal_bounds);
         let (events_tx, events_rx) = unbounded();
         let term = new_term(terminal_bounds, events_tx.clone());
-          let (cmd_tx, cmd_rx) = tokio::sync::mpsc::unbounded_channel::<SshMessage>();
+        //   let (cmd_tx, cmd_rx) = tokio::sync::mpsc::unbounded_channel::<SshMessage>();
         // let tab_id=Uuid::new_v4().to_string();
         // let title = session.name.clone();
         // events_tx 负责把消息发送给具体的终端窗口alac ,cmd-rx 负责读取字符发送给ssh后端
@@ -1696,11 +1768,10 @@ impl TerminalBuilder {
        
     
        
-        let backendtx = BackendTx::Ssh(cmd_tx);
         let terminal = Terminal {
             term,
             event_loop_task: Task::ready(Ok(())),
-            id: String::new(),
+            tab_id: tab_id,
             title: String::new(),
             dynamic_title: String::new(),
             status: String::new(),
@@ -1719,14 +1790,14 @@ impl TerminalBuilder {
             init_command_startup_tx: None,
 
             scroll_pixel_y: 0.,
-            backend: Arc::new(std::sync::Mutex::new(backendtx)),
+            backend:handle,
         
             // backend: todo!(),
         };
         Self {
             terminal,
             events_rx,
-            cmd_rx:Some(cmd_rx)
+            // cmd_rx:Some(cmd_rx)
         }
     }
 

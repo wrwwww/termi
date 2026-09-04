@@ -14,7 +14,9 @@ use protocol::{
 
 use russh::ChannelMsg;
 
-use terminal::{Content, Terminal, TerminalBounds, new_term, normalize_terminal_bounds};
+use terminal::{
+    Content, SessionRuntimeHandle, Terminal, TerminalBounds, new_term, normalize_terminal_bounds,
+};
 use utils::collections::HashMap;
 use vte::ansi::{Processor, StdSyncHandler};
 
@@ -31,33 +33,40 @@ pub struct RuntimeManager {
     runtimes: HashMap<SessionId, SessionRuntimeHandle>,
     event_tx: UnboundedSender<RuntimeEvent>,
     event_loop_task: Task<Result<(), anyhow::Error>>,
+    tokio_runtime: tokio::runtime::Runtime,
 }
 
 impl RuntimeManager {
     pub fn new(event_tx: UnboundedSender<RuntimeEvent>) -> Self {
+        let tokio_runtime = tokio::runtime::Runtime::new().unwrap();
         Self {
             runtimes: HashMap::default(),
             event_tx,
             event_loop_task: Task::ready(Ok(())),
+            tokio_runtime,
         }
     }
 
-    pub fn open_session(&mut self, session: Session) -> anyhow::Result<TabId> {
+    pub fn open_session(
+        &mut self,
+        session: Session,
+    ) -> anyhow::Result<(TabId, SessionRuntimeHandle)> {
         let runtime = self.get_or_create(session.clone())?;
 
         let tab_id = TabId::new();
 
         runtime.open_terminal(tab_id.clone());
 
-        Ok(tab_id)
+        Ok((tab_id, runtime))
     }
     pub fn get_or_create(&mut self, session: Session) -> anyhow::Result<SessionRuntimeHandle> {
         let session_id = session.id.clone();
         if let None = self.runtimes.get(&session_id) {
             let (runtime, handle) = SessionRuntime::new(session.clone(), self.event_tx.clone());
             self.runtimes.insert(session_id, handle);
+
             // 启动 Runtime 主循环
-            tokio::spawn(async move {
+            self.tokio_runtime.spawn(async move {
                 runtime.run().await;
             });
         }
@@ -75,75 +84,6 @@ impl RuntimeManager {
         if let Some(handle) = self.runtimes.remove(session_id) {
             handle.disconnect();
         }
-    }
-}
-
-// ============================================================
-// SessionRuntimeHandle
-//
-// UI 持有这个 Handle。
-// UI 不直接接触 SessionRuntime / SSH Channel。
-// ============================================================
-
-#[derive(Clone)]
-pub struct SessionRuntimeHandle {
-    tx: UnboundedSender<RuntimeCommand>,
-}
-
-impl SessionRuntimeHandle {
-    pub fn new(tx: UnboundedSender<RuntimeCommand>) -> Self {
-        Self { tx }
-    }
-    pub fn open_terminal(&self, tab_id: TabId) {
-        let _ = self.tx.unbounded_send(RuntimeCommand::Terminal {
-            tab_id,
-            command: TerminalCommand::Open,
-        });
-    }
-
-    pub fn terminal_input(&self, tab_id: TabId, data: Vec<u8>) {
-        let _ = self.tx.unbounded_send(RuntimeCommand::Terminal {
-            tab_id,
-            command: TerminalCommand::Input { data },
-        });
-    }
-
-    pub fn terminal_resize(&self, tab_id: TabId, cols: u16, rows: u16) {
-        let _ = self.tx.unbounded_send(RuntimeCommand::Terminal {
-            tab_id,
-            command: TerminalCommand::Resize { cols, rows },
-        });
-    }
-
-    pub fn terminal_close(&self, tab_id: TabId) {
-        let _ = self.tx.unbounded_send(RuntimeCommand::Terminal {
-            tab_id,
-            command: TerminalCommand::Close,
-        });
-    }
-
-    pub fn start_monitor(&self) {
-        let _ = self
-            .tx
-            .unbounded_send(RuntimeCommand::Monitor(protocol::MonitorCommand::Start));
-    }
-
-    pub fn stop_monitor(&self) {
-        let _ = self
-            .tx
-            .unbounded_send(RuntimeCommand::Monitor(protocol::MonitorCommand::Stop));
-    }
-
-    pub fn list_directory(&self, path: impl Into<String>) {
-        let _ = self
-            .tx
-            .unbounded_send(RuntimeCommand::Files(protocol::FileCommand::List {
-                path: path.into(),
-            }));
-    }
-
-    pub fn disconnect(&self) {
-        let _ = self.tx.unbounded_send(RuntimeCommand::Disconnect);
     }
 }
 

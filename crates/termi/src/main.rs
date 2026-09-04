@@ -69,8 +69,6 @@ fn load_embedded_fonts(cx: &App) {
 fn open_window(cx: &mut App) {
     let bounds = Bounds::centered(None, size(px(1200.), px(600.0)), cx);
     cx.spawn(async move |cx| {
-        let state = cx.new(|cx| workspace::state::AppState::load());
-
         cx.open_window(
             WindowOptions {
                 window_bounds: Some(WindowBounds::Windowed(bounds)),
@@ -78,7 +76,7 @@ fn open_window(cx: &mut App) {
                 ..Default::default()
             },
             |window, cx| {
-                let view = cx.new(|cx| WorkspaceView::new(state, window, cx));
+                let view = cx.new(|cx| WorkspaceView::new(window, cx));
                 cx.new(|cx| Root::new(view, window, cx))
                 // view
             },

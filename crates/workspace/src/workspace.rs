@@ -30,6 +30,8 @@ pub mod transfer_store;
 pub mod terminal;
 pub mod title_bar;
 pub mod welcome;
+use std::collections::VecDeque;
+
 use crate::{
     connection_dialog::ConnectionDialog,
     files::FilesPane,
@@ -39,8 +41,10 @@ use crate::{
     sidebar::Sidebar,
     state::AppState,
     statusbar::StatusBar,
-    terminal::{CloseTerminalAction, OpenTerminalAction, TerminalPane},
+    terminal::{CloseTerminalAction, OpenTerminalAction},
+    terminal_store::{TerminalEntry, TerminalStore},
     title_bar::PlatformTitleBar,
+    transfer_store::TransferStore,
 };
 use ::settings::Settings;
 use ::terminal::{TerminalBounds, TerminalBuilder};
@@ -50,7 +54,8 @@ use gpui_component::{
     Root,
     resizable::{h_resizable, resizable_panel, v_resizable},
 };
-use protocol::{SessionId, TabId};
+use log::info;
+use protocol::{SessionId, TabId, monitor::MonitorStore};
 use schemars::JsonSchema;
 use serde::Deserialize;
 use terminal_view::TerminalView;
@@ -67,53 +72,73 @@ pub struct WorkspaceView {
     state: Entity<AppState>,
     title_bar: Entity<PlatformTitleBar>,
     sidebar: Entity<crate::sidebar::Sidebar>,
-    terminal_pane: Entity<TerminalPane>,
+    // terminal_pane: Entity<TerminalPane>,
     files_pane: Entity<FilesPane>,
     settings_view: Entity<SettingsView>,
     status_bar: Entity<StatusBar>,
     monitor_panel: Entity<MonitorPanel>,
     session_manager: Entity<SessionStore>,
-    runtime_manager: Entity<runtime_manager::RuntimeManager>,
+    // runtime_manager: Entity<runtime_manager::RuntimeManager>,
     tabs: Vec<TabId>,
     active_tab: Option<TabId>,
     views: ViewRegistry,
 }
 
 impl WorkspaceView {
-    pub fn new(state: Entity<AppState>, window: &mut Window, cx: &mut Context<Self>) -> Self {
+    pub fn new(window: &mut Window, cx: &mut Context<Self>) -> Self {
         let (event_tx, event_rx) = futures::channel::mpsc::unbounded();
+        let session_manager = cx.new(|cx| SessionStore::new(cx));
+        let terminal_store = cx.new(|cx| TerminalStore::new());
+        let monitor_manager = cx.new(|cx| MonitorStore::new());
+        let transfer_store = cx.new(|cx| TransferStore::new());
+        let runtime_manager = runtime_manager::RuntimeManager::new(event_tx.clone());
+
+        let state = cx.new(|cx| {
+            state::AppState::new(
+                runtime_manager,
+                session_manager.clone(),
+                terminal_store.clone(),
+                monitor_manager.clone(),
+                transfer_store.clone(),
+            )
+        });
+        state.update(cx, |_this, cx| {
+            AppState::start_event_dispatcher(state.clone(), event_rx, cx);
+        });
+
         // Subscribe so any state changes re-render the chrome.
         cx.observe(&state, |_, _, cx| cx.notify()).detach();
-        let session_manager = cx.new(|cx| SessionStore::new(state.clone(), cx));
-        let runtime_manager = cx.new(|cx| runtime_manager::RuntimeManager::new(event_tx.clone()));
+
         let sidebar = cx.new(|cx| Sidebar::new(state.clone(), session_manager.clone(), window, cx));
 
         let title_bar = cx.new(|cx| PlatformTitleBar::new("title_bar", cx));
-        let terminal_pane = cx.new(|cx| {
-            let mut pane = TerminalPane::new(state.clone(), session_manager.clone(), window, cx);
-            pane.background_task(cx);
-            pane
-        });
+        // let terminal_pane = cx.new(|cx| {
+        //     let mut pane = TerminalPane::new(state.clone(), session_manager.clone(), window, cx);
+        //     pane.background_task(cx);
+        //     pane
+        // });
         let files_pane = cx.new(|cx| FilesPane::new(state.clone()));
 
         let settings_view = cx.new(|cx| SettingsView::new(state.clone()));
         let status_bar = cx.new(|cx| StatusBar::new(state.clone()));
         let monitor_panel = cx.new(|cx| MonitorPanel::new(state.clone()));
-
+        // state.update(cx, |this, cx| {
+        // });
+        let views = ViewRegistry::new();
         Self {
             state,
             title_bar,
             sidebar,
-            terminal_pane,
+            // terminal_pane,
             files_pane,
             settings_view,
             status_bar,
             monitor_panel,
             session_manager,
-            runtime_manager,
+
             tabs: vec![],
             active_tab: None,
-            views: todo!(),
+            views: views,
         }
     }
     fn open_connection_dialog(
@@ -183,24 +208,37 @@ impl WorkspaceView {
             .expect("")
             .clone();
         let tab_id = self
-            .runtime_manager
-            .update(cx, |manager, cx| manager.open_session(session));
-        if let Ok(tab_id) = tab_id {
-            let builder = TerminalBuilder::new_terminal(TerminalBounds::default());
+            .state
+            .update(cx, |this, cx| this.runtime_manager.open_session(session));
+
+        if let Ok((tab_id, handle)) = tab_id {
+            let builder = TerminalBuilder::new_terminal(tab_id, TerminalBounds::default(), handle);
 
             let terminal = cx.new(|cx| builder.subscribe(cx));
 
+            self.state.update(cx, |this, cx| {
+                this.terminal_store.update(cx, |this, cx| {
+                    this.insert(TerminalEntry {
+                        tab_id,
+                        session_id: SessionId::new(),
+                        title: "tielte".into(),
+                        runtime: terminal.clone(),
+                    });
+                });
+            });
             let terminal_view = cx.new(|cx| TerminalView::new(terminal.clone(), window, cx));
             // ② 注册 View
             self.views.register_terminal(tab_id, terminal_view);
+            self.tabs.push(tab_id);
+            self.activate_tab(tab_id, window, cx);
             // self.views.update(cx, |registry, _| {
             //     registry.register_terminal(tab_id.clone(), view);
             // });
         }
 
-        self.terminal_pane.update(cx, |pane, cx| {
-            pane.open_terminal(action, window, cx);
-        });
+        // self.terminal_pane.update(cx, |pane, cx| {
+        //     pane.open_terminal(action, window, cx);
+        // });
     }
     pub fn close_terminal(
         &mut self,
@@ -209,9 +247,9 @@ impl WorkspaceView {
         cx: &mut Context<Self>,
     ) {
         log::info!("Workspace: close_terminal {}", action.tab_id.to_string());
-        self.terminal_pane.update(cx, |pane, cx| {
-            pane.close_terminal(action, _window, cx);
-        });
+        // self.terminal_pane.update(cx, |pane, cx| {
+        //     pane.close_terminal(action, _window, cx);
+        // });
     }
     fn activate_tab(&mut self, tab_id: TabId, _window: &mut Window, cx: &mut Context<Self>) {
         self.active_tab = Some(tab_id);
@@ -335,9 +373,9 @@ impl Render for WorkspaceView {
             .state
             .update(cx, |state, _cx| state.pending_open_session_id.take())
         {
-            self.terminal_pane.update(cx, |pane, cx| {
-                pane.open_terminal(&OpenTerminalAction { session_id }, windows, cx);
-            });
+            // self.terminal_pane.update(cx, |pane, cx| {
+            //     // pane.open_terminal(&OpenTerminalAction { session_id }, windows, cx);
+            // });
         }
         self.title_bar.update(cx, |this, cx| {
             let t = cx.theme();

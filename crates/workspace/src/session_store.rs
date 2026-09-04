@@ -1,42 +1,70 @@
-use crate::{
-    runtime_manager::{SessionRuntime, SessionRuntimeHandle},
-    state::AppState,
-};
-use gpui::{Context, Entity, accesskit::Uuid};
-use protocol::{Session, SessionId, ssh::SshConnection};
+use gpui::Context;
+use protocol::{AuthMethod, Protocol, Session, SessionId, SessionStatus};
 use utils::collections::HashMap;
 
 pub struct SessionStore {
     sessions: HashMap<SessionId, Session>,
-    state: Entity<AppState>,
 }
 
 impl SessionStore {
-    pub fn new(state: Entity<AppState>, cx: &Context<Self>) -> Self {
-        let sessions = state.read(cx).sessions.clone();
-        let sessions = sessions
-            .into_iter()
-            .map(|session| (session.id.clone(), session))
-            .collect::<HashMap<_, _>>();
-        Self { sessions, state }
+    pub fn new(cx: &Context<Self>) -> Self {
+        // let sessions = state.read(cx).sessions.clone();
+        // let sessions = sessions
+        //     .into_iter()
+        //     .map(|session| (session.id.clone(), session))
+        //     .collect::<HashMap<_, _>>();
+        let session_1 = Session {
+            id: SessionId::new(),
+            name: "192.168.117.4".to_string(),
+            group: "linux".to_string(),
+            hostname: "192.168.117.4".to_string(),
+            port: 22,
+            username: "wrw".to_string(),
+            protocol: Protocol::Ssh,
+            auth: AuthMethod::Password {
+                password: "1006".to_string(),
+            },
+            // identity_file: Some("".to_string()),
+            status: SessionStatus::Disconnected,
+            latencies_ms: vec![],
+        };
+        let session_2 = Session {
+            id: SessionId::new(),
+            name: "192.168.117.129".to_string(),
+            group: "linux".to_string(),
+            hostname: "192.168.117.129".to_string(),
+            port: 22,
+            username: "wrw".to_string(),
+            protocol: Protocol::Ssh,
+            auth: AuthMethod::Password {
+                password: "1234".to_string(),
+            },
+            // identity_file: Some("".to_string()),
+            status: SessionStatus::Disconnected,
+            latencies_ms: vec![],
+        };
+        let mut map = HashMap::default();
+        map.insert(session_1.id, session_1);
+        map.insert(session_2.id, session_2);
+        Self { sessions: map }
     }
 
-    fn sync_state(&self, cx: &mut Context<Self>) {
-        let sessions = self.list();
-        self.state.update(cx, |state, cx| {
-            state.sessions = sessions;
-            state.groups = state
-                .sessions
-                .iter()
-                .map(|session| session.group.trim().to_string())
-                .filter(|group| !group.is_empty())
-                .collect();
-            state.groups.sort();
-            state.groups.dedup();
-            state.save();
-            cx.notify();
-        });
-    }
+    // fn sync_state(&self, cx: &mut Context<Self>) {
+    //     let sessions = self.list();
+    //     self.state.update(cx, |state, cx| {
+    //         state.sessions = sessions;
+    //         state.groups = state
+    //             .sessions
+    //             .iter()
+    //             .map(|session| session.group.trim().to_string())
+    //             .filter(|group| !group.is_empty())
+    //             .collect();
+    //         state.groups.sort();
+    //         state.groups.dedup();
+    //         // state.save();
+    //         cx.notify();
+    //     });
+    // }
     pub fn list(&self) -> Vec<Session> {
         self.sessions.values().cloned().collect::<Vec<_>>()
     }
@@ -56,7 +84,7 @@ impl SessionStore {
 
         let deleted = old_len != self.sessions.len();
         if deleted {
-            self.sync_state(cx);
+            // self.sync_state(cx);
         }
         deleted
     }
@@ -81,7 +109,7 @@ impl SessionStore {
         copied.latencies_ms = Vec::new();
 
         self.sessions.insert(new_id, copied);
-        self.sync_state(cx);
+        // self.sync_state(cx);
 
         Some(new_id)
     }
@@ -119,13 +147,13 @@ impl SessionStore {
         }
 
         if is_connect {
-            self.state.update(cx, |state, cx| {
-                state.pending_open_session_id = Some(id);
-                cx.notify();
-            });
+            // self.state.update(cx, |state, cx| {
+            //     state.pending_open_session_id = Some(id);
+            //     cx.notify();
+            // });
         }
 
-        self.sync_state(cx);
+        // self.sync_state(cx);
 
         // TODO:
         //
