@@ -69,8 +69,8 @@ pub struct Terminal {
  pub   init_command_startup_tx: Option<Sender<()>>,
 
  pub   event_loop_task: Task<Result<(), anyhow::Error>>,
-    pub backend: UnboundedSender<TerminalCommand>,
-    // pub backend: std::sync::Arc<std::sync::Mutex<BackendTx>>,
+    // pub backend: UnboundedSender<TerminalCommand>,
+    pub backend: std::sync::Arc<std::sync::Mutex<BackendTx>>,
     pub scroll_pixel_y: f32,
     // backend: std::sync::Arc<std::sync::Mutex<BackendTx>>,
     // pub(crate) highlight_cache: std::cell::RefCell<
@@ -1730,7 +1730,8 @@ impl TerminalBuilder {
         }
     }
 
-    pub fn subscribe(mut self,session:Session, tab_id: TabId, events : UnboundedSender<SystemEvent>,cx: &Context<Terminal>) -> Terminal {
+    pub fn subscribe(mut self,cx: &Context<Terminal>) -> Terminal {
+    // pub fn subscribe(mut self,session:Session, tab_id: TabId, events : UnboundedSender<SystemEvent>,cx: &Context<Terminal>) -> Terminal {
         // let cmd_rx=self.cmd_rx.take().unwrap();
         // cx.spawn(async move|this,cx|{
         //     let runtime=tokio::runtime::Runtime::new().unwrap();

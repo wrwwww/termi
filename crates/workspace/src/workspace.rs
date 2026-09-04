@@ -43,6 +43,7 @@ use crate::{
     title_bar::PlatformTitleBar,
 };
 use ::settings::Settings;
+use ::terminal::{TerminalBounds, TerminalBuilder};
 use ::theme::{ActiveTheme, Theme};
 use gpui::{prelude::FluentBuilder, *};
 use gpui_component::{
@@ -181,19 +182,21 @@ impl WorkspaceView {
             .query(action.session_id)
             .expect("")
             .clone();
-        self.runtime_manager.update(
-            cx,
-            |manager, cx| {
-                if let Ok(tab_id) = manager.open_session(session) {}
-            },
-        );
-        // ① 创建 TerminalView
-        // let view = cx.new(|cx| TerminalView::new(tab_id.clone(), cx));
+        let tab_id = self
+            .runtime_manager
+            .update(cx, |manager, cx| manager.open_session(session));
+        if let Ok(tab_id) = tab_id {
+            let builder = TerminalBuilder::new_terminal(TerminalBounds::default());
 
-        // ② 注册 View
-        self.views.update(cx, |registry, _| {
-            registry.register_terminal(tab_id.clone(), view);
-        });
+            let terminal = cx.new(|cx| builder.subscribe(cx));
+
+            let terminal_view = cx.new(|cx| TerminalView::new(terminal.clone(), window, cx));
+            // ② 注册 View
+            self.views.register_terminal(tab_id, terminal_view);
+            // self.views.update(cx, |registry, _| {
+            //     registry.register_terminal(tab_id.clone(), view);
+            // });
+        }
 
         self.terminal_pane.update(cx, |pane, cx| {
             pane.open_terminal(action, window, cx);

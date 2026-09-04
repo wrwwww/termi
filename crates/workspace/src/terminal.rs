@@ -62,8 +62,7 @@ impl TerminalPane {
         let title = session.name.clone().into();
         let builder = TerminalBuilder::new_terminal(TerminalBounds::default());
 
-        let terminal =
-            cx.new(|cx| builder.subscribe(session, tab_id.clone(), self.events_tx.clone(), cx));
+        let terminal = cx.new(|cx| builder.subscribe(cx));
 
         let terminal_view = cx.new(|cx| TerminalView::new(terminal.clone(), window, cx));
     }

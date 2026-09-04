@@ -42,8 +42,8 @@ impl RuntimeManager {
         }
     }
 
-    pub async fn open_session(&mut self, session: Session) -> anyhow::Result<TabId> {
-        let runtime = self.get_or_create(session.clone()).await?;
+    pub fn open_session(&mut self, session: Session) -> anyhow::Result<TabId> {
+        let runtime = self.get_or_create(session.clone())?;
 
         let tab_id = TabId::new();
 
@@ -51,10 +51,7 @@ impl RuntimeManager {
 
         Ok(tab_id)
     }
-    pub async fn get_or_create(
-        &mut self,
-        session: Session,
-    ) -> anyhow::Result<SessionRuntimeHandle> {
+    pub fn get_or_create(&mut self, session: Session) -> anyhow::Result<SessionRuntimeHandle> {
         let session_id = session.id.clone();
         if let None = self.runtimes.get(&session_id) {
             let (runtime, handle) = SessionRuntime::new(session.clone(), self.event_tx.clone());
