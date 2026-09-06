@@ -53,8 +53,8 @@ use gpui::{prelude::FluentBuilder, *};
 use gpui_component::{
     Root,
     resizable::{h_resizable, resizable_panel, v_resizable},
+    tab,
 };
-use log::info;
 use protocol::{SessionId, TabId, monitor::MonitorStore};
 use schemars::JsonSchema;
 use serde::Deserialize;
@@ -72,13 +72,11 @@ pub struct WorkspaceView {
     state: Entity<AppState>,
     title_bar: Entity<PlatformTitleBar>,
     sidebar: Entity<crate::sidebar::Sidebar>,
-    // terminal_pane: Entity<TerminalPane>,
     files_pane: Entity<FilesPane>,
     settings_view: Entity<SettingsView>,
     status_bar: Entity<StatusBar>,
     monitor_panel: Entity<MonitorPanel>,
     session_manager: Entity<SessionStore>,
-    // runtime_manager: Entity<runtime_manager::RuntimeManager>,
     tabs: Vec<TabId>,
     active_tab: Option<TabId>,
     views: ViewRegistry,
@@ -112,30 +110,23 @@ impl WorkspaceView {
         let sidebar = cx.new(|cx| Sidebar::new(state.clone(), session_manager.clone(), window, cx));
 
         let title_bar = cx.new(|cx| PlatformTitleBar::new("title_bar", cx));
-        // let terminal_pane = cx.new(|cx| {
-        //     let mut pane = TerminalPane::new(state.clone(), session_manager.clone(), window, cx);
-        //     pane.background_task(cx);
-        //     pane
-        // });
+
         let files_pane = cx.new(|cx| FilesPane::new(state.clone()));
 
         let settings_view = cx.new(|cx| SettingsView::new(state.clone()));
         let status_bar = cx.new(|cx| StatusBar::new(state.clone()));
         let monitor_panel = cx.new(|cx| MonitorPanel::new(state.clone()));
-        // state.update(cx, |this, cx| {
-        // });
+
         let views = ViewRegistry::new();
         Self {
             state,
             title_bar,
             sidebar,
-            // terminal_pane,
             files_pane,
             settings_view,
             status_bar,
             monitor_panel,
             session_manager,
-
             tabs: vec![],
             active_tab: None,
             views: views,
@@ -240,16 +231,32 @@ impl WorkspaceView {
         //     pane.open_terminal(action, window, cx);
         // });
     }
-    pub fn close_terminal(
-        &mut self,
-        action: &CloseTerminalAction,
-        _window: &mut Window,
-        cx: &mut Context<Self>,
-    ) {
-        log::info!("Workspace: close_terminal {}", action.tab_id.to_string());
-        // self.terminal_pane.update(cx, |pane, cx| {
-        //     pane.close_terminal(action, _window, cx);
-        // });
+    pub fn close_terminal(&mut self, tab_id: TabId, _window: &mut Window, cx: &mut Context<Self>) {
+        self.state.update(cx, |this, cx| {
+            if let Some(entry) = this
+                .terminal_store
+                .update(cx, |this, cx| this.close(&tab_id))
+            {
+                if let Some(handle) = this.runtime_manager.get(&entry.session_id) {
+                    handle.terminal_close(tab_id);
+                }
+            };
+        });
+        if let Some(idx) = self.tabs.iter().position(|id| *id == tab_id) {
+            self.tabs.remove(idx);
+            self.views.remove_terminal(&tab_id);
+
+            if self.tabs.is_empty() {
+                // 已经没有 tab 了
+                return;
+            }
+
+            // 优先激活被关闭 Tab 右边的 Tab；
+            // 如果关闭的是最后一个，则激活新的最后一个 Tab。
+            let next_idx = idx.min(self.tabs.len() - 1);
+
+            self.activate_tab(self.tabs[next_idx], _window, cx);
+        }
     }
     fn activate_tab(&mut self, tab_id: TabId, _window: &mut Window, cx: &mut Context<Self>) {
         self.active_tab = Some(tab_id);
@@ -327,12 +334,8 @@ impl WorkspaceView {
                                     MouseButton::Left,
                                     cx.listener(
                                         move |_this, _event: &MouseDownEvent, window, cx| {
-                                            window.dispatch_action(
-                                                Box::new(CloseTerminalAction {
-                                                    tab_id: tab_id.clone(),
-                                                }),
-                                                cx,
-                                            );
+                                            cx.stop_propagation();
+                                            _this.close_terminal(tab_id, window, cx);
                                         },
                                     ),
                                 ),
@@ -369,14 +372,6 @@ impl WorkspaceView {
 
 impl Render for WorkspaceView {
     fn render(&mut self, windows: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
-        if let Some(session_id) = self
-            .state
-            .update(cx, |state, _cx| state.pending_open_session_id.take())
-        {
-            // self.terminal_pane.update(cx, |pane, cx| {
-            //     // pane.open_terminal(&OpenTerminalAction { session_id }, windows, cx);
-            // });
-        }
         self.title_bar.update(cx, |this, cx| {
             let t = cx.theme();
             this.set_children([div()
@@ -426,7 +421,6 @@ impl Render for WorkspaceView {
         div()
             .id("lumen-workspace")
             .on_action(cx.listener(Self::open_terminal))
-            .on_action(cx.listener(Self::close_terminal))
             .on_action(cx.listener(Self::edit_session))
             .flex()
             .flex_col()

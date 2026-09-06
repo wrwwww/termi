@@ -38,11 +38,11 @@ impl Render for MonitorPanel {
 
         let state = self.state.read(cx);
 
-        let collapsed = state.monitor_collapsed;
-        let paused = state.monitor_paused;
-        let tab = state.monitor_tab;
-        let window = state.monitor_window;
-        let snapshot = state.monitor.clone();
+        let collapsed = false;
+        let paused = false;
+        let tab = MonitorTab::Logs;
+        let window = MonitorWindow::FifteenMin;
+        let snapshot: Option<MonitorSnapshot> = None;
 
         // The header is always visible; the body hides when collapsed.
         let header = render_header(&t, tab, paused, collapsed, &self.state);

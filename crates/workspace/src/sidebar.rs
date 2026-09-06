@@ -283,12 +283,17 @@ impl Sidebar {
 // ============================================================================
 
 impl Render for Sidebar {
-    fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
+    fn render(
+        &mut self,
+        // state: Entity<AppState>,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) -> impl IntoElement {
         let t = cx.theme();
 
         let query = self.search_query(cx);
 
-        let active_id = self.state.read(cx).active_tab_id.clone();
+        // let active_id = self.state.read(cx).active_tab_id.clone();
 
         let grouped = self.session_manager.read(cx).grouped_sessions();
 

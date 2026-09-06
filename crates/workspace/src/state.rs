@@ -27,26 +27,7 @@ pub struct AppState {
     pub terminal_store: Entity<TerminalStore>,
     pub monitor_store: Entity<MonitorStore>,
     pub transfer_store: Entity<TransferStore>,
-    pub sessions: Vec<Session>,
     pub groups: Vec<String>,
-
-    pub open_session_ids: Vec<TabId>,
-
-    pub pending_open_session_id: Option<SessionId>,
-    pub active_tab_id: Option<TabId>,
-    pub active_view: ActiveView,
-    pub settings: Settings,
-    /// Live server metrics for the currently active session. `None` while
-    /// no session is connected or before the first sample arrives.
-    pub monitor: Option<MonitorSnapshot>,
-    /// Which tab inside the monitor panel is active.
-    pub monitor_tab: MonitorTab,
-    /// Time window the user has selected for chart history (1m / 5m / 15m).
-    pub monitor_window: MonitorWindow,
-    /// True when the monitor panel is collapsed (header-only).
-    pub monitor_collapsed: bool,
-    /// True when live data sampling is paused by the user.
-    pub monitor_paused: bool,
 }
 impl AppState {
     pub fn new(
@@ -62,18 +43,7 @@ impl AppState {
             terminal_store,
             monitor_store,
             transfer_store,
-            sessions: vec![],
             groups: vec![],
-            open_session_ids: vec![],
-            pending_open_session_id: None,
-            active_tab_id: None,
-            active_view: ActiveView::NewConnection,
-            settings: Settings::default(),
-            monitor: None,
-            monitor_tab: MonitorTab::Metrics,
-            monitor_window: MonitorWindow::FifteenMin,
-            monitor_collapsed: false,
-            monitor_paused: false,
         }
     }
 }
@@ -316,103 +286,5 @@ impl AppState {
                     .join("termi")
                     .join("state.json")
             })
-    }
-
-    // pub fn load(cx: &mut Context<Self>) -> Self {
-    //     Self {
-    //         runtime_manager: RuntimeManager::new(event_tx),
-    //         session_store: (),
-    //         terminal_store: (),
-    //         monitor_store: (),
-    //         transfer_store: (),
-    //         sessions: (),
-    //         groups: (),
-    //         open_session_ids: (),
-    //         pending_open_session_id: (),
-    //         active_tab_id: (),
-    //         active_view: (),
-    //         settings: (),
-    //         monitor: (),
-    //         monitor_tab: (),
-    //         monitor_window: (),
-    //         monitor_collapsed: (),
-    //         monitor_paused: (),
-    //     }
-    // }
-    // /// Load sessions + settings from disk; fall back to a demo dataset on first run.
-    // pub fn load() -> Self {
-    //     // let path = directories::ProjectDirs::from("dev", "lumen", "Lumen")
-    //     //     .map(|d| d.config_dir().join("state.json"));
-
-    //     if let Some(path) = Self::state_file()
-    //         && let Ok(text) = std::fs::read_to_string(path)
-    //         && let Ok(mut parsed) = serde_json::from_str::<AppState>(&text)
-    //     {
-    //         // Runtime tabs are never restored: reopening an app must not make
-    //         // background connections to remote hosts.
-    //         parsed.open_session_ids.clear();
-    //         parsed.pending_open_session_id = None;
-    //         parsed.active_tab_id = None;
-    //         return parsed;
-    //     }
-
-    //     // Demo data so the first run isn't empty.
-    //     let mut groups: Vec<String> =
-    //         vec!["Production".into(), "Staging".into(), "Personal".into()];
-    //     groups.sort();
-    //     let sessions = vec![];
-    //     let active_tab_id = None;
-
-    //     Self {
-    //         sessions,
-    //         groups,
-    //         open_session_ids: Vec::new(),
-    //         pending_open_session_id: None,
-    //         active_tab_id,
-    //         active_view: ActiveView::Workspace,
-    //         settings: Settings::default(),
-    //         monitor: Some(MonitorSnapshot::default()),
-    //         monitor_tab: MonitorTab::Metrics,
-    //         monitor_window: MonitorWindow::FiveMin,
-    //         monitor_collapsed: false,
-    //         monitor_paused: false,
-    //         runtime_manager: todo!(),
-    //         session_store: todo!(),
-    //     }
-    // }
-
-    // pub fn save(&self) {
-    //     let Some(path) = Self::state_file() else {
-    //         return;
-    //     };
-    //     let Some(parent) = path.parent() else {
-    //         return;
-    //     };
-
-    //     // Keep endpoint metadata between launches, but never write secrets in
-    //     // clear text. A password or key passphrase is intentionally requested
-    //     // again after an application restart.
-    //     let mut persisted = self.clone();
-    //     for session in &mut persisted.sessions {
-    //         // match &mut session.auth {
-    //         //     AuthMethod::Password { password } => password.clear(),
-    //         //     AuthMethod::PublicKey { passphrase, .. } => *passphrase = None,
-    //         //     AuthMethod::Agent | AuthMethod::KeyboardInteractive => {}
-    //         // }
-    //     }
-
-    //     if std::fs::create_dir_all(parent).is_ok()
-    //         && let Ok(text) = serde_json::to_string_pretty(&persisted)
-    //     {
-    //         let _ = std::fs::write(path, text);
-    //     }
-    // }
-
-    pub fn set_active_view(&mut self, v: ActiveView) {
-        self.active_view = v;
-    }
-
-    pub fn set_active_tab(&mut self, id: &TabId) {
-        self.active_tab_id = Some(*id);
     }
 }

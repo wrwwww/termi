@@ -43,21 +43,23 @@ impl Render for StatusBar {
     fn render(&mut self, windows: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         let t = cx.theme();
         let state = self.state.read(cx);
-        let active = state
-            .active_tab_id
-            .as_ref()
-            .and_then(|id| state.sessions.iter().find(|s| s.id == SessionId::new()));
+        // let active = state
+        //     .active_tab_id
+        //     .as_ref()
+        //     .and_then(|id| state.sessions.iter().find(|s| s.id == SessionId::new()));
 
         let connected = true;
         // .map(|s| s.status == SessionStatus::Connected)
         // .unwrap_or(false);
-        let latency_text = active
-            .and_then(|s| s.latencies_ms.last().copied())
-            .map(|ms| format!("{} ms", ms))
-            .unwrap_or_default();
-        let user_host = active
-            .map(|s| format!("{}@{}", s.username, s.name))
-            .unwrap_or_else(|| "No active session".into());
+        let latency_text = "".to_string();
+        let user_host = "No active session".to_string();
+        // let latency_text = active
+        //     .and_then(|s| s.latencies_ms.last().copied())
+        //     .map(|ms| format!("{} ms", ms))
+        //     .unwrap_or_default();
+        // let user_host = active
+        //     .map(|s| format!("{}@{}", s.username, s.name))
+        //     .unwrap_or_else(|| "No active session".into());
 
         div()
             .on_action(cx.listener(Self::toggle_theme_mode))

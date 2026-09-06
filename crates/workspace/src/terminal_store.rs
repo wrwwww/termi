@@ -18,6 +18,9 @@ impl TerminalStore {
     pub fn insert(&mut self, terminal: TerminalEntry) {
         self.terminals.insert(terminal.tab_id, terminal);
     }
+    pub fn close(&mut self, tab_id: &TabId) -> Option<TerminalEntry> {
+        self.terminals.remove(tab_id)
+    }
 }
 
 pub struct TerminalEntry {
