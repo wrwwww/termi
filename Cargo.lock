@@ -5741,14 +5741,13 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "aws-lc-rs",
+ "bytes",
  "futures",
  "log",
  "russh",
- "schemars",
  "serde",
  "strum 0.28.0",
  "tokio",
- "uuid",
 ]
 
 [[package]]
@@ -7801,11 +7800,13 @@ dependencies = [
  "itertools 0.15.0",
  "log",
  "protocol",
+ "schemars",
  "serde",
  "settings",
  "settings_content",
  "settings_macros",
  "tokio",
+ "uuid",
  "vte",
 ]
 

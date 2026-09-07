@@ -24,3 +24,5 @@ settings_macros.workspace = true
 protocol.workspace = true
 futures.workspace = true
 tokio.workspace = true
+schemars.workspace = true
+uuid.workspace = true

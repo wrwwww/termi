@@ -1,5 +1,10 @@
 pub mod alacritty;
 pub mod terminal_settings;
+pub mod session;
+pub mod runtime;
+pub mod error;
+pub mod id;
+
 use futures::{
     FutureExt, SinkExt, StreamExt,
     channel::mpsc::{UnboundedReceiver, UnboundedSender, unbounded},
@@ -39,82 +44,11 @@ use gpui::{
     Window, accesskit::Uuid, div, fill, font, hsla, point, px, relative, rgba, size,
 };
 use itertools::Itertools;
-use protocol::{
-    BackendTx, RuntimeCommand, Session, SshMessage, SystemEvent, TabId, TerminalCommand,
-    open_session_terminal,
-};
+
 use serde::{Deserialize, Serialize};
 use vte::ansi::{Attr, Color, Handler, NamedColor, Processor, Rgb, StdSyncHandler};
 
-use crate::alacritty::{last_non_empty_lines, window_size_from_terminal_bounds};
-// ============================================================
-// SessionRuntimeHandle
-//
-// UI 持有这个 Handle。
-// UI 不直接接触 SessionRuntime / SSH Channel。
-// ============================================================
-
-#[derive(Clone)]
-pub struct SessionRuntimeHandle {
-    tx: UnboundedSender<RuntimeCommand>,
-}
-
-impl SessionRuntimeHandle {
-    pub fn new(tx: UnboundedSender<RuntimeCommand>) -> Self {
-        Self { tx }
-    }
-    pub fn open_terminal(&self, tab_id: TabId) {
-        let _ = self.tx.unbounded_send(RuntimeCommand::Terminal {
-            tab_id,
-            command: TerminalCommand::Open,
-        });
-    }
-
-    pub fn terminal_input(&self, tab_id: TabId, data: Vec<u8>) {
-        let _ = self.tx.unbounded_send(RuntimeCommand::Terminal {
-            tab_id,
-            command: TerminalCommand::Input { data },
-        });
-    }
-
-    pub fn terminal_resize(&self, tab_id: TabId, cols: u16, rows: u16) {
-        let _ = self.tx.unbounded_send(RuntimeCommand::Terminal {
-            tab_id,
-            command: TerminalCommand::Resize { cols, rows },
-        });
-    }
-
-    pub fn terminal_close(&self, tab_id: TabId) {
-        let _ = self.tx.unbounded_send(RuntimeCommand::Terminal {
-            tab_id,
-            command: TerminalCommand::Close,
-        });
-    }
-
-    pub fn start_monitor(&self) {
-        let _ = self
-            .tx
-            .unbounded_send(RuntimeCommand::Monitor(protocol::MonitorCommand::Start));
-    }
-
-    pub fn stop_monitor(&self) {
-        let _ = self
-            .tx
-            .unbounded_send(RuntimeCommand::Monitor(protocol::MonitorCommand::Stop));
-    }
-
-    pub fn list_directory(&self, path: impl Into<String>) {
-        let _ = self
-            .tx
-            .unbounded_send(RuntimeCommand::Files(protocol::FileCommand::List {
-                path: path.into(),
-            }));
-    }
-
-    pub fn disconnect(&self) {
-        let _ = self.tx.unbounded_send(RuntimeCommand::Disconnect);
-    }
-}
+use crate::{alacritty::{last_non_empty_lines, window_size_from_terminal_bounds}, id::TabId, session::SessionRuntimeHandle};
 
 pub struct Terminal {
     pub tab_id: TabId,
@@ -132,7 +66,6 @@ pub struct Terminal {
     /// `Connected` event. Used to skip stale `Closed` events that arrive
     /// before the new backend has started producing output.
     pub backend_initialized: bool,
-    // pub session: Option<Session>,
     pub output_processor: Processor,
     pub events: VecDeque<InternalEvent>,
     pub term: Arc<FairMutex<Term<TerminalListener>>>,
@@ -144,7 +77,6 @@ pub struct Terminal {
     // pub backend: UnboundedSender<TerminalCommand>,
     pub backend: SessionRuntimeHandle,
     pub scroll_pixel_y: f32,
-    // backend: std::sync::Arc<std::sync::Mutex<BackendTx>>,
     // pub(crate) highlight_cache: std::cell::RefCell<
     //     Option<(
     //         Vec<RenderCell>,

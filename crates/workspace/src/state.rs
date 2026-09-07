@@ -6,7 +6,8 @@
 use futures::channel::mpsc::UnboundedReceiver;
 use gpui::{Context, Entity};
 use protocol::{
-    AuthMethod, RuntimeEvent, Session, SessionId, SessionStatus, TabId, monitor::MonitorStore,
+    AuthMethod, RuntimeEvent, Session, SessionId, SessionStatus, TabId, error::RuntimeError,
+    monitor::MonitorStore,
 };
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
@@ -238,6 +239,27 @@ impl AppState {
         })
         .detach();
     }
+    fn handle_error(&mut self, error: RuntimeError, cx: &mut Context<Self>) {
+        match error {
+            RuntimeError::Session(session_error) => match session_error {
+                protocol::error::SessionError::Connection(connection_error) => todo!(),
+                protocol::error::SessionError::Authentication(authentication_error) => todo!(),
+                protocol::error::SessionError::HostKey(host_key_error) => todo!(),
+                protocol::error::SessionError::Other { message } => todo!(),
+            },
+            RuntimeError::Terminal(terminal_error) => match terminal_error {
+                protocol::error::TerminalError::ChannelOpen { message } => todo!(),
+                protocol::error::TerminalError::PtyRequest { message } => todo!(),
+                protocol::error::TerminalError::PtyResize { message } => todo!(),
+                protocol::error::TerminalError::ShellRequest { message } => todo!(),
+                protocol::error::TerminalError::Exec { command, message } => todo!(),
+                protocol::error::TerminalError::Initialization { message } => todo!(),
+                protocol::error::TerminalError::ChannelClosed { message } => todo!(),
+                protocol::error::TerminalError::Io { message } => todo!(),
+                protocol::error::TerminalError::Other { message } => todo!(),
+            },
+        }
+    }
     fn dispatch_event(&mut self, event: RuntimeEvent, cx: &mut Context<Self>) {
         match event {
             RuntimeEvent::Connected { session_id } => {
@@ -252,7 +274,7 @@ impl AppState {
             RuntimeEvent::Disconnected => {
                 log::info!("RuntimeManager: Disconnected");
             }
-            RuntimeEvent::Error { message } => todo!(),
+            RuntimeEvent::Error { error } => self.handle_error(error, cx),
             RuntimeEvent::TerminalOutput { tab_id, bytes } => {
                 self.terminal_store.update(cx, |this, cx| {
                     if let Some(terminal) = this.get(&tab_id) {

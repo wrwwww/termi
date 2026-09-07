@@ -1,45 +1,70 @@
 use anyhow::{Context, Result};
+use bytes::Bytes;
 use futures::lock::Mutex;
 use russh::{
     Channel, ChannelMsg,
     client::{self, Config, Handle, Msg},
+    keys::ssh_key,
 };
 use std::{path::Path, sync::Arc};
 
-use crate::{AuthMethod, ClientHandler, Session, file::RemoteFile};
+use crate::{AuthMethod, error::ProtocolError, file::RemoteFile};
+pub struct SshConfig {
+    pub hostname: String,
+    pub port: u16,
+    pub username: String,
+    pub auth: AuthMethod,
+}
+
+struct ClientHandler;
+
+impl russh::client::Handler for ClientHandler {
+    type Error = anyhow::Error;
+
+    async fn check_server_key(
+        &mut self,
+        server_public_key: &ssh_key::PublicKey,
+    ) -> Result<bool, Self::Error> {
+        println!("Server key: {:?}", server_public_key);
+
+        Ok(true)
+    }
+}
 
 pub struct SshConnection {
     handle: Arc<Mutex<Handle<ClientHandler>>>,
 }
 impl SshConnection {
     /// 建立 SSH 连接
-    pub async fn connect(session: &Session) -> Result<Self> {
+    pub async fn connect(session: &SshConfig) -> Result<Self, ProtocolError> {
         let addr = format!("{}:{}", session.hostname, session.port);
-
         let stream = tokio::net::TcpStream::connect(&addr)
             .await
-            .with_context(|| format!("连接服务器失败: {addr}"))?;
+            .map_err(|err| ProtocolError::Io(err))?;
+        // .with_context(|| format!("连接服务器失败: {addr}"))?;
 
         let config = Arc::new(Config::default());
 
         let mut handle = client::connect_stream(config, stream, ClientHandler)
             .await
-            .context("SSH 握手失败")?;
+            .map_err(|err| ProtocolError::KexInit)?;
+        // .context()?;
 
         match &session.auth {
             AuthMethod::Password { password } => {
                 let result = handle
                     .authenticate_password(session.username.clone(), password.clone())
                     .await
-                    .context("SSH 密码认证失败")?;
+                    .map_err(|err| ProtocolError::RequestDenied)?;
 
                 if !result.success() {
-                    anyhow::bail!("用户名或密码不正确");
+                    // anyhow::bail!("用户名或密码不正确");
                 }
             }
 
             _ => {
-                anyhow::bail!("当前只支持密码认证");
+                // anyhow::bail!("当前只支持密码认证");
+                return Err(ProtocolError::NoAuthMethod);
             }
         }
 
@@ -159,8 +184,19 @@ impl TerminalChannel {
         Ok(())
     }
 
-    pub async fn read(&mut self) -> Option<ChannelMsg> {
-        self.channel.wait().await
+    pub async fn read(&mut self) -> Option<ProtocolChannelMsg> {
+        match self.channel.wait().await {
+            Some(msg) => match msg {
+                ChannelMsg::Data { data } => Some(ProtocolChannelMsg::Data { data }),
+                ChannelMsg::ExtendedData { data, ext } => {
+                    Some(ProtocolChannelMsg::ExtendedData { data, ext })
+                }
+                ChannelMsg::Eof => Some(ProtocolChannelMsg::Eof),
+                ChannelMsg::Close => Some(ProtocolChannelMsg::Close),
+                _ => Some(ProtocolChannelMsg::Other),
+            },
+            None => None,
+        }
     }
     pub async fn window_change(&mut self, cols: u32, rows: u32) -> Result<()> {
         self.channel
@@ -176,6 +212,14 @@ impl TerminalChannel {
             .context("向 SSH terminal channel 发送 EOF 失败")?;
         Ok(())
     }
+}
+
+pub enum ProtocolChannelMsg {
+    Data { data: Bytes },
+    ExtendedData { data: Bytes, ext: u32 },
+    Eof,
+    Close,
+    Other,
 }
 pub struct CommandOutput {
     pub stdout: Vec<u8>,
