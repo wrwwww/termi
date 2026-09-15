@@ -1,5 +1,5 @@
 use gpui::{Entity, SharedString};
-use protocol::{SessionId, TabId};
+ use terminal::id::{SessionId, TabId};
 use terminal::Terminal;
 use utils::collections::HashMap;
 

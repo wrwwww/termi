@@ -1,7 +1,7 @@
 use gpui::Context;
-use protocol::{AuthMethod, Protocol, Session, SessionId, SessionStatus};
+use protocol::{AuthMethod, Protocol,  };
 use utils::collections::HashMap;
-
+use terminal::{id::{SessionId   }, session::session::{Session, SessionStatus}};
 pub struct SessionStore {
     sessions: HashMap<SessionId, Session>,
 }
@@ -30,14 +30,14 @@ impl SessionStore {
         };
         let session_2 = Session {
             id: SessionId::new(),
-            name: "192.168.117.129".to_string(),
+            name: "192.168.117.131".to_string(),
             group: "linux".to_string(),
-            hostname: "192.168.117.129".to_string(),
+            hostname: "192.168.117.131".to_string(),
             port: 22,
             username: "wrw".to_string(),
             protocol: Protocol::Ssh,
             auth: AuthMethod::Password {
-                password: "1234".to_string(),
+                password: "1006".to_string(),
             },
             // identity_file: Some("".to_string()),
             status: SessionStatus::Disconnected,
@@ -88,7 +88,7 @@ impl SessionStore {
 
         copied.name = format!("{} Copy", copied.name);
 
-        copied.status = protocol::SessionStatus::Disconnected;
+        copied.status =  SessionStatus::Disconnected;
 
         copied.latencies_ms = Vec::new();
 

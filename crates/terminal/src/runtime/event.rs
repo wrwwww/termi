@@ -5,7 +5,7 @@ use crate::{
     id::{SessionId, TabId, TransferId},
     session::session::SessionStatus,
 };
-
+#[derive(Debug)]
 pub enum RuntimeCommand {
     Terminal {
         tab_id: TabId,
@@ -80,6 +80,7 @@ pub enum RuntimeEvent {
     },
 }
 
+#[derive(Debug)]
 pub enum TerminalCommand {
     Open,
 
@@ -89,11 +90,15 @@ pub enum TerminalCommand {
 
     Close,
 }
+
+#[derive(Debug)]
 pub enum MonitorCommand {
     Start,
     Stop,
     Refresh,
 }
+
+#[derive(Debug)]
 pub enum FileCommand {
     List { path: String },
 

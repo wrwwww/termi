@@ -5,18 +5,20 @@
 
 use futures::channel::mpsc::UnboundedReceiver;
 use gpui::{Context, Entity};
-use protocol::{
-    AuthMethod, RuntimeEvent, Session, SessionId, SessionStatus, TabId, error::RuntimeError,
-    monitor::MonitorStore,
-};
+use protocol::monitor::MonitorStore;
 use serde::{Deserialize, Serialize};
-use std::collections::BTreeMap;
-use strum::{Display, EnumIter, EnumString};
-use utils::collections::HashMap;
+use terminal::{
+    error::{
+        AuthenticationError, ConnectionError, HostKeyError, RuntimeError, SessionError,
+        TerminalError,
+    },
+    id::{SessionId, TabId},
+    runtime::{RuntimeManager, event::RuntimeEvent},
+    session::session::SessionStatus,
+};
 
 use crate::{
     monitor_store::{self},
-    runtime_manager::{self, RuntimeManager},
     session_store::{self, SessionStore},
     terminal_store::TerminalStore,
     transfer_store::{self, TransferStore},
@@ -242,21 +244,125 @@ impl AppState {
     fn handle_error(&mut self, error: RuntimeError, cx: &mut Context<Self>) {
         match error {
             RuntimeError::Session(session_error) => match session_error {
-                protocol::error::SessionError::Connection(connection_error) => todo!(),
-                protocol::error::SessionError::Authentication(authentication_error) => todo!(),
-                protocol::error::SessionError::HostKey(host_key_error) => todo!(),
-                protocol::error::SessionError::Other { message } => todo!(),
+                SessionError::Connection(connection_error) => match connection_error {
+                    ConnectionError::Timeout
+                    | ConnectionError::Refused
+                    | ConnectionError::Unreachable
+                    | ConnectionError::Dns => {
+                        
+                    }
+
+                    ConnectionError::Reset => {
+                        println!("Session connection reset");
+                    }
+
+                    ConnectionError::Other { message } => {
+                        println!("Session connection error: {message}");
+                    }
+                },
+
+                SessionError::Authentication(authentication_error) => match authentication_error {
+                    AuthenticationError::PasswordRejected => {
+                        println!("Authentication error: password rejected");
+                    }
+
+                    AuthenticationError::PublicKeyRejected => {
+                        println!("Authentication error: public key rejected");
+                    }
+
+                    AuthenticationError::PrivateKeyNotFound { path } => {
+                        println!("Authentication error: private key not found: {path}");
+                    }
+
+                    AuthenticationError::PrivateKeyInvalid { message } => {
+                        println!("Authentication error: private key invalid: {message}");
+                    }
+
+                    AuthenticationError::KeyboardInteractiveFailed => {
+                        println!("Authentication error: keyboard interactive failed");
+                    }
+
+                    AuthenticationError::NoSupportedMethod => {
+                        println!("Authentication error: no supported authentication method");
+                    }
+
+                    AuthenticationError::PermissionDenied => {
+                        println!("Authentication error: permission denied");
+                    }
+
+                    AuthenticationError::Other { message } => {
+                        println!("Authentication error: {message}");
+                    }
+                },
+
+                SessionError::HostKey(host_key_error) => match host_key_error {
+                    HostKeyError::UnknownHost { fingerprint } => {
+                        println!("Host key error: unknown host, fingerprint={fingerprint}");
+                    }
+
+                    HostKeyError::Changed {
+                        old_fingerprint,
+                        new_fingerprint,
+                    } => {
+                        println!(
+                            "Host key error: changed, old={old_fingerprint}, new={new_fingerprint}"
+                        );
+                    }
+
+                    HostKeyError::VerificationRequired { fingerprint } => {
+                        println!("Host key verification required: fingerprint={fingerprint}");
+                    }
+
+                    HostKeyError::Rejected => {
+                        println!("Host key error: rejected");
+                    }
+                },
+
+                SessionError::Other { message } => {
+                    println!("Session error: {message}");
+                }
+
+                SessionError::Protocol { message } => {
+                    println!("Session protocol error: {message}");
+                }
             },
+
             RuntimeError::Terminal(terminal_error) => match terminal_error {
-                protocol::error::TerminalError::ChannelOpen { message } => todo!(),
-                protocol::error::TerminalError::PtyRequest { message } => todo!(),
-                protocol::error::TerminalError::PtyResize { message } => todo!(),
-                protocol::error::TerminalError::ShellRequest { message } => todo!(),
-                protocol::error::TerminalError::Exec { command, message } => todo!(),
-                protocol::error::TerminalError::Initialization { message } => todo!(),
-                protocol::error::TerminalError::ChannelClosed { message } => todo!(),
-                protocol::error::TerminalError::Io { message } => todo!(),
-                protocol::error::TerminalError::Other { message } => todo!(),
+                TerminalError::ChannelOpen { message } => {
+                    println!("Terminal channel open error: {message}");
+                }
+
+                TerminalError::PtyRequest { message } => {
+                    println!("Terminal PTY request error: {message}");
+                }
+
+                TerminalError::PtyResize { message } => {
+                    println!("Terminal PTY resize error: {message}");
+                }
+
+                TerminalError::ShellRequest { message } => {
+                    println!("Terminal shell request error: {message}");
+                }
+
+                TerminalError::Exec { command, message } => {
+                    println!("Terminal exec error: command={command}, message={message}");
+                }
+
+                TerminalError::Initialization { message } => {
+                    println!("Terminal initialization error: {message}");
+                }
+
+                TerminalError::ChannelClosed { message } => {
+                    println!("Terminal channel closed: {message:?}");
+                }
+
+                TerminalError::Io { message } => {
+                    println!("Terminal IO error: {message}");
+                }
+
+                TerminalError::Other { message } => {
+                    println!("Terminal error: {message}");
+                }
             },
         }
     }
@@ -299,14 +405,5 @@ impl AppState {
                 message,
             } => todo!(),
         }
-    }
-    fn state_file() -> Option<std::path::PathBuf> {
-        std::env::var_os("APPDATA")
-            .or_else(|| std::env::var_os("USERPROFILE"))
-            .map(|base| {
-                std::path::PathBuf::from(base)
-                    .join("termi")
-                    .join("state.json")
-            })
     }
 }

@@ -44,15 +44,15 @@ use crate::{
 
 use gpui::*;
 use gpui_component::{
-    IconName, Root,
+    IconName,  
     button::Button,
     input::{Input, InputState},
     menu::ContextMenuExt,
 };
 
 use log::{error, info};
-
-use protocol::{Session, SessionId};
+use terminal::{id::{SessionId, TabId}, session::session::Session};
+ 
 use schemars::JsonSchema;
 use serde::Deserialize;
 
@@ -218,24 +218,6 @@ impl Sidebar {
     // ========================================================================
 
     fn open_session(&mut self, session_id: SessionId, window: &mut Window, cx: &mut Context<Self>) {
-        // 更新 SessionManager 中的状态。
-        self.session_manager.update(cx, |manager, _cx| {
-            manager.open_session(session_id);
-        });
-
-        // 更新 AppState。
-        //
-        // 你的原始代码这里已经有：
-        //
-        //     state.set_active_session(...)
-        //
-        // 所以这里恢复使用这个设计。
-        self.state.update(cx, |state, cx| {
-            // state.set_active_tab(&session_id);
-
-            cx.notify();
-        });
-
         // 打开 Terminal。
         window.dispatch_action(Box::new(OpenTerminalAction { session_id }), cx);
     }

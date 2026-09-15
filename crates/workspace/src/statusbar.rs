@@ -4,9 +4,9 @@
 //! encoding/line endings/grid · theme + agent forwarding (right).
 
 use crate::state::AppState;
-
+use terminal::id::{SessionId,  TabId};
 use gpui::*;
-use protocol::{SessionId, SessionStatus, TabId};
+ 
 use settings::Settings;
 use settings_content::theme::ThemeAppearanceMode;
 use termi_action::theme::ToggleMode;

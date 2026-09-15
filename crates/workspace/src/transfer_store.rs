@@ -1,4 +1,4 @@
-use protocol::{SessionId, TransferId};
+ 
 pub struct TransferStore {}
 impl TransferStore {
     pub fn new() -> Self {

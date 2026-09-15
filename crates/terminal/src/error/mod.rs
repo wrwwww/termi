@@ -38,7 +38,8 @@ pub enum SessionError {
 
     /// SSH Host Key 验证错误
     HostKey(HostKeyError),
-
+    /// SSH 协议层错误
+    Protocol { message: String },
     /// 其他 Session 级别错误
     Other { message: String },
 }
@@ -50,16 +51,16 @@ pub enum SessionError {
 #[derive(Debug, Clone)]
 pub enum ConnectionError {
     /// DNS 解析失败
-    Dns { host: String, message: String },
+    Dns ,
 
     /// 连接超时
-    Timeout { host: String, port: u16 },
+    Timeout ,
 
     /// 目标端口拒绝连接
-    Refused { host: String, port: u16 },
+    Refused ,
 
     /// 网络不可达
-    Unreachable { host: String, port: u16 },
+    Unreachable ,
 
     /// 连接被重置
     Reset,
@@ -154,45 +155,27 @@ pub enum TerminalError {
     /// 其他 Terminal 错误
     Other { message: String },
 }
-
 impl From<ProtocolError> for RuntimeError {
-    fn from(value: ProtocolError) -> Self {
-        match value {
-            ProtocolError::KexInit => {
-                RuntimeError::Session(SessionError::Connection(ConnectionError::Other {
-                    message: "".to_string(),
-                }))
-            }
-            ProtocolError::Kex => todo!(),
-            ProtocolError::Version => todo!(),
-            ProtocolError::NoCommonAlgorithm { ours, theirs } => todo!(),
-            ProtocolError::UnknownAlgorithm => todo!(),
-            ProtocolError::PacketAuth => todo!(),
-            ProtocolError::PacketSize { size } => todo!(),
-            ProtocolError::Decryption => todo!(),
-            ProtocolError::Compression => todo!(),
-            ProtocolError::Decompression => todo!(),
-            ProtocolError::Encoding => todo!(),
-            ProtocolError::StrictKeyExchangeViolation {
-                message_type,
-                sequence_number,
-            } => todo!(),
-            ProtocolError::Disconnect => todo!(),
-            ProtocolError::Io(error) => todo!(),
-            ProtocolError::WrongChannel => todo!(),
-            ProtocolError::ChannelOpenFailure { reason } => todo!(),
+    fn from(error: ProtocolError) -> Self {
+        match error {
+            ProtocolError::Disconnect =>  RuntimeError::Session(SessionError::Connection(ConnectionError::Refused )),
+            ProtocolError::Io(_error) => RuntimeError::Session(SessionError::Connection(ConnectionError::Timeout )),
+            ProtocolError::ChannelOpenFailure { reason } =>  RuntimeError::Session(SessionError::Other {
+                message: format!("channel 打开失败{}",reason),
+            }),
             ProtocolError::NotAuthenticated => todo!(),
-            ProtocolError::UnsupportedAuthMethod => todo!(),
-            ProtocolError::NoAuthMethod => todo!(),
-            ProtocolError::RequestDenied => todo!(),
-            ProtocolError::KeyChanged { line } => todo!(),
-            ProtocolError::CouldNotReadKey => todo!(),
-            ProtocolError::UnknownKey => todo!(),
-            ProtocolError::WrongServerSignature => todo!(),
-            ProtocolError::Signature { message } => todo!(),
-            ProtocolError::SshKey { message } => todo!(),
-            ProtocolError::SshEncoding { message } => todo!(),
-            ProtocolError::Internal { message } => todo!(),
+            ProtocolError::UnsupportedAuthMethod =>  RuntimeError::Session(SessionError::Other {
+                message: format!("当前认证方式不支持"),
+            }),
+            ProtocolError::NoAuthMethod =>  RuntimeError::Session(SessionError::Other {
+                message: format!("没有可认证的方式"),
+            }),
+            ProtocolError::RequestDenied => RuntimeError::Session(SessionError::Other {
+                message: format!("请求被服务器拒绝"),
+            }),
+            _ => RuntimeError::Session(SessionError::Other {
+                message: format!("{error:?}"),
+            }),
         }
     }
 }

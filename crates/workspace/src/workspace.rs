@@ -18,7 +18,7 @@ pub mod files;
 pub mod item;
 pub mod monitor;
 pub mod monitor_store;
-pub mod runtime_manager;
+ 
 pub mod session_store;
 pub mod settings;
 pub mod sidebar;
@@ -41,13 +41,13 @@ use crate::{
     sidebar::Sidebar,
     state::AppState,
     statusbar::StatusBar,
-    terminal::{CloseTerminalAction, OpenTerminalAction},
+    terminal::{   OpenTerminalAction},
     terminal_store::{TerminalEntry, TerminalStore},
     title_bar::PlatformTitleBar,
     transfer_store::TransferStore,
 };
 use ::settings::Settings;
-use ::terminal::{TerminalBounds, TerminalBuilder};
+use ::terminal::{TerminalBounds, TerminalBuilder, id::{SessionId, TabId}, runtime::RuntimeManager};
 use ::theme::{ActiveTheme, Theme};
 use gpui::{prelude::FluentBuilder, *};
 use gpui_component::{
@@ -55,7 +55,7 @@ use gpui_component::{
     resizable::{h_resizable, resizable_panel, v_resizable},
     tab,
 };
-use protocol::{SessionId, TabId, monitor::MonitorStore};
+use protocol::{  monitor::MonitorStore};
 use schemars::JsonSchema;
 use serde::Deserialize;
 use terminal_view::TerminalView;
@@ -89,7 +89,7 @@ impl WorkspaceView {
         let terminal_store = cx.new(|cx| TerminalStore::new());
         let monitor_manager = cx.new(|cx| MonitorStore::new());
         let transfer_store = cx.new(|cx| TransferStore::new());
-        let runtime_manager = runtime_manager::RuntimeManager::new(event_tx.clone());
+        let runtime_manager =  RuntimeManager::new(event_tx.clone());
 
         let state = cx.new(|cx| {
             state::AppState::new(
@@ -198,11 +198,13 @@ impl WorkspaceView {
             .query(action.session_id)
             .expect("")
             .clone();
+        log::info!("session:{:?}",session);
         let tab_id = self
             .state
             .update(cx, |this, cx| this.runtime_manager.open_session(session));
-
-        if let Ok((tab_id, handle)) = tab_id {
+       
+        if let Ok((tab_id, handle)) = tab_id { 
+            log::info!("tab_id:{:?}",tab_id);
             let builder = TerminalBuilder::new_terminal(tab_id, TerminalBounds::default(), handle);
 
             let terminal = cx.new(|cx| builder.subscribe(cx));
@@ -222,14 +224,7 @@ impl WorkspaceView {
             self.views.register_terminal(tab_id, terminal_view);
             self.tabs.push(tab_id);
             self.activate_tab(tab_id, window, cx);
-            // self.views.update(cx, |registry, _| {
-            //     registry.register_terminal(tab_id.clone(), view);
-            // });
         }
-
-        // self.terminal_pane.update(cx, |pane, cx| {
-        //     pane.open_terminal(action, window, cx);
-        // });
     }
     pub fn close_terminal(&mut self, tab_id: TabId, _window: &mut Window, cx: &mut Context<Self>) {
         self.state.update(cx, |this, cx| {

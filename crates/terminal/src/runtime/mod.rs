@@ -2,6 +2,7 @@ use std::collections::HashMap;
 
 use futures::channel::mpsc::UnboundedSender;
 use gpui::Task;
+use log::info;
 
 use crate::{
     SessionRuntimeHandle,
@@ -46,6 +47,7 @@ impl RuntimeManager {
         Ok((tab_id, runtime))
     }
     pub fn get_or_create(&mut self, session: Session) -> anyhow::Result<SessionRuntimeHandle> {
+        info!("get or create");
         let session_id = session.id.clone();
         if let None = self.runtimes.get(&session_id) {
             let (runtime, handle) = SessionRuntime::new(session.clone(), self.event_tx.clone());

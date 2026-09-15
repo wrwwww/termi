@@ -302,7 +302,16 @@ impl Terminal {
             PtyEvent::Event(event) => self.process_event(event, cx),
         }
     }
+    ///Paste text into the terminal
+    pub fn paste(&mut self, text: &str) {
+        let paste_text = if self.last_content.mode.contains(Modes::BRACKETED_PASTE) {
+            format!("{}{}{}", "\x1b[200~", text.replace('\x1b', ""), "\x1b[201~")
+        } else {
+            text.replace("\r\n", "\r").replace('\n', "\r")
+        };
 
+        self.input(paste_text.into_bytes());
+    }
     pub fn process_event(&mut self, event: TerminalBackendEvent, cx: &mut Context<Self>) {
         match event {
             TerminalBackendEvent::Title(title) => {
@@ -592,6 +601,8 @@ pub fn make_content(term: &Term<TerminalListener>, last_content: &Content) -> Co
         scrolled_to_top: content.display_offset == term.history_size(),
         scrolled_to_bottom: content.display_offset == 0,
         bottom_row_occupied,
+        // selection_text,
+        // selection: todo!(),
     }
 }
 
@@ -1720,29 +1731,17 @@ impl TerminalBuilder {
             keyboard_input_sent: false,
             init_command_startup_marker: None,
             init_command_startup_tx: None,
-
             scroll_pixel_y: 0.,
             backend:handle,
-        
-            // backend: todo!(),
         };
         Self {
             terminal,
             events_rx,
-            // cmd_rx:Some(cmd_rx)
         }
     }
 
     pub fn subscribe(mut self,cx: &Context<Terminal>) -> Terminal {
-    // pub fn subscribe(mut self,session:Session, tab_id: TabId, events : UnboundedSender<SystemEvent>,cx: &Context<Terminal>) -> Terminal {
-        // let cmd_rx=self.cmd_rx.take().unwrap();
-        // cx.spawn(async move|this,cx|{
-        //     let runtime=tokio::runtime::Runtime::new().unwrap();
-        //     runtime.spawn(async move {
-        //          open_session_terminal(events.clone(), session, tab_id, cmd_rx).await;
-        //     }).await.unwrap();
-     
-        // }).detach();  
+
         //Event loop
         self.terminal.event_loop_task = cx.spawn(async move |terminal, cx| {
             while let Some(event) = self.events_rx.next().await {
@@ -1753,8 +1752,6 @@ impl TerminalBuilder {
 
                 'outer: loop {
                     let mut events = Vec::new();
-
-        
 
                     let mut wakeup = false;
                     loop {

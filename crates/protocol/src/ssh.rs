@@ -1,6 +1,7 @@
 use anyhow::{Context, Result};
 use bytes::Bytes;
 use futures::lock::Mutex;
+use log::info;
 use russh::{
     Channel, ChannelMsg,
     client::{self, Config, Handle, Msg},
@@ -9,6 +10,7 @@ use russh::{
 use std::{path::Path, sync::Arc};
 
 use crate::{AuthMethod, error::ProtocolError, file::RemoteFile};
+#[derive(Debug)]
 pub struct SshConfig {
     pub hostname: String,
     pub port: u16,
@@ -38,26 +40,31 @@ impl SshConnection {
     /// 建立 SSH 连接
     pub async fn connect(session: &SshConfig) -> Result<Self, ProtocolError> {
         let addr = format!("{}:{}", session.hostname, session.port);
+
+        info!("创建tcp连接");
         let stream = tokio::net::TcpStream::connect(&addr)
             .await
             .map_err(|err| ProtocolError::Io(err))?;
         // .with_context(|| format!("连接服务器失败: {addr}"))?;
 
         let config = Arc::new(Config::default());
-
+        
         let mut handle = client::connect_stream(config, stream, ClientHandler)
             .await
             .map_err(|err| ProtocolError::KexInit)?;
-        // .context()?;
 
+        // .context()?;
+        info!("开始验证密码");
         match &session.auth {
             AuthMethod::Password { password } => {
+                info!("user:{:?},password:{:?}",session.username,password);
                 let result = handle
                     .authenticate_password(session.username.clone(), password.clone())
                     .await
                     .map_err(|err| ProtocolError::RequestDenied)?;
-
+                info!("result:{:?}",result);
                 if !result.success() {
+                    info!("用户名密码不正确");
                     // anyhow::bail!("用户名或密码不正确");
                 }
             }
@@ -75,13 +82,16 @@ impl SshConnection {
 
     /// 打开一个 SSH Terminal Channel
     pub async fn open_terminal(&self) -> Result<TerminalChannel> {
+        log::info!("open terminal channel");
         let channel = self
             .handle
             .lock()
             .await
             .channel_open_session()
-            .await
-            .context("打开 SSH terminal channel 失败")?;
+            .await.map_err(|err|{
+                log::error!("open  terminal channel err {:?}",err);
+            }).unwrap()
+            ;
 
         channel
             .request_pty(true, "xterm-256color", 80, 24, 0, 0, &[])

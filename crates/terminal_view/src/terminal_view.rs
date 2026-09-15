@@ -4,6 +4,7 @@ pub mod blink_manager;
 pub mod terminal_element;
 use gpui::Action;
 use gpui::*;
+use gpui_component::menu::ContextMenuExt;
 use gpui_rsx::rsx;
 use log::info;
 use serde::Deserialize;
@@ -12,7 +13,7 @@ use settings_content::terminal::TerminalBlink;
 use terminal::{CursorShape, Modes, Terminal, TerminalBounds, terminal_settings::TerminalSettings};
 
 use crate::{blink_manager::BlinkManager, terminal_element::TerminalElement};
-
+actions!(terminal_view,[PasteText]);
 pub struct ImeState {
     pub marked_text: String,
 }
@@ -165,7 +166,6 @@ impl TerminalView {
         };
 
         if should_blink {
-            info!("enable blinkManager");
             self.blink_manager.update(cx, BlinkManager::enable);
         }
 
@@ -183,7 +183,6 @@ impl TerminalView {
     fn focus_out(&mut self, _window: &mut Window, cx: &mut Context<Self>) {
         self.blink_manager.update(cx, BlinkManager::disable);
         self.terminal.update(cx, |terminal, _| {
-            info!("enable blinkManager");
             terminal.focus_out();
             // terminal.set_cursor_shape(CursorShape::Hollow);
         });
@@ -219,6 +218,17 @@ impl TerminalView {
             TerminalBlink::On => self.blink_manager.read(cx).visible(),
         }
     }
+    ///Attempt to paste the clipboard text into the terminal
+    fn paste_text(&mut self, _: &PasteText, _: &mut Window, cx: &mut Context<Self>) {
+        let Some(clipboard) = cx.read_from_clipboard() else {
+            return;
+        };
+
+        if let Some(text) = clipboard.text() {
+            self.terminal
+                .update(cx, |terminal, _cx| terminal.paste(&text));
+        }
+    }
 }
 /// Sends the specified text directly to the terminal.
 #[derive(Clone, Debug, Default, Deserialize, PartialEq, Action, private::schemars::JsonSchema)]
@@ -236,27 +246,36 @@ impl Render for TerminalView {
         // let view = cx.entity();
         // let config = self.config.read(cx).config_manager.current.theme.font_size;
         // let list = self.terminal_manager.read(cx).session_manager.read(cx);
-
-        rsx! {
-            <div id="terminal_view" class="bg-black" h_full w_full flex_1
-                on_action={cx.listener(TerminalView::send_text)}
-                on_key_down={cx.listener(Self::key_down)}
-                track_focus={&self.focus_handle.clone()}
-                >
-
-                <div id="terminal_container" class="" h_full w_full>
-                    {
-                        TerminalElement::new(
-                        terminal_handle,
-                        terminal_view_handle,
-                        self.focus_handle.clone(),
-                        focused,
-                        self.should_show_cursor(focused, cx),
-                        None,
-                        )
-                    }
-                </div>
-            </div>
-        }
+div()
+    .id("terminal_view")
+    .bg(black())
+    .h_full()
+    .w_full()
+    .flex_1()
+    .on_action(cx.listener(TerminalView::send_text))
+     .on_action(cx.listener(TerminalView::paste_text))
+    .on_key_down(cx.listener(Self::key_down))
+    .track_focus(&self.focus_handle.clone())
+    .context_menu(|menu, window, cx| {
+        menu 
+            .menu("Paste", Box::new(PasteText))
+        
+    })
+    .child(
+        div()
+            .id("terminal_container")
+            .h_full()
+            .w_full()
+            .child(
+                TerminalElement::new(
+                    terminal_handle,
+                    terminal_view_handle,
+                    self.focus_handle.clone(),
+                    focused,
+                    self.should_show_cursor(focused, cx),
+                    None,
+                )
+            )
+    )
     }
 }

@@ -34,9 +34,10 @@ use gpui_component::{
     tab::TabBar,
 };
 
-use protocol::{AuthMethod, Protocol, Session, SessionId, SessionStatus};
+use protocol::{AuthMethod, Protocol,  };
 
 use strum::IntoEnumIterator;
+use terminal::{id::SessionId, session::session::{Session, SessionStatus}};
 use theme::{ActiveTheme, Theme};
 
 use crate::{

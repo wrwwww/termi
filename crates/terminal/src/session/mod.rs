@@ -4,6 +4,7 @@ use futures::{
     StreamExt,
     channel::mpsc::{UnboundedReceiver, UnboundedSender},
 };
+use log::info;
 use protocol::{
     error::ProtocolError,
     ssh::{ProtocolChannelMsg, SshConnection, TerminalChannel},
@@ -103,7 +104,9 @@ impl SessionRuntime {
     // ========================================================
 
     pub async fn run(mut self) {
+
         if let Err(error) = self.connect().await {
+            log::error!("connect error");
             let _ = self.send_err(error);
             return;
         }
@@ -130,14 +133,17 @@ impl SessionRuntime {
     // ========================================================
 
     async fn connect(&mut self) -> Result<(), ProtocolError> {
-        let connection = SshConnection::connect(&protocol::ssh::SshConfig {
+        log::info!("ssh connect");
+        let config=protocol::ssh::SshConfig {
             hostname: self.session.hostname.clone(),
             port: self.session.port,
             username: self.session.username.clone(),
             auth: self.session.auth.clone(),
-        })
+        };
+        log::info!("ssh config:{:?}",config);
+        let connection = SshConnection::connect(&config)
         .await?;
-
+        log::info!("connect success");
         self.connection = Some(connection);
 
         Ok(())
@@ -148,6 +154,7 @@ impl SessionRuntime {
     // ========================================================
 
     async fn handle_command(&mut self, command: RuntimeCommand) -> anyhow::Result<()> {
+        info!("handle command:{:?}",command);
         match command {
             // ------------------------------------------------
             // Terminal
@@ -197,12 +204,7 @@ impl SessionRuntime {
             // 打开 Terminal
             // ------------------------------------------------
             TerminalCommand::Open => {
-                self.open_terminal(tab_id).await.map_err(|err| {
-                    // let terminal = self
-                    //     .terminals
-                    //     .get(&tab_id)
-                    //     .ok_or_else(|| anyhow::anyhow!("Terminal 不存在: {:?}", tab_id))?;
-                });
+                self.open_terminal(tab_id).await?;
             }
 
             // ------------------------------------------------
@@ -247,6 +249,7 @@ impl SessionRuntime {
     // ========================================================
 
     async fn open_terminal(&mut self, tab_id: TabId) -> anyhow::Result<()> {
+        log::info!("open terminal");
         // 防止重复创建
         if self.terminals.contains_key(&tab_id) {
             return Ok(());
@@ -257,8 +260,10 @@ impl SessionRuntime {
             .as_ref()
             .ok_or_else(|| anyhow::anyhow!("SSH 连接未建立"))?
             .open_terminal()
-            .await?;
-
+            .await.map_err(|err|{
+                log::error!("error:{:?}",err);
+            }).unwrap();
+        log::info!("channel: "  );
         // ----------------------------------------------------
         // 每个 Terminal 自己拥有一套 command channel
         // ----------------------------------------------------
@@ -384,6 +389,7 @@ async fn run_terminal(
 
     event_tx: UnboundedSender<RuntimeEvent>,
 ) {
+    log::info!("run terminal");
     loop {
         tokio::select! {
 
