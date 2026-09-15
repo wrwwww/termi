@@ -4,14 +4,18 @@ pub mod session;
 pub mod runtime;
 pub mod error;
 pub mod id;
+pub mod mouse;
 
 use futures::{
     FutureExt, SinkExt, StreamExt,
     channel::mpsc::{UnboundedReceiver, UnboundedSender, unbounded},
-};
-use log::info;
+};use std::{borrow::Cow, io, ops::RangeInclusive, path::PathBuf, sync::Arc};
+use log::{info, trace};
+use settings::Settings;
+ 
+ 
 use std::{
-    borrow::Cow,
+ 
     cmp,
     collections::{VecDeque, vec_deque},
     fmt::{self, Formatter},
@@ -19,36 +23,24 @@ use std::{
     ops::{BitOr, BitOrAssign, Deref, Range as StdRange},
     process::ExitStatus,
     rc::Rc,
-    sync::{Arc, atomic::AtomicU64, mpsc::Sender},
+    sync::{  atomic::AtomicU64, mpsc::Sender},
     time::{Instant, SystemTime, UNIX_EPOCH},
 };
 use tokio::task::yield_now;
 
-use alacritty_terminal::{
-    Term,
-    event::{self, Event, EventListener},
-    grid::{Dimensions, GridIterator},
-    index::Column,
-    sync::FairMutex,
-    term::{Config, cell::Flags},
+use alacritty_terminal::{   
+    Term, event::{self, Event, EventListener}, grid::{Dimensions, GridIterator}, index::{Column, Line}, sync::FairMutex, term::{Config, cell::Flags},
 };
 
 use gpui::{
-    AbsoluteLength, AnyElement, App, AvailableSpace, Background, BorderStyle, Bounds,
-    ClipboardItem, ContentMask, Context, Corners, DefiniteLength, DispatchPhase, Edges, Element,
-    Entity, EventEmitter, FocusHandle, Font, FontFeatures, FontStyle, FontWeight, HighlightStyle,
-    Hitbox, HitboxBehavior, Hsla, InputHandler, InteractiveElement, Interactivity, IntoElement,
-    KeyDownEvent, Keystroke, Modifiers, ModifiersChangedEvent, MouseButton, MouseMoveEvent,
-    PaintQuad, ParentElement, Pixels, Point as GpuiPoint, ShapedLine, Size, StrikethroughStyle,
-    Task, TextAlign, TextRun, TextStyle, UTF16Selection, UnderlineStyle, WeakEntity, WhiteSpace,
-    Window, accesskit::Uuid, div, fill, font, hsla, point, px, relative, rgba, size,
+    AbsoluteLength, AnyElement, App, AvailableSpace, Background, BorderStyle, Bounds, ClipboardItem, ContentMask, Context, Corners, DefiniteLength, DispatchPhase, Edges, Element, Entity, EventEmitter, FocusHandle, Font, FontFeatures, FontStyle, FontWeight, HighlightStyle, Hitbox, HitboxBehavior, Hsla, InputHandler, InteractiveElement, Interactivity, IntoElement, KeyDownEvent, Keystroke, Modifiers, ModifiersChangedEvent, MouseButton, MouseDownEvent, MouseMoveEvent, MouseUpEvent, PaintQuad, ParentElement, Pixels, Point as GpuiPoint, ShapedLine, Size, StrikethroughStyle, Task, TextAlign, TextRun, TextStyle, UTF16Selection, UnderlineStyle, WeakEntity, WhiteSpace, Window, accesskit::Uuid, div, fill, font, hsla, point, px, relative, rgba, size,
 };
 use itertools::Itertools;
 
 use serde::{Deserialize, Serialize};
 use vte::ansi::{Attr, Color, Handler, NamedColor, Processor, Rgb, StdSyncHandler};
 
-use crate::{alacritty::{last_non_empty_lines, window_size_from_terminal_bounds}, id::TabId, session::SessionRuntimeHandle};
+use crate::{alacritty::{AlacDirection, AlacScroll, AlacSelection, AlacSelectionType, HyperlinkMatch, clear_saved_screen, display_offset, full_content_range, last_non_empty_lines, scroll_display, selection_text, set_selection as set_term_selection, update_selection as update_term_selection, window_size_from_terminal_bounds}, id::TabId, mouse::{grid_point, grid_point_and_side, mouse_button_report, mouse_moved_report}, session::SessionRuntimeHandle, terminal_settings::TerminalSettings};
 
 pub struct Terminal {
     pub tab_id: TabId,
@@ -72,11 +64,15 @@ pub struct Terminal {
     pub keyboard_input_sent: bool,
     pub init_command_startup_marker: Option<String>,
     pub init_command_startup_tx: Option<Sender<()>>,
-
+   pub selection_head: Option<Point>,
     pub event_loop_task: Task<Result<(), anyhow::Error>>,
     // pub backend: UnboundedSender<TerminalCommand>,
     pub backend: SessionRuntimeHandle,
     pub scroll_pixel_y: f32,
+   mouse_down_hyperlink: Option<HyperlinkMatch>,
+    last_mouse: Option<(Point, SelectionSide)>,
+    selection_phase:  SelectionPhase,
+    mouse_down_position: Option<GpuiPoint<Pixels>>,
     // pub(crate) highlight_cache: std::cell::RefCell<
     //     Option<(
     //         Vec<RenderCell>,
@@ -252,6 +248,7 @@ pub enum TerminalEvent {
     // Open(MaybeNavigationTarget),
 }
 impl EventEmitter<TerminalEvent> for Terminal {}
+const SELECTION_DRAG_THRESHOLD: f64 = 2.0;
 impl Terminal {
     pub fn focus_in(&self) {
         if self.last_content.mode.contains(Modes::FOCUS_IN_OUT) {
@@ -311,6 +308,10 @@ impl Terminal {
         };
 
         self.input(paste_text.into_bytes());
+    }
+        fn set_selection(&mut self, selection: Option<Selection>) {
+        self.events
+            .push_back(InternalEvent::SetSelection(selection));
     }
     pub fn process_event(&mut self, event: TerminalBackendEvent, cx: &mut Context<Self>) {
         match event {
@@ -436,20 +437,94 @@ impl Terminal {
                 // invalidate the matches and recalculate their locations
                 // in the new terminal layout
                 // if !self.matches.is_empty() {
-                //     cx.emit(Event::Wakeup);
+                    // cx.emit(Event::Wakeup);
                 // }
             }
-            InternalEvent::Clear => {}
-            InternalEvent::Scroll(scroll) => {}
-            InternalEvent::SetSelection(selection) => {}
-            InternalEvent::UpdateSelection(position) => {}
+            InternalEvent::Clear => {
+                      trace!("Clearing");
+                clear_saved_screen(term);
+                self.reset_cwd_history();
+                // cx.emit(Event::Wakeup);
+            }
+            InternalEvent::Scroll(scroll) => {  trace!("Scrolling: scroll={scroll:?}");
+                scroll_display(term, *scroll);
+                // self.refresh_hovered_word(window, cx);
 
-            InternalEvent::Copy(keep_selection) => {}
+                // if self.vi_mode_enabled {
+                //     update_vi_cursor_for_scroll(term, *scroll);
+                //     if let Some(selection_head) = update_selection_to_vi_cursor(term) {
+                //         #[cfg(any(target_os = "linux", target_os = "freebsd"))]
+                //         if let Some(selection_text) = selection_text(term) {
+                //             cx.write_to_primary(ClipboardItem::new_string(selection_text));
+                //         }
+
+                //         self.selection_head = Some(selection_head);
+                //         // cx.emit(Event::SelectionsChanged)
+                //     }
+                // }
+            }
+            InternalEvent::SetSelection(selection) => {
+                          trace!("Setting selection: selection={selection:?}");
+                set_term_selection(term, selection.as_ref());
+
+                #[cfg(any(target_os = "linux", target_os = "freebsd"))]
+                if let Some(selection_text) = selection_text(term) {
+                    cx.write_to_primary(ClipboardItem::new_string(selection_text));
+                }
+
+                if let Some(selection) = selection {
+                    self.selection_head = Some(selection.head);
+                }
+                // cx.emit(Event::SelectionsChanged)
+            }
+            InternalEvent::UpdateSelection(position) => {
+                  trace!("Updating selection: position={position:?}");
+                let (point, side) = grid_point_and_side(
+                    *position,
+                    self.last_content.terminal_bounds,
+                    display_offset(term),
+                );
+
+                if update_term_selection(term, point, side) {
+                    #[cfg(any(target_os = "linux", target_os = "freebsd"))]
+                    if let Some(selection_text) = selection_text(term) {
+                        cx.write_to_primary(ClipboardItem::new_string(selection_text));
+                    }
+
+                    self.selection_head = Some(point);
+                    // cx.emit(Event::SelectionsChanged)
+                }
+            }
+
+            InternalEvent::Copy(keep_selection) => {
+                  trace!("Copying selection: keep_selection={keep_selection:?}");
+                if let Some(txt) = selection_text(term) {
+                    cx.write_to_clipboard(ClipboardItem::new_string(txt));
+                    if !keep_selection.unwrap_or_else(|| {
+                        let settings = TerminalSettings::get_global(cx);
+                        settings.keep_selection_on_copy
+                    }) {
+                        self.events.push_back(InternalEvent::SetSelection(None));
+                    }
+                }
+            }
 
             InternalEvent::ToggleViMode => {}
             InternalEvent::ViMotion(motion) => {}
             InternalEvent::FindHyperlink(position, open) => {}
         }
+    }
+    fn reset_cwd_history(&mut self) {
+        // self.pending_cwd_boundary = None;
+        // self.cwd_history = self
+        //     .working_directory()
+        //     .map(|working_directory| {
+        //         vec![CwdHistoryEntry {
+        //             scrollback_position: i32::MIN,
+        //             working_directory,
+        //         }]
+        //     })
+        //     .unwrap_or_default();
     }
     pub fn try_modifiers_change(
         &mut self,
@@ -503,6 +578,8 @@ impl Terminal {
         //         new_bounds.num_lines() as u16,
         //     ));
         // }
+    }    pub fn selection_started(&self) -> bool {
+        self.selection_phase == SelectionPhase::Selecting
     }
     pub fn write_input(&mut self, input: impl Into<Cow<'static, [u8]>>) {
         let input = input.into();
@@ -534,6 +611,352 @@ impl Terminal {
         if has_marker {
             self.complete_init_command_startup_handshake();
         }
+    }
+  pub fn copy(&mut self, keep_selection: Option<bool>) {
+        self.events.push_back(InternalEvent::Copy(keep_selection));
+    }
+    pub fn select_all(&mut self) {
+        let term = self.term.lock();
+        let range = full_content_range(&term);
+        drop(term);
+        self.set_selection(Some(Selection::simple_range(range)));
+    }
+    pub fn clear(&mut self) {
+        self.events.push_back(InternalEvent::Clear)
+    }
+    pub fn scroll_line_up(&mut self) {
+        self.events
+            .push_back(InternalEvent::Scroll(Scroll::Delta(1)));
+    }
+
+    pub fn scroll_up_by(&mut self, lines: usize) {
+        self.events
+            .push_back(InternalEvent::Scroll(Scroll::Delta(lines as i32)));
+    }
+
+    pub fn scroll_line_down(&mut self) {
+        self.events
+            .push_back(InternalEvent::Scroll(Scroll::Delta(-1)));
+    }
+
+    pub fn scroll_down_by(&mut self, lines: usize) {
+        self.events
+            .push_back(InternalEvent::Scroll(Scroll::Delta(-(lines as i32))));
+    }
+
+    pub fn scroll_page_up(&mut self) {
+        self.events.push_back(InternalEvent::Scroll(Scroll::PageUp));
+    }
+
+    pub fn scroll_page_down(&mut self) {
+        self.events
+            .push_back(InternalEvent::Scroll(Scroll::PageDown));
+    }
+
+    pub fn scroll_to_top(&mut self) {
+        self.events.push_back(InternalEvent::Scroll(Scroll::Top));
+    }
+
+    pub fn scroll_to_bottom(&mut self) {
+        self.events.push_back(InternalEvent::Scroll(Scroll::Bottom));
+    }
+
+    pub fn scrolled_to_top(&self) -> bool {
+        self.last_content.scrolled_to_top
+    }
+
+    pub fn scrolled_to_bottom(&self) -> bool {
+        self.last_content.scrolled_to_bottom
+    } 
+    fn mouse_changed(&mut self, point: Point, side: SelectionSide) -> bool {
+        match self.last_mouse {
+            Some((old_point, old_side)) => {
+                if old_point == point && old_side == side {
+                    false
+                } else {
+                    self.last_mouse = Some((point, side));
+                    true
+                }
+            }
+            None => {
+                self.last_mouse = Some((point, side));
+                true
+            }
+        }
+    }
+
+    pub fn mouse_mode(&self, shift: bool) -> bool {
+        self.last_content.mode.intersects(Modes::MOUSE_MODE) && !shift
+    }
+
+    pub fn mouse_move(&mut self, e: &MouseMoveEvent, cx: &mut Context<Self>) {
+        let position = e.position - self.last_content.terminal_bounds.bounds.origin;
+        if self.mouse_mode(e.modifiers.shift) {
+            // A ctrl/cmd press on a link suppressed its button-press report in
+            // `mouse_down`. Since the app never saw the press, we must swallow
+            // the whole gesture rather than forward later motion/release
+            // reports, which would be a press-less (malformed) sequence.
+            // `mouse_up` resolves it: release on the same link opens it,
+            // otherwise the gesture is dropped.
+            if self.mouse_down_hyperlink.is_none() {
+                let (point, side) = grid_point_and_side(
+                    position,
+                    self.last_content.terminal_bounds,
+                    self.last_content.display_offset,
+                );
+
+                if self.mouse_changed(point, side) {
+                    let bytes = mouse_moved_report(
+                        point,
+                        e.pressed_button,
+                        e.modifiers,
+                        self.last_content.mode,
+                    );
+
+                    if let Some(bytes) = bytes {
+                        self.write_to_pty(bytes);
+                    }
+                }
+            }
+        } else {
+            // self.schedule_find_hyperlink(e.modifiers, e.position, cx);
+        }
+        cx.notify();
+    }
+
+    pub fn select_word_at_event_position(&mut self, e: &MouseDownEvent) {
+        let position = e.position - self.last_content.terminal_bounds.bounds.origin;
+        let (point, side) = grid_point_and_side(
+            position,
+            self.last_content.terminal_bounds,
+            self.last_content.display_offset,
+        );
+        let selection = Selection::new(SelectionType::Semantic, point, side);
+        self.events
+            .push_back(InternalEvent::SetSelection(Some(selection)));
+    }
+
+    pub fn mouse_drag(
+        &mut self,
+        e: &MouseMoveEvent,
+        region: Bounds<Pixels>,
+        cx: &mut Context<Self>,
+    ) {
+        let position = e.position - self.last_content.terminal_bounds.bounds.origin;
+        if !self.mouse_mode(e.modifiers.shift) {
+            if let Some(hyperlink) = &self.mouse_down_hyperlink {
+                let point = grid_point(
+                    position,
+                    self.last_content.terminal_bounds,
+                    self.last_content.display_offset,
+                );
+
+                if !hyperlink.range.contains(point) {
+                    self.mouse_down_hyperlink = None;
+                } else {
+                    return;
+                }
+            }
+
+            // Ignore tiny pointer movements so that a click that jitters by a
+            // pixel or two (e.g. the window-focusing click) does not begin a
+            // selection. Mirrors the drag threshold used by gpui's `div`.
+            if self.selection_phase != SelectionPhase::Selecting
+                && let Some(mouse_down_position) = self.mouse_down_position
+                && (e.position - mouse_down_position).magnitude() <= SELECTION_DRAG_THRESHOLD
+            {
+                return;
+            }
+
+            self.selection_phase = SelectionPhase::Selecting;
+            // Alacritty has the same ordering, of first updating the selection
+            // then scrolling 15ms later
+            self.events
+                .push_back(InternalEvent::UpdateSelection(position));
+
+            // Doesn't make sense to scroll the alt screen
+            if !self.last_content.mode.contains(Modes::ALT_SCREEN) {
+                let scroll_lines = match self.drag_line_delta(e, region) {
+                    Some(value) => value,
+                    None => return,
+                };
+
+                self.events
+                    .push_back(InternalEvent::Scroll(Scroll::Delta(scroll_lines)));
+            }
+
+            cx.notify();
+        }
+    }
+
+    fn drag_line_delta(&self, e: &MouseMoveEvent, region: Bounds<Pixels>) -> Option<i32> {
+        let top = region.origin.y;
+        let bottom = region.bottom_left().y;
+
+        let scroll_lines = if e.position.y < top {
+            let scroll_delta = (top - e.position.y).pow(1.1);
+            (scroll_delta / self.last_content.terminal_bounds.line_height).ceil() as i32
+        } else if e.position.y > bottom {
+            let scroll_delta = -((e.position.y - bottom).pow(1.1));
+            (scroll_delta / self.last_content.terminal_bounds.line_height).floor() as i32
+        } else {
+            return None;
+        };
+
+        Some(scroll_lines.clamp(-3, 3))
+    }
+
+    pub fn mouse_down(&mut self, e: &MouseDownEvent, cx: &mut Context<Self>) {
+        let position = e.position - self.last_content.terminal_bounds.bounds.origin;
+        let point = grid_point(
+            position,
+            self.last_content.terminal_bounds,
+            self.last_content.display_offset,
+        );
+
+        if e.button == MouseButton::Left
+            && e.modifiers.secondary()
+            && (TerminalSettings::get_global(cx).open_links_in_mouse_mode
+                || !self.mouse_mode(e.modifiers.shift))
+        {
+            // self.mouse_down_hyperlink = self.find_hyperlink_at_point(point);
+
+            if self.mouse_down_hyperlink.is_some() {
+                return;
+            }
+        }
+
+        if self.mouse_mode(e.modifiers.shift) {
+            let bytes =
+                mouse_button_report(point, e.button, e.modifiers, true, self.last_content.mode);
+
+            if let Some(bytes) = bytes {
+                self.write_to_pty(bytes);
+            }
+        } else {
+            match e.button {
+                MouseButton::Left => {
+                    self.mouse_down_position = Some(e.position);
+                    let (point, side) = grid_point_and_side(
+                        position,
+                        self.last_content.terminal_bounds,
+                        self.last_content.display_offset,
+                    );
+
+                    let selection_type = match e.click_count {
+                        0 => return, //This is a release
+                        1 => Some(SelectionType::Simple),
+                        2 => Some(SelectionType::Semantic),
+                        3 => Some(SelectionType::Lines),
+                        _ => None,
+                    };
+
+                    if selection_type == Some(SelectionType::Simple) && e.modifiers.shift {
+                        if self.last_content.selection.is_some() {
+                            // Shift+click extends the existing selection to this point.
+                            self.events
+                                .push_back(InternalEvent::UpdateSelection(position));
+                        } else {
+                            // With no selection yet, Shift is the escape hatch for
+                            // selecting text while an app has mouse tracking enabled,
+                            // so anchor a selection here for the drag to extend.
+                            self.events.push_back(InternalEvent::SetSelection(Some(
+                                Selection::new(SelectionType::Simple, point, side),
+                            )));
+                        }
+                        return;
+                    }
+
+                    let selection = selection_type
+                        .map(|selection_type| Selection::new(selection_type, point, side));
+
+                    if let Some(selection) = selection {
+                        self.events
+                            .push_back(InternalEvent::SetSelection(Some(selection)));
+                    }
+                }
+                #[cfg(any(target_os = "linux", target_os = "freebsd"))]
+                MouseButton::Middle => {
+                    if let Some(item) = cx.read_from_primary() {
+                        let text = item.text().unwrap_or_default();
+                        self.paste(&text);
+                    }
+                }
+                _ => {}
+            }
+        }
+    }
+
+    pub fn mouse_up(&mut self, e: &MouseUpEvent, cx: &Context<Self>) {
+        let setting = TerminalSettings::get_global(cx);
+
+        let position = e.position - self.last_content.terminal_bounds.bounds.origin;
+        if let Some(mouse_down_hyperlink) = self.mouse_down_hyperlink.take() {
+            let point = grid_point(
+                position,
+                self.last_content.terminal_bounds,
+                self.last_content.display_offset,
+            );
+
+            // if self
+            //     .find_hyperlink_at_point(point)
+            //     .is_some_and(|mouse_up_hyperlink| mouse_up_hyperlink == mouse_down_hyperlink)
+            // {
+            //     self.events
+            //         .push_back(InternalEvent::ProcessHyperlink(mouse_down_hyperlink, true));
+            //     self.selection_phase = SelectionPhase::Ended;
+            //     self.last_mouse = None;
+            //     self.mouse_down_position = None;
+            //     return;
+            // }
+
+            if self.mouse_mode(e.modifiers.shift) {
+                self.selection_phase = SelectionPhase::Ended;
+                self.last_mouse = None;
+                self.mouse_down_position = None;
+                return;
+            }
+        }
+
+        if self.mouse_mode(e.modifiers.shift) {
+            let point = grid_point(
+                position,
+                self.last_content.terminal_bounds,
+                self.last_content.display_offset,
+            );
+
+            let bytes =
+                mouse_button_report(point, e.button, e.modifiers, false, self.last_content.mode);
+
+            if let Some(bytes) = bytes {
+                self.write_to_pty(bytes);
+            }
+        } else {
+            if e.button == MouseButton::Left && setting.copy_on_select {
+                self.copy(Some(true));
+            }
+
+            //Hyperlinks
+            // if self.selection_phase == SelectionPhase::Ended {
+            //     let mouse_cell_index =
+            //         content_index_for_mouse(position, &self.last_content.terminal_bounds);
+            //     if let Some(link) = self
+            //         .last_content
+            //         .cells
+            //         .get(mouse_cell_index)
+            //         .and_then(|cell| cell.hyperlink())
+            //     {
+            //         cx.open_url(link.uri());
+            //     } else if e.modifiers.secondary() {
+            //         self.events
+            //             .push_back(InternalEvent::FindHyperlink(position, true));
+            //     }
+            // }
+        }
+
+        self.selection_phase = SelectionPhase::Ended;
+        self.last_mouse = None;
+        self.mouse_down_position = None;
     }
 }
 pub type AlacPoint = alacritty_terminal::index::Point;
@@ -601,8 +1024,9 @@ pub fn make_content(term: &Term<TerminalListener>, last_content: &Content) -> Co
         scrolled_to_top: content.display_offset == term.history_size(),
         scrolled_to_bottom: content.display_offset == 0,
         bottom_row_occupied,
-        // selection_text,
-        // selection: todo!(),
+        selection_text,
+        selection:  Default::default(),
+ 
     }
 }
 
@@ -916,7 +1340,20 @@ pub struct Range {
     start: Point,
     end: Point,
 }
+impl Range {
+    #[cfg(test)]
+    fn to_alacritty(self) -> RangeInclusive<AlacPoint> {
+        self.start.to_alacritty()..=self.end.to_alacritty()
+    }
 
+
+    fn from_alacritty(range: RangeInclusive<AlacPoint>) -> Self {
+        Self {
+            start: terminal_point_from_alacritty(*range.start()),
+            end: terminal_point_from_alacritty(*range.end()),
+        }
+    }
+}
 impl Range {
     pub fn new(start: Point, end: Point) -> Self {
         Self { start, end }
@@ -954,8 +1391,8 @@ pub struct Content {
     pub cells: Vec<IndexedCell>,
     pub mode: Modes,
     pub display_offset: usize,
-    // pub selection_text: Option<String>,
-    // pub selection: Option<SelectionRange>,
+    pub selection_text: Option<String>,
+    pub selection: Option<SelectionRange>,
     pub cursor: Cursor,
     pub cursor_char: char,
     pub terminal_bounds: TerminalBounds,
@@ -978,8 +1415,8 @@ impl Default for Content {
             cells: Default::default(),
             mode: Default::default(),
             display_offset: Default::default(),
-            // selection_text: Default::default(),
-            // selection: Default::default(),
+            selection_text: Default::default(),
+            selection: Default::default(),
             cursor: Cursor {
                 shape: CursorShape::Block,
                 point: Point::new(0, 0),
@@ -1009,6 +1446,17 @@ enum Scroll {
     Bottom,
 }
 
+impl Scroll {
+    fn to_alacritty(self) -> AlacScroll {
+        match self {
+            Self::Delta(delta) => AlacScroll::Delta(delta),
+            Self::PageUp => AlacScroll::PageUp,
+            Self::PageDown => AlacScroll::PageDown,
+            Self::Top => AlacScroll::Top,
+            Self::Bottom => AlacScroll::Bottom,
+        }
+    }
+}
 #[derive(Clone, Copy, Debug)]
 enum ViMotion {
     Up,
@@ -1081,6 +1529,41 @@ impl Selection {
     fn update(&mut self, point: Point, side: SelectionSide) {
         self.end = SelectionAnchor { point, side };
         self.head = point;
+    }
+    
+    fn to_alacritty(&self) -> AlacSelection {
+        let mut selection = AlacSelection::new(
+            self.ty.to_alacritty(),
+            self.start.point.to_alacritty(),
+            self.start.side.to_alacritty(),
+        );
+        if self.start.point != self.end.point || self.start.side != self.end.side {
+            selection.update(self.end.point.to_alacritty(), self.end.side.to_alacritty());
+        }
+        selection
+    }
+}
+impl Point {
+    fn to_alacritty(self) -> AlacPoint {
+        AlacPoint::new(Line(self.line), Column(self.column))
+    }
+}
+impl SelectionSide {
+    fn to_alacritty(self) -> AlacDirection {
+        match self {
+            Self::Left => AlacDirection::Left,
+            Self::Right => AlacDirection::Right,
+        }
+    }
+}
+
+impl SelectionType {
+    fn to_alacritty(self) -> AlacSelectionType {
+        match self {
+            Self::Simple => AlacSelectionType::Simple,
+            Self::Semantic => AlacSelectionType::Semantic,
+            Self::Lines => AlacSelectionType::Lines,
+        }
     }
 }
 
@@ -1733,6 +2216,11 @@ impl TerminalBuilder {
             init_command_startup_tx: None,
             scroll_pixel_y: 0.,
             backend:handle,
+            selection_head:  None,
+            mouse_down_hyperlink: todo!(),
+            last_mouse: todo!(),
+            selection_phase: todo!(),
+            mouse_down_position: todo!(),
         };
         Self {
             terminal,

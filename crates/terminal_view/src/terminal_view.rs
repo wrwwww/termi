@@ -13,7 +13,22 @@ use settings_content::terminal::TerminalBlink;
 use terminal::{CursorShape, Modes, Terminal, TerminalBounds, terminal_settings::TerminalSettings};
 
 use crate::{blink_manager::BlinkManager, terminal_element::TerminalElement};
-actions!(terminal_view,[PasteText]);
+actions!(
+    terminal_view,
+    [
+        PasteText,
+        Copy,
+        Clear,
+        Paste,
+        ScrollLineDown,
+        ScrollLineUp,
+        ScrollPageDown,
+        ScrollPageUp,
+        ScrollToBottom,
+        ScrollToTop,
+        SelectAll
+    ]
+);
 pub struct ImeState {
     pub marked_text: String,
 }
@@ -229,6 +244,81 @@ impl TerminalView {
                 .update(cx, |terminal, _cx| terminal.paste(&text));
         }
     }
+    fn copy(&mut self, _: &Copy, _: &mut Window, cx: &mut Context<Self>) {
+        self.terminal.update(cx, |term, _| term.copy(None));
+        cx.notify();
+    }
+    fn select_all(&mut self, _: &SelectAll, _: &mut Window, cx: &mut Context<Self>) {
+        self.terminal.update(cx, |term, _| term.select_all());
+        cx.notify();
+    }
+
+    fn clear(&mut self, _: &Clear, _: &mut Window, cx: &mut Context<Self>) {
+        self.scroll_top = px(0.);
+        self.terminal.update(cx, |term, _| term.clear());
+        cx.notify();
+    }
+
+    // fn max_scroll_top(&self, cx: &App) -> Pixels {
+    //     let terminal = self.terminal.read(cx);
+
+    //     let Some(block) = self.block_below_cursor.as_ref() else {
+    //         return Pixels::ZERO;
+    //     };
+
+    //     let line_height = terminal.last_content().terminal_bounds.line_height;
+    //     let viewport_lines = terminal.viewport_lines();
+    //     let cursor_line = viewport_line_for_point(
+    //         terminal.last_content.cursor.point,
+    //         terminal.last_content.display_offset,
+    //     )
+    //     .unwrap_or_default();
+    //     let max_scroll_top_in_lines =
+    //         (block.height as usize).saturating_sub(viewport_lines.saturating_sub(cursor_line + 1));
+
+    //     max_scroll_top_in_lines as f32 * line_height
+    // }
+
+    fn scroll_wheel(&mut self, event: &ScrollWheelEvent, cx: &mut Context<Self>) {
+        // let terminal_content = self.terminal.read(cx).last_content();
+
+        // if self.block_below_cursor.is_some() && terminal_content.display_offset == 0 {
+        //     let line_height = terminal_content.terminal_bounds.line_height;
+        //     let y_delta = event.delta.pixel_delta(line_height).y;
+        //     if y_delta < Pixels::ZERO || self.scroll_top > Pixels::ZERO {
+        //         self.scroll_top = cmp::max(
+        //             Pixels::ZERO,
+        //             cmp::min(self.scroll_top - y_delta, self.max_scroll_top(cx)),
+        //         );
+        //         cx.notify();
+        //         return;
+        //     }
+        // }
+        // self.terminal.update(cx, |term, cx| {
+        //     term.scroll_wheel(
+        //         event,
+        //         TerminalSettings::get_global(cx).scroll_multiplier.max(0.01),
+        //     )
+        // });
+    }
+
+    fn is_alt_screen(&self, cx: &App) -> bool {
+        self.terminal
+            .read(cx)
+            .last_content
+            .mode
+            .contains(Modes::ALT_SCREEN)
+    }
+
+    fn scroll_to_top(&mut self, _: &ScrollToTop, _: &mut Window, cx: &mut Context<Self>) {
+        if self.is_alt_screen(cx) {
+            cx.propagate();
+            return;
+        }
+
+        self.terminal.update(cx, |term, _| term.scroll_to_top());
+        cx.notify();
+    }
 }
 /// Sends the specified text directly to the terminal.
 #[derive(Clone, Debug, Default, Deserialize, PartialEq, Action, private::schemars::JsonSchema)]
@@ -246,36 +336,37 @@ impl Render for TerminalView {
         // let view = cx.entity();
         // let config = self.config.read(cx).config_manager.current.theme.font_size;
         // let list = self.terminal_manager.read(cx).session_manager.read(cx);
-div()
-    .id("terminal_view")
-    .bg(black())
-    .h_full()
-    .w_full()
-    .flex_1()
-    .on_action(cx.listener(TerminalView::send_text))
-     .on_action(cx.listener(TerminalView::paste_text))
-    .on_key_down(cx.listener(Self::key_down))
-    .track_focus(&self.focus_handle.clone())
-    .context_menu(|menu, window, cx| {
-        menu 
-            .menu("Paste", Box::new(PasteText))
-        
-    })
-    .child(
         div()
-            .id("terminal_container")
+            .id("terminal_view")
+            .bg(black())
             .h_full()
             .w_full()
+            .flex_1()
+            .on_action(cx.listener(TerminalView::send_text))
+            .on_action(cx.listener(TerminalView::paste_text))
+            .on_action(cx.listener(TerminalView::copy))
+            .on_action(cx.listener(TerminalView::clear))
+            .on_action(cx.listener(TerminalView::scroll_to_top))
+            .on_action(cx.listener(TerminalView::select_all))
+            .on_key_down(cx.listener(Self::key_down))
+            .track_focus(&self.focus_handle.clone())
+            .context_menu(|menu, window, cx| {
+                menu.menu("Paste", Box::new(PasteText))
+                    .menu("Copy", Box::new(Copy))
+            })
             .child(
-                TerminalElement::new(
-                    terminal_handle,
-                    terminal_view_handle,
-                    self.focus_handle.clone(),
-                    focused,
-                    self.should_show_cursor(focused, cx),
-                    None,
-                )
+                div()
+                    .id("terminal_container")
+                    .h_full()
+                    .w_full()
+                    .child(TerminalElement::new(
+                        terminal_handle,
+                        terminal_view_handle,
+                        self.focus_handle.clone(),
+                        focused,
+                        self.should_show_cursor(focused, cx),
+                        None,
+                    )),
             )
-    )
     }
 }

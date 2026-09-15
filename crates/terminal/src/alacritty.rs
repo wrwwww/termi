@@ -2,12 +2,19 @@ use alacritty_terminal::{
     Grid, Term,
     event::WindowSize,
     grid::{Dimensions, Row},
-    index::{Column, Line},
+    index::{Column, Direction, Line},
     term::cell::Flags,
 };
-
-use crate::{AlacCell, TerminalBounds, TerminalListener};
-
+use vte::ansi::{ClearMode, Handler};
+pub(super) type AlacSelection = alacritty_terminal::selection::Selection;
+pub(super) type AlacSelectionType = alacritty_terminal::selection::SelectionType;
+use crate::{
+    AlacCell, AlacPoint, Point, Range, Scroll, Selection, SelectionSide, TerminalBounds,
+    TerminalListener,
+};
+pub(super) type AlacrittyTerm = Term<TerminalListener>;
+pub(super) type AlacDirection = Direction;
+pub type AlacScroll = alacritty_terminal::grid::Scroll;
 pub fn window_size_from_terminal_bounds(bounds: TerminalBounds) -> WindowSize {
     WindowSize {
         num_lines: bounds.num_lines() as u16,
@@ -77,4 +84,66 @@ fn row_to_string(row: &Row<AlacCell>) -> String {
         .iter()
         .map(|cell| cell.c)
         .collect::<String>()
+}
+
+pub(super) fn selection_text(term: &AlacrittyTerm) -> Option<String> {
+    term.selection_to_string()
+}
+pub(super) fn set_selection(term: &mut AlacrittyTerm, selection: Option<&Selection>) {
+    term.selection = selection.map(Selection::to_alacritty);
+}
+
+pub(super) fn update_selection(
+    term: &mut AlacrittyTerm,
+    point: Point,
+    side: SelectionSide,
+) -> bool {
+    let Some(mut selection) = term.selection.take() else {
+        return false;
+    };
+    selection.update(point.to_alacritty(), side.to_alacritty());
+    term.selection = Some(selection);
+    true
+}
+pub(super) fn display_offset(term: &AlacrittyTerm) -> usize {
+    term.grid().display_offset()
+}
+pub(super) fn scroll_display(term: &mut AlacrittyTerm, scroll: Scroll) {
+    term.scroll_display(scroll.to_alacritty());
+}
+
+pub(super) fn clear_saved_screen(term: &mut AlacrittyTerm) {
+    term.clear_screen(ClearMode::Saved);
+
+    let cursor = term.grid().cursor.point;
+
+    term.grid_mut().reset_region(..cursor.line);
+
+    let line = term.grid()[cursor.line][..Column(term.grid().columns())]
+        .iter()
+        .cloned()
+        .enumerate()
+        .collect::<Vec<(usize, AlacCell)>>();
+
+    for (index, cell) in line {
+        term.grid_mut()[Line(0)][Column(index)] = cell;
+    }
+
+    term.grid_mut().cursor.point = AlacPoint::new(Line(0), term.grid_mut().cursor.point.column);
+    let new_cursor = term.grid().cursor.point;
+
+    if (new_cursor.line.0 as usize) < term.screen_lines() - 1 {
+        term.grid_mut().reset_region((new_cursor.line + 1)..);
+    }
+}
+pub(super) fn full_content_range(term: &AlacrittyTerm) -> Range {
+    let start = AlacPoint::new(term.topmost_line(), Column(0));
+    let end = AlacPoint::new(term.bottommost_line(), term.last_column());
+    Range::from_alacritty(start..=end)
+}
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub(crate) struct HyperlinkMatch {
+    pub(crate) text: String,
+    pub(crate) is_url: bool,
+    pub(crate) range: Range,
 }
