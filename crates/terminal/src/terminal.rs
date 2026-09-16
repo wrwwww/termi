@@ -2217,10 +2217,10 @@ impl TerminalBuilder {
             scroll_pixel_y: 0.,
             backend:handle,
             selection_head:  None,
-            mouse_down_hyperlink: todo!(),
-            last_mouse: todo!(),
-            selection_phase: todo!(),
-            mouse_down_position: todo!(),
+            mouse_down_hyperlink:  None,
+            last_mouse:  None,
+            selection_phase: SelectionPhase::Ended,
+            mouse_down_position:  None,
         };
         Self {
             terminal,
@@ -2229,7 +2229,7 @@ impl TerminalBuilder {
     }
 
     pub fn subscribe(mut self,cx: &Context<Terminal>) -> Terminal {
-
+       
         //Event loop
         self.terminal.event_loop_task = cx.spawn(async move |terminal, cx| {
             while let Some(event) = self.events_rx.next().await {
