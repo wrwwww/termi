@@ -1,3 +1,4 @@
+use std::cmp::Ordering;
 use std::time::{SystemTime, UNIX_EPOCH};
 use std::{mem, rc::Rc, time::Instant};
 
@@ -12,6 +13,7 @@ use gpui::{
     px, relative, size,
 };
 
+use gpui_component::red_400;
 use itertools::Itertools;
 use log::info;
 use settings::Settings;
@@ -396,7 +398,7 @@ impl TerminalElement {
                     if scroll_top > Pixels::ZERO {
                         adjusted_event.position.y += scroll_top;
                     }
-                    // terminal.mouse_down(&adjusted_event, cx);
+                    terminal.mouse_down(&adjusted_event, cx);
                     cx.notify();
                 })
             }
@@ -597,7 +599,7 @@ impl Element for TerminalElement {
                 let buffer_font_size = settings.buffer_font_size(cx);
 
                 let terminal_settings = TerminalSettings::get_global(cx);
-
+ 
                 let font_family = terminal_settings.font_family.as_ref().map_or_else(
                     || settings.buffer_font.family.clone(),
                     |font_family| font_family.0.clone().into(),
@@ -741,7 +743,7 @@ impl Element for TerminalElement {
                     // mode,
                     display_offset,
                     cursor_char,
-                    // selection,
+                    selection,
                     cursor,
                     ..
                 } = &self.terminal.read(cx).last_content;
@@ -750,14 +752,14 @@ impl Element for TerminalElement {
                 // let display_offset = *display_offset;
 
                 // // searches, highlights to a single range representations
-                // let mut relative_highlighted_ranges = Vec::new();
+                let mut relative_highlighted_ranges = Vec::new();
                 // for search_match in search_matches {
                 //     relative_highlighted_ranges.push((search_match, match_color))
                 // }
-                // if let Some(selection) = selection {
-                //     relative_highlighted_ranges
-                //         .push((selection.point_range(), player_color.selection));
-                // }
+                if let Some(selection) = selection {
+                    relative_highlighted_ranges
+                        .push((selection.point_range(), red_400()));
+                }
 
                 // // then have that representation be converted to the appropriate highlight data structure
 
@@ -918,7 +920,7 @@ impl Element for TerminalElement {
                     batched_text_runs: batched_text_runs,
                     block_element_rects,
                     rects,
-                    relative_highlighted_ranges: vec![],
+                    relative_highlighted_ranges ,
                     cursor,
                     ime_cursor_bounds,
                     background_color,
@@ -1017,26 +1019,27 @@ impl Element for TerminalElement {
                         rect.paint(origin, &layout.dimensions, window);
                     }
 
-                    // for (relative_highlighted_range, color) in &layout.relative_highlighted_ranges {
-                    //     if let Some((start_y, highlighted_range_lines)) =
-                    //         to_highlighted_range_lines(relative_highlighted_range, layout, origin)
-                    //     {
-                    //         let corner_radius = if EditorSettings::get_global(cx).rounded_selection
-                    //         {
-                    //             0.15 * layout.dimensions.line_height
-                    //         } else {
-                    //             Pixels::ZERO
-                    //         };
-                    //         let hr = HighlightedRange {
-                    //             start_y,
-                    //             line_height: layout.dimensions.line_height,
-                    //             lines: highlighted_range_lines,
-                    //             color: *color,
-                    //             corner_radius: corner_radius,
-                    //         };
-                    //         hr.paint(true, bounds, window);
-                    //     }
-                    // }
+                    for (relative_highlighted_range, color) in &layout.relative_highlighted_ranges {
+                        if let Some((start_y, highlighted_range_lines)) =
+                            to_highlighted_range_lines(relative_highlighted_range, layout, origin)
+                        {
+                            let corner_radius = if true
+                            // let corner_radius = if EditorSettings::get_global(cx).rounded_selection
+                            {
+                                0.15 * layout.dimensions.line_height
+                            } else {
+                                Pixels::ZERO
+                            };
+                            let hr = HighlightedRange {
+                                start_y,
+                                line_height: layout.dimensions.line_height,
+                                lines: highlighted_range_lines,
+                                color: *color,
+                                corner_radius: corner_radius,
+                            };
+                            hr.paint(true, bounds, window);
+                        }
+                    }
 
                     // Paint batched text runs instead of individual cells
 
@@ -1683,6 +1686,217 @@ impl CursorLayout {
                 window,
                 cx,
             );
+        }
+    }
+}
+
+fn to_highlighted_range_lines(
+    range: &Range,
+    layout: & MyPaintState,
+    origin: GpuiPoint<Pixels>,
+) -> Option<(Pixels, Vec<HighlightedRangeLine>)> {
+    // Step 1. Normalize the points to be viewport relative.
+    // When display_offset = 1, here's how the grid is arranged:
+    //-2,0 -2,1...
+    //--- Viewport top
+    //-1,0 -1,1...
+    //--------- Terminal Top
+    // 0,0  0,1...
+    // 1,0  1,1...
+    //--- Viewport Bottom
+    // 2,0  2,1...
+    //--------- Terminal Bottom
+
+    // Normalize to viewport relative, from terminal relative.
+    // lines are i32s, which are negative above the top left corner of the terminal
+    // If the user has scrolled, we use the display_offset to tell us which offset
+    // of the grid data we should be looking at. But for the rendering step, we don't
+    // want negatives. We want things relative to the 'viewport' (the area of the grid
+    // which is currently shown according to the display offset)
+    let display_offset = i32::try_from(layout.display_offset).unwrap_or(i32::MAX);
+    let unclamped_start_line = range.start().line.saturating_add(display_offset);
+    let unclamped_start_column = range.start().column;
+    let unclamped_end_line = range.end().line.saturating_add(display_offset);
+    let unclamped_end_column = range.end().column;
+
+    // Step 2. Clamp range to viewport, and return None if it doesn't overlap
+    if unclamped_end_line < 0 || unclamped_start_line > layout.dimensions.num_lines() as i32 {
+        return None;
+    }
+
+    let clamped_start_line = unclamped_start_line.max(0) as usize;
+
+    let clamped_end_line = unclamped_end_line.min(layout.dimensions.num_lines() as i32) as usize;
+
+    // Convert the start of the range to pixels
+    let start_y = origin.y + clamped_start_line as f32 * layout.dimensions.line_height;
+
+    // Step 3. Expand ranges that cross lines into a collection of single-line ranges.
+    //  (also convert to pixels)
+    let mut highlighted_range_lines = Vec::new();
+    for line in clamped_start_line..=clamped_end_line {
+        let mut line_start = 0;
+        let mut line_end = layout.dimensions.num_columns();
+
+        if line == clamped_start_line && unclamped_start_line >= 0 {
+            line_start = unclamped_start_column;
+        }
+        if line == clamped_end_line && unclamped_end_line <= layout.dimensions.num_lines() as i32 {
+            line_end = unclamped_end_column + 1; // +1 for inclusive
+        }
+
+        highlighted_range_lines.push(HighlightedRangeLine {
+            start_x: origin.x + line_start as f32 * layout.dimensions.cell_width,
+            end_x: origin.x + line_end as f32 * layout.dimensions.cell_width,
+        });
+    }
+
+    Some((start_y, highlighted_range_lines))
+}
+
+
+
+#[derive(Debug)]
+pub struct HighlightedRange {
+    pub start_y: Pixels,
+    pub line_height: Pixels,
+    pub lines: Vec<HighlightedRangeLine>,
+    pub color: Hsla,
+    pub corner_radius: Pixels,
+}
+
+#[derive(Debug)]
+pub struct HighlightedRangeLine {
+    pub start_x: Pixels,
+    pub end_x: Pixels,
+}
+
+impl HighlightedRange {
+    pub fn paint(&self, fill: bool, bounds: Bounds<Pixels>, window: &mut Window) {
+        if self.lines.len() >= 2 && self.lines[0].start_x > self.lines[1].end_x {
+            self.paint_lines(self.start_y, &self.lines[0..1], fill, bounds, window);
+            self.paint_lines(
+                self.start_y + self.line_height,
+                &self.lines[1..],
+                fill,
+                bounds,
+                window,
+            );
+        } else {
+            self.paint_lines(self.start_y, &self.lines, fill, bounds, window);
+        }
+    }
+
+    fn paint_lines(
+        &self,
+        start_y: Pixels,
+        lines: &[HighlightedRangeLine],
+        fill: bool,
+        _bounds: Bounds<Pixels>,
+        window: &mut Window,
+    ) {
+        if lines.is_empty() {
+            return;
+        }
+
+        let first_line = lines.first().unwrap();
+        let last_line = lines.last().unwrap();
+
+        let first_top_left = point(first_line.start_x, start_y);
+        let first_top_right = point(first_line.end_x, start_y);
+
+        let curve_height = point(Pixels::ZERO, self.corner_radius);
+        let curve_width = |start_x: Pixels, end_x: Pixels| {
+            let max = (end_x - start_x) / 2.;
+            let width = if max < self.corner_radius {
+                max
+            } else {
+                self.corner_radius
+            };
+
+            point(width, Pixels::ZERO)
+        };
+
+        let top_curve_width = curve_width(first_line.start_x, first_line.end_x);
+        let mut builder = if fill {
+            gpui::PathBuilder::fill()
+        } else {
+            gpui::PathBuilder::stroke(px(1.))
+        };
+        builder.move_to(first_top_right - top_curve_width);
+        builder.curve_to(first_top_right + curve_height, first_top_right);
+
+        let mut iter = lines.iter().enumerate().peekable();
+        while let Some((ix, line)) = iter.next() {
+            let bottom_right = point(line.end_x, start_y + (ix + 1) as f32 * self.line_height);
+
+            if let Some((_, next_line)) = iter.peek() {
+                let next_top_right = point(next_line.end_x, bottom_right.y);
+
+                match next_top_right.x.partial_cmp(&bottom_right.x).unwrap() {
+                    Ordering::Equal => {
+                        builder.line_to(bottom_right);
+                    }
+                    Ordering::Less => {
+                        let curve_width = curve_width(next_top_right.x, bottom_right.x);
+                        builder.line_to(bottom_right - curve_height);
+                        if self.corner_radius > Pixels::ZERO {
+                            builder.curve_to(bottom_right - curve_width, bottom_right);
+                        }
+                        builder.line_to(next_top_right + curve_width);
+                        if self.corner_radius > Pixels::ZERO {
+                            builder.curve_to(next_top_right + curve_height, next_top_right);
+                        }
+                    }
+                    Ordering::Greater => {
+                        let curve_width = curve_width(bottom_right.x, next_top_right.x);
+                        builder.line_to(bottom_right - curve_height);
+                        if self.corner_radius > Pixels::ZERO {
+                            builder.curve_to(bottom_right + curve_width, bottom_right);
+                        }
+                        builder.line_to(next_top_right - curve_width);
+                        if self.corner_radius > Pixels::ZERO {
+                            builder.curve_to(next_top_right + curve_height, next_top_right);
+                        }
+                    }
+                }
+            } else {
+                let curve_width = curve_width(line.start_x, line.end_x);
+                builder.line_to(bottom_right - curve_height);
+                if self.corner_radius > Pixels::ZERO {
+                    builder.curve_to(bottom_right - curve_width, bottom_right);
+                }
+
+                let bottom_left = point(line.start_x, bottom_right.y);
+                builder.line_to(bottom_left + curve_width);
+                if self.corner_radius > Pixels::ZERO {
+                    builder.curve_to(bottom_left - curve_height, bottom_left);
+                }
+            }
+        }
+
+        if first_line.start_x > last_line.start_x {
+            let curve_width = curve_width(last_line.start_x, first_line.start_x);
+            let second_top_left = point(last_line.start_x, start_y + self.line_height);
+            builder.line_to(second_top_left + curve_height);
+            if self.corner_radius > Pixels::ZERO {
+                builder.curve_to(second_top_left + curve_width, second_top_left);
+            }
+            let first_bottom_left = point(first_line.start_x, second_top_left.y);
+            builder.line_to(first_bottom_left - curve_width);
+            if self.corner_radius > Pixels::ZERO {
+                builder.curve_to(first_bottom_left - curve_height, first_bottom_left);
+            }
+        }
+
+        builder.line_to(first_top_left + curve_height);
+        if self.corner_radius > Pixels::ZERO {
+            builder.curve_to(first_top_left + top_curve_width, first_top_left);
+        }
+        builder.line_to(first_top_right - top_curve_width);
+
+        if let Ok(path) = builder.build() {
+            window.paint_path(path, self.color);
         }
     }
 }
