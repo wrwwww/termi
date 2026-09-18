@@ -40,7 +40,7 @@ use itertools::Itertools;
 use serde::{Deserialize, Serialize};
 use vte::ansi::{Attr, Color, Handler, NamedColor, Processor, Rgb, StdSyncHandler};
 
-use crate::{alacritty::{AlacDirection, AlacScroll, AlacSelection, AlacSelectionType, HyperlinkMatch, clear_saved_screen, display_offset, full_content_range, last_non_empty_lines, scroll_display, selection_text, set_selection as set_term_selection, update_selection as update_term_selection, window_size_from_terminal_bounds}, id::TabId, mouse::{grid_point, grid_point_and_side, mouse_button_report, mouse_moved_report}, session::SessionRuntimeHandle, terminal_settings::TerminalSettings};
+use crate::{alacritty::{AlacDirection, AlacScroll, AlacSelection, AlacSelectionRange, AlacSelectionType, HyperlinkMatch, clear_saved_screen, display_offset, full_content_range, last_non_empty_lines, scroll_display, selection_text, set_selection as set_term_selection, update_selection as update_term_selection, window_size_from_terminal_bounds}, id::TabId, mouse::{grid_point, grid_point_and_side, mouse_button_report, mouse_moved_report}, session::SessionRuntimeHandle, terminal_settings::TerminalSettings};
 
 pub struct Terminal {
     pub tab_id: TabId,
@@ -1013,10 +1013,10 @@ pub fn make_content(term: &Term<TerminalListener>, last_content: &Content) -> Co
         cells,
         mode: Modes(1),
         display_offset: content.display_offset,
-        // selection_text,
-        // selection: content
-        //     .selection
-        //     .map(terminal_selection_range_from_alacritty),
+        selection_text,
+        selection: content
+            .selection
+            .map(terminal_selection_range_from_alacritty),
         cursor: terminal_cursor_from_alacritty(content.cursor),
         cursor_char: term.grid()[content.cursor.point].c,
         terminal_bounds: last_content.terminal_bounds,
@@ -1024,12 +1024,16 @@ pub fn make_content(term: &Term<TerminalListener>, last_content: &Content) -> Co
         scrolled_to_top: content.display_offset == term.history_size(),
         scrolled_to_bottom: content.display_offset == 0,
         bottom_row_occupied,
-        selection_text,
-        selection:  Default::default(),
  
     }
 }
-
+fn terminal_selection_range_from_alacritty(range: AlacSelectionRange) -> SelectionRange {
+    SelectionRange {
+        start: terminal_point_from_alacritty(range.start),
+        end: terminal_point_from_alacritty(range.end),
+        is_block: range.is_block,
+    }
+}
 pub fn content_text(term: &Term<TerminalListener>) -> String {
     let start = AlacPoint::new(term.topmost_line(), Column(0));
     let end = AlacPoint::new(term.bottommost_line(), term.last_column());

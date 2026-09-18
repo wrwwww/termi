@@ -8,6 +8,7 @@ use alacritty_terminal::{
 use vte::ansi::{ClearMode, Handler};
 pub(super) type AlacSelection = alacritty_terminal::selection::Selection;
 pub(super) type AlacSelectionType = alacritty_terminal::selection::SelectionType;
+  pub(super)  type AlacSelectionRange= alacritty_terminal::selection::SelectionRange;
 use crate::{
     AlacCell, AlacPoint, Point, Range, Scroll, Selection, SelectionSide, TerminalBounds,
     TerminalListener,
