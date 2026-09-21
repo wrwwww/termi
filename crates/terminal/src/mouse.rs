@@ -1,4 +1,4 @@
-use std::cmp::{self, min};
+use std::{cmp::{self, min}, iter::repeat};
 
 use gpui::{Modifiers, MouseButton, Pixels, Point as GpuiPoint, ScrollWheelEvent, px};
 
@@ -249,4 +249,24 @@ fn sgr_mouse_report(point: Point, button: u8, pressed: bool) -> String {
     );
 
     msg
+}
+
+pub(crate) fn scroll_report(
+    point: Point,
+    scroll_lines: i32,
+    e: &ScrollWheelEvent,
+    mode: Modes,
+) -> Option<impl Iterator<Item = Vec<u8>>> {
+    if mode.intersects(Modes::MOUSE_MODE) {
+        mouse_report(
+            point,
+            MouseButtonCode::from_scroll(e),
+            true,
+            e.modifiers,
+            MouseFormat::from_mode(mode),
+        )
+        .map(|report| repeat(report).take(scroll_lines.unsigned_abs() as usize))
+    } else {
+        None
+    }
 }

@@ -2,7 +2,7 @@ use std::{ops::Range as StdRange, time::Duration};
 
 pub mod blink_manager;
 pub mod terminal_element;
-use gpui::Action;
+use gpui::{Action, prelude::FluentBuilder};
 use gpui::*;
 use gpui_component::menu::ContextMenuExt;
 use gpui_rsx::rsx;
@@ -11,6 +11,7 @@ use serde::Deserialize;
 use settings::Settings;
 use settings_content::terminal::TerminalBlink;
 use terminal::{CursorShape, Modes, Terminal, TerminalBounds, terminal_settings::TerminalSettings};
+use theme::ActiveTheme;
 
 use crate::{blink_manager::BlinkManager, terminal_element::TerminalElement};
 actions!(
@@ -137,7 +138,34 @@ impl TerminalView {
     pub fn terminal(&self) -> &Entity<Terminal> {
         &self.terminal
     }
+  pub fn content_mode(&self, window: &Window, cx: &App) -> ContentMode {
+        match &self.mode {
+            TerminalMode::Standalone => ContentMode::Scrollable,
+            TerminalMode::Embedded {
+                max_lines_when_unfocused,
+            } => {
+                let terminal = self.terminal.read(cx);
+                let total_lines = terminal.total_lines();
 
+                if total_lines > Self::MAX_EMBEDDED_LINES {
+                    ContentMode::Scrollable
+                } else {
+                    let mut displayed_lines = terminal.used_lines().min(total_lines);
+
+                    if !self.focus_handle.is_focused(window)
+                        && let Some(max_lines) = max_lines_when_unfocused
+                    {
+                        displayed_lines = displayed_lines.min(*max_lines)
+                    }
+
+                    ContentMode::Inline {
+                        displayed_lines,
+                        total_lines,
+                    }
+                }
+            }
+        }
+    }
     /// Attempts to process a keystroke in the terminal. Returns true if handled.
     ///
     /// In vi mode, explicitly triggers a re-render because vi navigation (like j/k)
@@ -294,12 +322,12 @@ impl TerminalView {
         //         return;
         //     }
         // }
-        // self.terminal.update(cx, |term, cx| {
-        //     term.scroll_wheel(
-        //         event,
-        //         TerminalSettings::get_global(cx).scroll_multiplier.max(0.01),
-        //     )
-        // });
+        self.terminal.update(cx, |term, cx| {
+            term.scroll_wheel(
+                event,
+                TerminalSettings::get_global(cx).scroll_multiplier.max(0.01),
+            )
+        });
     }
 
     fn is_alt_screen(&self, cx: &App) -> bool {
@@ -350,6 +378,30 @@ impl Render for TerminalView {
             .on_action(cx.listener(TerminalView::select_all))
             .on_key_down(cx.listener(Self::key_down))
             .track_focus(&self.focus_handle.clone())
+             .on_mouse_down(
+                MouseButton::Right,
+                cx.listener(|this, event: &MouseDownEvent, window, cx| {
+                    if !this.terminal.read(cx).mouse_mode(event.modifiers.shift) {
+                        let had_selection = this.terminal.read(cx).last_content.selection.is_some();
+                        if !had_selection {
+                            this.terminal.update(cx, |terminal, _| {
+                                terminal.select_word_at_event_position(event);
+                            });
+                        }
+                        let has_selection = !had_selection
+                            || this
+                                .terminal
+                                .read(cx)
+                                .last_content
+                                .selection_text
+                                .as_ref()
+                                .is_some_and(|text| !text.is_empty());
+                        // this.deploy_context_menu(event.position, has_selection, window, cx);
+                        
+                        cx.notify();
+                    }
+                }),
+            )
             .context_menu(|menu, window, cx| {
                 menu.menu("Paste", Box::new(PasteText))
                     .menu("Copy", Box::new(Copy))
@@ -366,7 +418,20 @@ impl Render for TerminalView {
                         focused,
                         self.should_show_cursor(focused, cx),
                         None,
-                    )),
+                    )).when(self.content_mode(window, cx).is_scrollable(), |div| {
+                        let colors = cx.theme().colors();
+                        div.custom_scrollbars(
+                            Scrollbars::for_settings::<TerminalScrollbarSettingsWrapper>()
+                                .show_along(ScrollAxes::Vertical)
+                                .with_stable_track_along(
+                                    ScrollAxes::Vertical,
+                                    colors.editor_background,
+                                )
+                                .tracked_scroll_handle(&self.scroll_handle),
+                            window,
+                            cx,
+                        )
+                    }),
             )
     }
 }

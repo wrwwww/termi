@@ -33,14 +33,14 @@ use alacritty_terminal::{
 };
 
 use gpui::{
-    AbsoluteLength, AnyElement, App, AvailableSpace, Background, BorderStyle, Bounds, ClipboardItem, ContentMask, Context, Corners, DefiniteLength, DispatchPhase, Edges, Element, Entity, EventEmitter, FocusHandle, Font, FontFeatures, FontStyle, FontWeight, HighlightStyle, Hitbox, HitboxBehavior, Hsla, InputHandler, InteractiveElement, Interactivity, IntoElement, KeyDownEvent, Keystroke, Modifiers, ModifiersChangedEvent, MouseButton, MouseDownEvent, MouseMoveEvent, MouseUpEvent, PaintQuad, ParentElement, Pixels, Point as GpuiPoint, ShapedLine, Size, StrikethroughStyle, Task, TextAlign, TextRun, TextStyle, UTF16Selection, UnderlineStyle, WeakEntity, WhiteSpace, Window, accesskit::Uuid, div, fill, font, hsla, point, px, relative, rgba, size,
+    AbsoluteLength, AnyElement, App, AvailableSpace, Background, BorderStyle, Bounds, ClipboardItem, ContentMask, Context, Corners, DefiniteLength, DispatchPhase, Edges, Element, Entity, EventEmitter, FocusHandle, Font, FontFeatures, FontStyle, FontWeight, HighlightStyle, Hitbox, HitboxBehavior, Hsla, InputHandler, InteractiveElement, Interactivity, IntoElement, KeyDownEvent, Keystroke, Modifiers, ModifiersChangedEvent, MouseButton, MouseDownEvent, MouseMoveEvent, MouseUpEvent, PaintQuad, ParentElement, Pixels, Point as GpuiPoint, ScrollWheelEvent, ShapedLine, Size, StrikethroughStyle, Task, TextAlign, TextRun, TextStyle, TouchPhase, UTF16Selection, UnderlineStyle, WeakEntity, WhiteSpace, Window, accesskit::Uuid, div, fill, font, hsla, point, px, relative, rgba, size,
 };
 use itertools::Itertools;
 
 use serde::{Deserialize, Serialize};
 use vte::ansi::{Attr, Color, Handler, NamedColor, Processor, Rgb, StdSyncHandler};
 
-use crate::{alacritty::{AlacDirection, AlacScroll, AlacSelection, AlacSelectionRange, AlacSelectionType, HyperlinkMatch, clear_saved_screen, display_offset, full_content_range, last_non_empty_lines, scroll_display, selection_text, set_selection as set_term_selection, update_selection as update_term_selection, window_size_from_terminal_bounds}, id::TabId, mouse::{grid_point, grid_point_and_side, mouse_button_report, mouse_moved_report}, session::SessionRuntimeHandle, terminal_settings::TerminalSettings};
+use crate::{alacritty::{AlacDirection, AlacScroll, AlacSelection, AlacSelectionRange, AlacSelectionType, HyperlinkMatch, clear_saved_screen, display_offset, full_content_range, last_non_empty_lines, scroll_display, selection_text, set_selection as set_term_selection, update_selection as update_term_selection, window_size_from_terminal_bounds}, id::TabId, mouse::{grid_point, grid_point_and_side, mouse_button_report, mouse_moved_report, scroll_report}, session::SessionRuntimeHandle, terminal_settings::TerminalSettings};
 
 pub struct Terminal {
     pub tab_id: TabId,
@@ -68,6 +68,7 @@ pub struct Terminal {
     pub event_loop_task: Task<Result<(), anyhow::Error>>,
     // pub backend: UnboundedSender<TerminalCommand>,
     pub backend: SessionRuntimeHandle,
+    scroll_px: Pixels,
     pub scroll_pixel_y: f32,
    mouse_down_hyperlink: Option<HyperlinkMatch>,
     last_mouse: Option<(Point, SelectionSide)>,
@@ -313,6 +314,72 @@ impl Terminal {
         self.events
             .push_back(InternalEvent::SetSelection(selection));
     }
+       fn determine_scroll_lines(
+        &mut self,
+        e: &ScrollWheelEvent,
+        scroll_multiplier: f32,
+    ) -> Option<i32> {
+        let line_height = self.last_content.terminal_bounds.line_height;
+        match e.touch_phase {
+            /* Reset scroll state on started */
+            TouchPhase::Started => {
+                self.scroll_px = px(0.);
+                None
+            }
+            /* Calculate the appropriate scroll lines */
+            TouchPhase::Moved => {
+                let old_offset = (self.scroll_px / line_height) as i32;
+
+                self.scroll_px += e.delta.pixel_delta(line_height).y * scroll_multiplier;
+
+                let new_offset = (self.scroll_px / line_height) as i32;
+
+                // Whenever we hit the edges, reset our stored scroll to 0
+                // so we can respond to changes in direction quickly
+                self.scroll_px %= self.last_content.terminal_bounds.height();
+
+                Some(new_offset - old_offset)
+            }
+            // Cancellation does not commit a scroll, same as a plain end.
+            TouchPhase::Ended | TouchPhase::Cancelled => None,
+        }
+    }
+
+ ///Scroll the terminal
+    pub fn scroll_wheel(&mut self, e: &ScrollWheelEvent, scroll_multiplier: f32) {
+        let mouse_mode = self.mouse_mode(e.shift);
+        let scroll_multiplier = if mouse_mode { 1. } else { scroll_multiplier };
+
+        if let Some(scroll_lines) = self.determine_scroll_lines(e, scroll_multiplier)
+            && scroll_lines != 0
+        {
+            if mouse_mode {
+                let point = grid_point(
+                    e.position - self.last_content.terminal_bounds.bounds.origin,
+                    self.last_content.terminal_bounds,
+                    self.last_content.display_offset,
+                );
+
+                if let Some(scrolls) = scroll_report(point, scroll_lines, e, self.last_content.mode)
+                {
+                    for scroll in scrolls {
+                        self.write_to_pty(scroll);
+                    }
+                };
+            } else if self
+                .last_content
+                .mode
+                .contains(Modes::ALT_SCREEN | Modes::ALTERNATE_SCROLL)
+                && !e.shift
+            {
+                self.write_to_pty(alt_scroll(scroll_lines));
+            } else {
+                self.events
+                    .push_back(InternalEvent::Scroll(Scroll::Delta(scroll_lines)));
+            }
+        }
+    }
+
     pub fn process_event(&mut self, event: TerminalBackendEvent, cx: &mut Context<Self>) {
         match event {
             TerminalBackendEvent::Title(title) => {
@@ -959,6 +1026,19 @@ impl Terminal {
         self.mouse_down_position = None;
     }
 }
+
+pub(crate) fn alt_scroll(scroll_lines: i32) -> Vec<u8> {
+    let cmd = if scroll_lines > 0 { b'A' } else { b'B' };
+
+    let mut content = Vec::with_capacity(scroll_lines.unsigned_abs() as usize * 3);
+    for _ in 0..scroll_lines.abs() {
+        content.push(0x1b);
+        content.push(b'O');
+        content.push(cmd);
+    }
+    content
+}
+
 pub type AlacPoint = alacritty_terminal::index::Point;
 pub type AlacCell = alacritty_terminal::term::cell::Cell;
 fn terminal_point_from_alacritty(point: AlacPoint) -> Point {
@@ -2225,6 +2305,7 @@ impl TerminalBuilder {
             last_mouse:  None,
             selection_phase: SelectionPhase::Ended,
             mouse_down_position:  None,
+            scroll_px: px(0.),
         };
         Self {
             terminal,

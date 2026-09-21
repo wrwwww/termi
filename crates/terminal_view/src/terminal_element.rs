@@ -468,10 +468,12 @@ impl TerminalElement {
                 terminal_view
                     .update(cx, |terminal_view, cx| {
                         // if matches!(terminal_view.mode, TerminalMode::Standalone)
-                        //     || terminal_view.focus_handle.is_focused(window)
+                        //     || 
                         // {
-                        //     terminal_view.scroll_wheel(e, cx);
-                        //     cx.notify();
+                        if  terminal_view.focus_handle.is_focused(window){
+                            terminal_view.scroll_wheel(e, cx);
+                            cx.notify();
+                        }
                         // }
                     })
                     .ok();
@@ -758,7 +760,7 @@ impl Element for TerminalElement {
                 // }
                 if let Some(selection) = selection {
                     relative_highlighted_ranges
-                        .push((selection.point_range(), red_400()));
+                        .push((selection.point_range(), theme.colors().element_selected));
                 }
 
                 // // then have that representation be converted to the appropriate highlight data structure
