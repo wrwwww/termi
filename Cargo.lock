@@ -7828,6 +7828,7 @@ dependencies = [
  "terminal",
  "theme",
  "theme_settings",
+ "ui",
  "vte",
 ]
 
@@ -8301,6 +8302,7 @@ dependencies = [
  "gpui",
  "gpui-component",
  "gpui-component-assets",
+ "schemars",
  "serde",
  "smallvec",
  "theme",

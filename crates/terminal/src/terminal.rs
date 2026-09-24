@@ -379,7 +379,17 @@ impl Terminal {
             }
         }
     }
+ pub fn total_lines(&self) -> usize {
+        total_lines(&self.term.lock_unfair())
+    }
 
+    pub fn viewport_lines(&self) -> usize {
+        screen_lines(&self.term.lock_unfair())
+    }
+
+    // pub fn used_lines(&self) -> usize {
+    //     used_lines(&self.term.lock_unfair())
+    // }
     pub fn process_event(&mut self, event: TerminalBackendEvent, cx: &mut Context<Self>) {
         match event {
             TerminalBackendEvent::Title(title) => {

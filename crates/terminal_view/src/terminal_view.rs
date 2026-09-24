@@ -1,18 +1,21 @@
+use std::cmp;
 use std::{ops::Range as StdRange, time::Duration};
-
 pub mod blink_manager;
 pub mod terminal_element;
-use gpui::{Action, prelude::FluentBuilder};
+pub mod terminal_scrollbar;
 use gpui::*;
+use gpui::{Action, prelude::FluentBuilder};
 use gpui_component::menu::ContextMenuExt;
-use gpui_rsx::rsx;
-use log::info;
+
+use gpui_component::red_800;
 use serde::Deserialize;
 use settings::Settings;
 use settings_content::terminal::TerminalBlink;
 use terminal::{CursorShape, Modes, Terminal, TerminalBounds, terminal_settings::TerminalSettings};
 use theme::ActiveTheme;
+use ui::scroll_bar::{ScrollAxes, ScrollbarVisibility, Scrollbars, ShowScrollbar, WithScrollbar};
 
+use crate::terminal_scrollbar::TerminalScrollHandle;
 use crate::{blink_manager::BlinkManager, terminal_element::TerminalElement};
 actions!(
     terminal_view,
@@ -36,7 +39,7 @@ pub struct ImeState {
 pub struct TerminalView {
     cursor_shape: CursorShape,
     blink_manager: Entity<BlinkManager>,
-
+    scroll_handle: TerminalScrollHandle,
     terminal: Entity<Terminal>,
     // lable: Entity<InputState>,
     focus_handle: FocusHandle,
@@ -54,12 +57,38 @@ impl Focusable for TerminalView {
     }
 }
 
+#[derive(Clone)]
+pub enum ContentMode {
+    Scrollable,
+    Inline {
+        displayed_lines: usize,
+        total_lines: usize,
+    },
+}
+
+impl ContentMode {
+    pub fn is_limited(&self) -> bool {
+        match self {
+            ContentMode::Scrollable => false,
+            ContentMode::Inline {
+                displayed_lines,
+                total_lines,
+            } => displayed_lines < total_lines,
+        }
+    }
+
+    pub fn is_scrollable(&self) -> bool {
+        matches!(self, ContentMode::Scrollable)
+    }
+}
+
 impl TerminalView {
     pub fn new(terminal: Entity<Terminal>, window: &mut Window, cx: &mut Context<Self>) -> Self {
         let focus_handle = cx.focus_handle();
         let focus_in = cx.on_focus_in(&focus_handle, window, |terminal_view, window, cx| {
             terminal_view.focus_in(window, cx);
         });
+        let scroll_handle = TerminalScrollHandle::new(terminal.read(cx));
         let focus_out = cx.on_focus_out(
             &focus_handle,
             window,
@@ -89,6 +118,7 @@ impl TerminalView {
         Self {
             scroll_top: Pixels::ZERO,
             terminal,
+            scroll_handle,
             ime_state: None,
             focus_handle,
             cursor_shape: cursor_shape.into(),
@@ -138,33 +168,34 @@ impl TerminalView {
     pub fn terminal(&self) -> &Entity<Terminal> {
         &self.terminal
     }
-  pub fn content_mode(&self, window: &Window, cx: &App) -> ContentMode {
-        match &self.mode {
-            TerminalMode::Standalone => ContentMode::Scrollable,
-            TerminalMode::Embedded {
-                max_lines_when_unfocused,
-            } => {
-                let terminal = self.terminal.read(cx);
-                let total_lines = terminal.total_lines();
+    pub fn content_mode(&self, window: &Window, cx: &App) -> ContentMode {
+        return ContentMode::Scrollable;
+        // match &self.mode {
+        //     TerminalMode::Standalone => ContentMode::Scrollable,
+        //     TerminalMode::Embedded {
+        //         max_lines_when_unfocused,
+        //     } => {
+        //         let terminal = self.terminal.read(cx);
+        //         let total_lines = terminal.total_lines();
 
-                if total_lines > Self::MAX_EMBEDDED_LINES {
-                    ContentMode::Scrollable
-                } else {
-                    let mut displayed_lines = terminal.used_lines().min(total_lines);
+        //         if total_lines > Self::MAX_EMBEDDED_LINES {
+        //             ContentMode::Scrollable
+        //         } else {
+        //             let mut displayed_lines = terminal.used_lines().min(total_lines);
 
-                    if !self.focus_handle.is_focused(window)
-                        && let Some(max_lines) = max_lines_when_unfocused
-                    {
-                        displayed_lines = displayed_lines.min(*max_lines)
-                    }
+        //             if !self.focus_handle.is_focused(window)
+        //                 && let Some(max_lines) = max_lines_when_unfocused
+        //             {
+        //                 displayed_lines = displayed_lines.min(*max_lines)
+        //             }
 
-                    ContentMode::Inline {
-                        displayed_lines,
-                        total_lines,
-                    }
-                }
-            }
-        }
+        //             ContentMode::Inline {
+        //                 displayed_lines,
+        //                 total_lines,
+        //             }
+        //         }
+        //     }
+        // }
     }
     /// Attempts to process a keystroke in the terminal. Returns true if handled.
     ///
@@ -358,6 +389,18 @@ pub struct SendText(String);
 pub struct SendKeystroke(String);
 impl Render for TerminalView {
     fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
+        self.scroll_handle.update(self.terminal.read(cx));
+        if let Some(new_display_offset) = self.scroll_handle.future_display_offset.take() {
+            self.terminal.update(cx, |term, _| {
+                let delta = new_display_offset as i32 - term.last_content.display_offset as i32;
+                match delta.cmp(&0) {
+                    cmp::Ordering::Greater => term.scroll_up_by(delta as usize),
+                    cmp::Ordering::Less => term.scroll_down_by(-delta as usize),
+                    cmp::Ordering::Equal => {}
+                }
+            });
+        }
+
         let terminal_handle = self.terminal.clone();
         let terminal_view_handle = cx.entity();
         let focused = self.focus_handle.is_focused(window);
@@ -378,7 +421,7 @@ impl Render for TerminalView {
             .on_action(cx.listener(TerminalView::select_all))
             .on_key_down(cx.listener(Self::key_down))
             .track_focus(&self.focus_handle.clone())
-             .on_mouse_down(
+            .on_mouse_down(
                 MouseButton::Right,
                 cx.listener(|this, event: &MouseDownEvent, window, cx| {
                     if !this.terminal.read(cx).mouse_mode(event.modifiers.shift) {
@@ -397,7 +440,7 @@ impl Render for TerminalView {
                                 .as_ref()
                                 .is_some_and(|text| !text.is_empty());
                         // this.deploy_context_menu(event.position, has_selection, window, cx);
-                        
+
                         cx.notify();
                     }
                 }),
@@ -411,6 +454,7 @@ impl Render for TerminalView {
                     .id("terminal_container")
                     .h_full()
                     .w_full()
+                     .bg(cx.theme().colors().terminal_background)
                     .child(TerminalElement::new(
                         terminal_handle,
                         terminal_view_handle,
@@ -418,14 +462,15 @@ impl Render for TerminalView {
                         focused,
                         self.should_show_cursor(focused, cx),
                         None,
-                    )).when(self.content_mode(window, cx).is_scrollable(), |div| {
+                    ))
+                    .when(self.content_mode(window, cx).is_scrollable(), |div| {
                         let colors = cx.theme().colors();
                         div.custom_scrollbars(
                             Scrollbars::for_settings::<TerminalScrollbarSettingsWrapper>()
                                 .show_along(ScrollAxes::Vertical)
                                 .with_stable_track_along(
                                     ScrollAxes::Vertical,
-                                    colors.editor_background,
+                                    colors.terminal_background,
                                 )
                                 .tracked_scroll_handle(&self.scroll_handle),
                             window,
@@ -433,5 +478,28 @@ impl Render for TerminalView {
                         )
                     }),
             )
+    }
+}
+
+#[derive(Default)]
+struct TerminalScrollbarSettingsWrapper;
+
+impl ScrollbarVisibility for TerminalScrollbarSettingsWrapper {
+    fn visibility(&self, cx: &App) -> ui::scroll_bar::ShowScrollbar {
+        TerminalSettings::get_global(cx)
+            .scrollbar
+            .show
+            .map(ui_scrollbar_settings_from_raw)
+            .unwrap_or_else(|| ShowScrollbar::Auto)
+    }
+}
+pub fn ui_scrollbar_settings_from_raw(
+    value: settings_content::terminal::ShowScrollbar,
+) -> ui::scroll_bar::ShowScrollbar {
+    match value {
+        settings_content::terminal::ShowScrollbar::Auto => ShowScrollbar::Auto,
+        settings_content::terminal::ShowScrollbar::System => ShowScrollbar::System,
+        settings_content::terminal::ShowScrollbar::Always => ShowScrollbar::Always,
+        settings_content::terminal::ShowScrollbar::Never => ShowScrollbar::Never,
     }
 }
