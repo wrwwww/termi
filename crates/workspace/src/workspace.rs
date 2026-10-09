@@ -18,7 +18,7 @@ pub mod files;
 pub mod item;
 pub mod monitor;
 pub mod monitor_store;
- 
+
 pub mod session_store;
 pub mod settings;
 pub mod sidebar;
@@ -41,23 +41,32 @@ use crate::{
     sidebar::Sidebar,
     state::AppState,
     statusbar::StatusBar,
-    terminal::{   OpenTerminalAction},
+    terminal::OpenTerminalAction,
     terminal_store::{TerminalEntry, TerminalStore},
     title_bar::PlatformTitleBar,
     transfer_store::TransferStore,
 };
 use ::settings::Settings;
-use ::terminal::{TerminalBounds, TerminalBuilder, id::{SessionId, TabId}, runtime::RuntimeManager};
+use ::terminal::{
+    TerminalBounds, TerminalBuilder,
+    id::{SessionId, TabId},
+    runtime::RuntimeManager,
+};
 use ::theme::{ActiveTheme, Theme};
-use gpui_kit::{base::{Root, resizable_panel}, component::{h_resizable, v_resizable}, gpui::{prelude::FluentBuilder, *}};
+use gpui_kit::{
+    base::{Root, resizable_panel},
+    component::{button::Button, h_resizable, v_resizable},
+    gpui::{prelude::FluentBuilder, *},
+};
+use log::info;
 
-use protocol::{  monitor::MonitorStore};
+use protocol::monitor::MonitorStore;
 use schemars::JsonSchema;
 use serde::Deserialize;
 use terminal_view::TerminalView;
 use utils::collections::HashMap;
 
-// actions!(workspace, [OpenTerminal, OpenNewSession]);
+actions!(workspace, [OpenSettings]);
 #[derive(Clone, Debug, Deserialize, PartialEq, Eq, JsonSchema, Action)]
 #[action(namespace = session_manager)]
 pub struct EditAction {
@@ -85,7 +94,7 @@ impl WorkspaceView {
         let terminal_store = cx.new(|cx| TerminalStore::new());
         let monitor_manager = cx.new(|cx| MonitorStore::new());
         let transfer_store = cx.new(|cx| TransferStore::new());
-        let runtime_manager =  RuntimeManager::new(event_tx.clone());
+        let runtime_manager = RuntimeManager::new(event_tx.clone());
 
         let state = cx.new(|cx| {
             state::AppState::new(
@@ -109,7 +118,7 @@ impl WorkspaceView {
 
         let files_pane = cx.new(|cx| FilesPane::new(state.clone()));
 
-        let settings_view = cx.new(|cx| SettingsView::new(state.clone()));
+        let settings_view = cx.new(|cx| SettingsView::new(state.clone(),cx));
         let status_bar = cx.new(|cx| StatusBar::new(state.clone()));
         let monitor_panel = cx.new(|cx| MonitorPanel::new(state.clone()));
 
@@ -180,7 +189,47 @@ impl WorkspaceView {
             }
         });
     }
+  pub fn open_settings(
+    &mut self,
+    _action: &OpenSettings,
+    _window: &mut Window,
+    cx: &mut Context<Self>,
+) {
+    info!("Workspace: open_settings");
 
+    let settings_view = self.settings_view.clone();
+
+    cx.defer(move |cx| {
+        let current_rem_size: f32 = theme_settings::ThemeSettings::get_global(cx)
+            .ui_font_size(cx)
+            .into();
+
+        let default_bounds = DEFAULT_ADDITIONAL_WINDOW_SIZE;
+        let default_rem_size = 16.0_f32;
+        let scale_factor = current_rem_size / default_rem_size;
+        let scaled_bounds: gpui::Size<Pixels> = default_bounds.map(|axis| axis * scale_factor);
+
+        let result = cx.open_window(
+            WindowOptions {
+                titlebar: None,
+                focus: true,
+                show: true,
+                is_movable: true,
+                kind: WindowKind::Dialog,
+                window_background: cx.theme().window_background_appearance(),
+                window_bounds: Some(WindowBounds::centered(scaled_bounds, cx)),
+                ..Default::default()
+            },
+            move |window, cx| {
+                cx.new(|cx| Root::new(settings_view, window, cx))
+            },
+        );
+
+        if let Err(error) = result {
+            log::error!("failed to open settings window: {}", error);
+        }
+    });
+}
     pub fn open_terminal(
         &mut self,
         action: &OpenTerminalAction,
@@ -194,13 +243,13 @@ impl WorkspaceView {
             .query(action.session_id)
             .expect("")
             .clone();
-        log::info!("session:{:?}",session);
+        log::info!("session:{:?}", session);
         let tab_id = self
             .state
             .update(cx, |this, cx| this.runtime_manager.open_session(session));
-       
-        if let Ok((tab_id, handle)) = tab_id { 
-            log::info!("tab_id:{:?}",tab_id);
+
+        if let Ok((tab_id, handle)) = tab_id {
+            log::info!("tab_id:{:?}", tab_id);
             let builder = TerminalBuilder::new_terminal(tab_id, TerminalBounds::default(), handle);
 
             let terminal = cx.new(|cx| builder.subscribe(cx));
@@ -402,7 +451,13 @@ impl Render for WorkspaceView {
                                 .child(menu_button("Edit", &t))
                                 .child(menu_button("View", &t))
                                 .child(menu_button("Window", &t))
-                                .child(menu_button("Help", &t)),
+                                .child(menu_button("Help", &t))
+                                .child(Button::new("settings").label("settings").on_click(
+                                    cx.listener(|this, event, window, cx| {
+                                        
+                                        window.dispatch_action(Box::new(OpenSettings), cx);
+                                    }),
+                                )),
                         ),
                 )
                 .into_any_element()]);
@@ -413,6 +468,7 @@ impl Render for WorkspaceView {
             .id("lumen-workspace")
             .on_action(cx.listener(Self::open_terminal))
             .on_action(cx.listener(Self::edit_session))
+            .on_action(cx.listener(Self::open_settings))
             .flex()
             .flex_col()
             .size_full()

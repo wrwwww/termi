@@ -1,10 +1,15 @@
 //! `SettingsView` — two-column preferences page (nav + content).
 
 use crate::state::{AppState, ThemeMode};
+use crate::title_bar::PlatformTitleBar;
+use gpui_kit::component::setting::{
+    SettingField, SettingGroup, SettingItem, SettingPage, Settings,
+};
 use gpui_kit::gpui::*;
 use theme::ActiveTheme;
 
 pub struct SettingsView {
+pub title_bar: Entity<PlatformTitleBar>,
     state: Entity<AppState>,
     section: SettingsSection,
 }
@@ -20,10 +25,13 @@ enum SettingsSection {
 }
 
 impl SettingsView {
-    pub fn new(state: Entity<AppState>) -> Self {
+    pub fn new(state: Entity<AppState>,   cx: &mut Context<Self>,) -> Self {
+        
+        let title_bar = cx.new(|cx| PlatformTitleBar::new("connection_dialog_title_bar", cx));
         Self {
             state,
             section: SettingsSection::Appearance,
+            title_bar,
         }
     }
 }
@@ -31,12 +39,25 @@ impl SettingsView {
 impl Render for SettingsView {
     fn render(&mut self, windows: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         let t = cx.theme();
-
-        div().flex().flex_row().flex_1().bg(t.colors().background)
-        // // ===== Left nav =====
-        // .child(nav(&t, self.section, cx))
-        // // ===== Content area =====
-        // .child(render_section(&t, self.section, &self.state, cx))
+              div()
+            .size_full()
+            .flex()
+            .flex_col()
+            .bg(t.colors().background)
+            .child(self.title_bar.clone()).child(Settings::new("my-settings").pages(vec![
+            SettingPage::new("General").group(SettingGroup::new().title("Basic Options").item(
+                SettingItem::new(
+                    "Enable Feature",
+                    SettingField::switch(
+                        |cx: &App| true,
+                        |val: bool, cx: &mut App| {
+                            println!("Feature enabled: {}", val);
+                        },
+                    ),
+                ),
+            )),
+        ]))
+        
     }
 }
 
