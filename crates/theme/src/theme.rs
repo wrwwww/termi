@@ -6,9 +6,9 @@ pub mod registry;
 pub mod scale;
 use std::sync::Arc;
 
-use gpui::BorrowAppContext;
-use gpui::Global;
-use gpui::{
+use gpui_kit::gpui::BorrowAppContext;
+use gpui_kit::gpui::Global;
+use gpui_kit::gpui::{
     App, AssetSource, Hsla, Pixels, SharedString, Styled, Tiling, WindowAppearance,
     WindowBackgroundAppearance, px,
 };

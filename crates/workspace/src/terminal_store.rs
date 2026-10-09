@@ -1,4 +1,4 @@
-use gpui::{Entity, SharedString};
+use gpui_kit::gpui::{Entity, SharedString};
  use terminal::id::{SessionId, TabId};
 use terminal::Terminal;
 use utils::collections::HashMap;

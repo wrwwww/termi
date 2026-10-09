@@ -3,7 +3,7 @@ use std::{
     rc::Rc,
 };
 
-use gpui::{Bounds, Pixels, Point, point, px, size};
+use gpui_kit::gpui::{Bounds, Pixels, Point, point, px, size};
 use terminal::Terminal;
 use ui::scroll_bar::ScrollableHandle;
 

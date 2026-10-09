@@ -5,7 +5,7 @@ use std::{
     time::{Duration, Instant},
 };
 
-use gpui::{
+use gpui_kit::gpui::{
     Along, Anchor, AnyElement, App, AppContext as _, Axis as ScrollbarAxis, BorderStyle, Bounds,
     ContentMask, Context, Corners, CursorStyle, DispatchPhase, Div, Edges, Element, ElementId,
     Entity, EntityId, GlobalElementId, Hitbox, HitboxBehavior, Hsla, InteractiveElement,
@@ -30,7 +30,7 @@ pub const EDITOR_SCROLLBAR_WIDTH: Pixels = ScrollbarStyle::Editor.to_pixels();
 const SCROLLBAR_PADDING: Pixels = px(4.);
 const BORDER_WIDTH: Pixels = px(1.);
 
-use gpui::Global;
+use gpui_kit::gpui::Global;
 use serde::{Deserialize, Serialize};
 
 /// When to show the scrollbar in the editor.
@@ -232,7 +232,7 @@ impl<T: ScrollableHandle> UniformListDecoration for ScrollbarStateWrapper<T> {
         _item_count: usize,
         _window: &mut Window,
         _cx: &mut App,
-    ) -> gpui::AnyElement {
+    ) -> gpui_kit:: gpui::AnyElement {
         ScrollbarElement {
             origin: -scroll_offset,
             state: self.0.clone(),
@@ -625,7 +625,7 @@ struct TrackColors {
     has_border: bool,
 }
 
-pub fn on_new_scrollbars<T: gpui::Global>(cx: &mut App) {
+pub fn on_new_scrollbars<T:  gpui_kit::gpui::Global>(cx: &mut App) {
     cx.observe_new::<ScrollbarState>(|_, window, cx| {
         if let Some(window) = window {
             cx.observe_global_in::<T>(window, ScrollbarState::settings_changed)
@@ -1197,7 +1197,7 @@ impl<T: ScrollableHandle> Element for ScrollbarElement<T> {
     fn request_layout(
         &mut self,
         _id: Option<&GlobalElementId>,
-        _inspector_id: Option<&gpui::InspectorElementId>,
+        _inspector_id: Option<&gpui_kit::gpui::InspectorElementId>,
         window: &mut Window,
         cx: &mut App,
     ) -> (LayoutId, Self::RequestLayoutState) {
@@ -1214,7 +1214,7 @@ impl<T: ScrollableHandle> Element for ScrollbarElement<T> {
     fn prepaint(
         &mut self,
         id: Option<&GlobalElementId>,
-        _inspector_id: Option<&gpui::InspectorElementId>,
+        _inspector_id: Option<&gpui_kit::gpui::InspectorElementId>,
         bounds: Bounds<Pixels>,
         _request_layout: &mut Self::RequestLayoutState,
         window: &mut Window,
@@ -1400,7 +1400,7 @@ impl<T: ScrollableHandle> Element for ScrollbarElement<T> {
     fn paint(
         &mut self,
         _id: Option<&GlobalElementId>,
-        _inspector_id: Option<&gpui::InspectorElementId>,
+        _inspector_id: Option<&gpui_kit::gpui::InspectorElementId>,
         Bounds { origin, size }: Bounds<Pixels>,
         _request_layout: &mut Self::RequestLayoutState,
         prepaint_state: &mut Self::PrepaintState,

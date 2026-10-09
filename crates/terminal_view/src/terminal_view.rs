@@ -3,11 +3,10 @@ use std::{ops::Range as StdRange, time::Duration};
 pub mod blink_manager;
 pub mod terminal_element;
 pub mod terminal_scrollbar;
-use gpui::*;
-use gpui::{Action, prelude::FluentBuilder};
-use gpui_component::menu::ContextMenuExt;
+use gpui_kit::component::menu::ContextMenuExt;
+use gpui_kit::gpui::*;
+use gpui_kit::gpui::{Action, prelude::FluentBuilder};
 
-use gpui_component::red_800;
 use serde::Deserialize;
 use settings::Settings;
 use settings_content::terminal::TerminalBlink;

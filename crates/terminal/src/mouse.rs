@@ -1,6 +1,6 @@
 use std::{cmp::{self, min}, iter::repeat};
 
-use gpui::{Modifiers, MouseButton, Pixels, Point as GpuiPoint, ScrollWheelEvent, px};
+use gpui_kit::gpui::{Modifiers, MouseButton, Pixels, Point as GpuiPoint, ScrollWheelEvent, px};
 
 use crate::{Modes, Point, SelectionSide, TerminalBounds};
 enum MouseFormat {
@@ -37,27 +37,27 @@ enum MouseButtonCode {
 impl MouseButtonCode {
     fn from_move_button(e: Option<MouseButton>) -> Self {
         match e {
-            Some(gpui::MouseButton::Left) => MouseButtonCode::LeftMove,
-            Some(gpui::MouseButton::Middle) => MouseButtonCode::MiddleMove,
-            Some(gpui::MouseButton::Right) => MouseButtonCode::RightMove,
-            Some(gpui::MouseButton::Navigate(_)) => MouseButtonCode::Other,
+            Some(gpui_kit::gpui::MouseButton::Left) => MouseButtonCode::LeftMove,
+            Some(gpui_kit::gpui::MouseButton::Middle) => MouseButtonCode::MiddleMove,
+            Some(gpui_kit::gpui::MouseButton::Right) => MouseButtonCode::RightMove,
+            Some(gpui_kit::gpui::MouseButton::Navigate(_)) => MouseButtonCode::Other,
             None => MouseButtonCode::NoneMove,
         }
     }
 
     fn from_button(e: MouseButton) -> Self {
         match e {
-            gpui::MouseButton::Left => MouseButtonCode::LeftButton,
-            gpui::MouseButton::Middle => MouseButtonCode::MiddleButton,
-            gpui::MouseButton::Right => MouseButtonCode::RightButton,
-            gpui::MouseButton::Navigate(_) => MouseButtonCode::Other,
+            gpui_kit::gpui::MouseButton::Left => MouseButtonCode::LeftButton,
+            gpui_kit::gpui::MouseButton::Middle => MouseButtonCode::MiddleButton,
+            gpui_kit::gpui::MouseButton::Right => MouseButtonCode::RightButton,
+            gpui_kit::gpui::MouseButton::Navigate(_) => MouseButtonCode::Other,
         }
     }
 
     fn from_scroll(e: &ScrollWheelEvent) -> Self {
         let is_positive = match e.delta {
-            gpui::ScrollDelta::Pixels(pixels) => pixels.y > px(0.),
-            gpui::ScrollDelta::Lines(lines) => lines.y > 0.,
+             gpui_kit::gpui::ScrollDelta::Pixels(pixels) => pixels.y > px(0.),
+           gpui_kit::  gpui::ScrollDelta::Lines(lines) => lines.y > 0.,
         };
 
         if is_positive {
@@ -86,7 +86,7 @@ pub(crate) fn alt_scroll(scroll_lines: i32) -> Vec<u8> {
 
 pub(crate) fn mouse_button_report(
     point: Point,
-    button: gpui::MouseButton,
+    button: gpui_kit::gpui::MouseButton,
     modifiers: Modifiers,
     pressed: bool,
     mode: Modes,

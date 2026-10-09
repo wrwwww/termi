@@ -1,4 +1,4 @@
 pub mod theme {
-    use gpui::actions;
+    use gpui_kit::gpui::actions;
     actions!(theme, [ToggleMode]);
 }

@@ -1,4 +1,4 @@
-use gpui::{
+use gpui_kit::gpui::{
     AnyElement, App, Div, FontWeight, IntoElement, ParentElement, Rems, RenderOnce,
     StyleRefinement, Styled, UnderlineStyle, Window, div, prelude::FluentBuilder, px, relative,
 };
@@ -132,7 +132,7 @@ impl LabelLike {
         self.base.style()
     }
 
-    gpui::margin_style_methods!({
+     gpui_kit::gpui::margin_style_methods!({
         visibility: pub
     });
 

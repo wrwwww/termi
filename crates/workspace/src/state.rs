@@ -4,7 +4,7 @@
 //! via GPUI's standard model notification API.
 
 use futures::channel::mpsc::UnboundedReceiver;
-use gpui::{Context, Entity};
+use gpui_kit::gpui::{Context, Entity};
 use protocol::monitor::MonitorStore;
 use serde::{Deserialize, Serialize};
 use terminal::{

@@ -7,7 +7,7 @@ use std::{
 
 use anyhow::{Context, Result};
 use futures::{StreamExt, channel::mpsc, future::LocalBoxFuture};
-use gpui::{App, AsyncApp, BorrowAppContext, FontFallbacks, Task, px};
+use gpui_kit::gpui::{App, AsyncApp, BorrowAppContext, FontFallbacks, Task, px};
 use settings_content::{
     ScrollbarSettings, SettingsContent, UserSettingsContent, terminal::PathHyperlinkRegex,
 };

@@ -32,7 +32,7 @@ use alacritty_terminal::{
     Term, event::{self, Event, EventListener}, grid::{Dimensions, GridIterator}, index::{Column, Line}, sync::FairMutex, term::{Config, cell::Flags},
 };
 
-use gpui::{
+use gpui_kit::gpui::{
     AbsoluteLength, AnyElement, App, AvailableSpace, Background, BorderStyle, Bounds, ClipboardItem, ContentMask, Context, Corners, DefiniteLength, DispatchPhase, Edges, Element, Entity, EventEmitter, FocusHandle, Font, FontFeatures, FontStyle, FontWeight, HighlightStyle, Hitbox, HitboxBehavior, Hsla, InputHandler, InteractiveElement, Interactivity, IntoElement, KeyDownEvent, Keystroke, Modifiers, ModifiersChangedEvent, MouseButton, MouseDownEvent, MouseMoveEvent, MouseUpEvent, PaintQuad, ParentElement, Pixels, Point as GpuiPoint, ScrollWheelEvent, ShapedLine, Size, StrikethroughStyle, Task, TextAlign, TextRun, TextStyle, TouchPhase, UTF16Selection, UnderlineStyle, WeakEntity, WhiteSpace, Window, accesskit::Uuid, div, fill, font, hsla, point, px, relative, rgba, size,
 };
 use itertools::Itertools;

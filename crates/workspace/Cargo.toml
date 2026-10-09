@@ -13,7 +13,7 @@ path = "src/workspace.rs"
 
 [dependencies]
 anyhow.workspace = true
-gpui.workspace = true
+gpui-kit.workspace = true
 serde.workspace = true
 utils.workspace = true
 smallvec.workspace = true
@@ -23,8 +23,7 @@ theme.workspace = true
 serde_json.workspace = true
 log.workspace = true
 gpui-rsx.workspace = true
-gpui-component-assets.workspace = true
-gpui-component.workspace = true
+
 settings.workspace=true
 settings_content.workspace=true
 terminal.workspace=true

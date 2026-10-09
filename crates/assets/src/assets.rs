@@ -1,5 +1,5 @@
 use anyhow::Context as _;
-use gpui::{App, AssetSource, Result, SharedString};
+use gpui_kit::gpui::{App, AssetSource, Result, SharedString};
 use rust_embed::RustEmbed;
 
 #[derive(RustEmbed)]

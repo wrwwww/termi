@@ -3,7 +3,7 @@ use std::fmt::Debug;
 use std::sync::Arc;
 
 use anyhow::Result;
-use gpui::{App, AssetSource, Global, SharedString};
+use gpui_kit::gpui::{App, AssetSource, Global, SharedString};
 use parking_lot::RwLock;
 use thiserror::Error;
 

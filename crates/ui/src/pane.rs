@@ -1,4 +1,4 @@
-use gpui::{prelude::FluentBuilder, *};
+use gpui_kit::gpui::{prelude::FluentBuilder, *};
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum PaneDirection {

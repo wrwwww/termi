@@ -42,13 +42,8 @@ use crate::{
     terminal::{CloseTerminalAction, OpenTerminalAction},
 };
 
-use gpui::*;
-use gpui_component::{
-    IconName,  
-    button::Button,
-    input::{Input, InputState},
-    menu::ContextMenuExt,
-};
+use gpui_kit::{base::input::InputState, component::{IconName, button::Button, input::Input, menu::ContextMenuExt}, gpui::*};
+
 
 use log::{error, info};
 use terminal::{id::{SessionId, TabId}, session::session::Session};

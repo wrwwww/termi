@@ -1,4 +1,4 @@
-use gpui::{
+use gpui_kit::gpui::{
     App, Hsla, MAX_BUTTONS_PER_SIDE, Pixels, Rgba, Window, WindowButton, WindowButtonLayout,
     WindowControlArea, div, prelude::*, px,
 };

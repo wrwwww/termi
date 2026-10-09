@@ -1,6 +1,6 @@
-use gpui::{Hsla, Rgba};
+use gpui_kit::gpui::{Hsla, Rgba};
 
-use gpui::hsla;
+use gpui_kit::gpui::hsla;
 
 use crate::colors::ThemeColors;
 use crate::scale::{ColorScale, ColorScaleSet, ColorScales};
@@ -124,13 +124,13 @@ impl ThemeColors {
             scrollbar_thumb_background: neutral().light_alpha().step_3(),
             scrollbar_thumb_hover_background: neutral().light_alpha().step_4(),
             scrollbar_thumb_active_background: neutral().light_alpha().step_5(),
-            scrollbar_thumb_border: gpui::transparent_black(),
-            scrollbar_track_background: gpui::transparent_black(),
+            scrollbar_thumb_border: gpui_kit::gpui::transparent_black(),
+            scrollbar_track_background: gpui_kit::gpui::transparent_black(),
             scrollbar_track_border: neutral().light().step_5(),
             minimap_thumb_background: neutral().light_alpha().step_3().alpha(0.7),
             minimap_thumb_hover_background: neutral().light_alpha().step_4().alpha(0.7),
             minimap_thumb_active_background: neutral().light_alpha().step_5().alpha(0.7),
-            minimap_thumb_border: gpui::transparent_black(),
+            minimap_thumb_border: gpui_kit::gpui::transparent_black(),
             terminal_background: neutral().light().step_1(),
             terminal_foreground: black().light().step_12(),
             terminal_bright_foreground: black().light().step_11(),
@@ -243,13 +243,13 @@ impl ThemeColors {
             scrollbar_thumb_background: neutral().dark_alpha().step_3(),
             scrollbar_thumb_hover_background: neutral().dark_alpha().step_4(),
             scrollbar_thumb_active_background: neutral().dark_alpha().step_5(),
-            scrollbar_thumb_border: gpui::transparent_black(),
-            scrollbar_track_background: gpui::transparent_black(),
+            scrollbar_thumb_border: gpui_kit::gpui::transparent_black(),
+            scrollbar_track_background: gpui_kit::gpui::transparent_black(),
             scrollbar_track_border: neutral().dark().step_5(),
             minimap_thumb_background: neutral().dark_alpha().step_3().alpha(0.7),
             minimap_thumb_hover_background: neutral().dark_alpha().step_4().alpha(0.7),
             minimap_thumb_active_background: neutral().dark_alpha().step_5().alpha(0.7),
-            minimap_thumb_border: gpui::transparent_black(),
+            minimap_thumb_border: gpui_kit::gpui::transparent_black(),
             terminal_background: neutral().dark().step_1(),
             terminal_ansi_background: neutral().dark().step_1(),
             terminal_foreground: white().dark().step_12(),

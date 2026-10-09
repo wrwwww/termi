@@ -1,7 +1,7 @@
 use std::sync::Arc;
 use std::time::Instant;
 
-use gpui::{App, Global, ReadGlobal, SharedString};
+use gpui_kit::gpui::{App, Global, ReadGlobal, SharedString};
 use parking_lot::RwLock;
 
 #[derive(Default)]
@@ -62,7 +62,7 @@ impl FontFamilyCache {
     }
 
     /// Prefetch all font names in the background
-    pub async fn prefetch(&self, cx: &gpui::AsyncApp) {
+    pub async fn prefetch(&self, cx: &gpui_kit::gpui::AsyncApp) {
         if self
             .state
             .try_read()

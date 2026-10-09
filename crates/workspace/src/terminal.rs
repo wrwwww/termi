@@ -1,5 +1,5 @@
 
-use gpui::Action;
+use gpui_kit::gpui::Action;
 use schemars::JsonSchema;
 use serde::Deserialize;
 use terminal::id::{SessionId, TabId};

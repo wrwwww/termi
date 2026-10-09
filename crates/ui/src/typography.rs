@@ -1,4 +1,4 @@
-use gpui::{
+use gpui_kit::gpui::{
     AnyElement, App, IntoElement, ParentElement, Pixels, Rems, RenderOnce, SharedString, Styled,
     Window, div, px, rems,
 };

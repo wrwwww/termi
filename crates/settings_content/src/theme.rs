@@ -158,12 +158,12 @@ impl Display for ThemeColor {
     }
 }
 
-impl TryFrom<&ThemeColor> for gpui::Rgba {
+impl TryFrom<&ThemeColor> for gpui_kit::gpui::Rgba {
     type Error = anyhow::Error;
 
     fn try_from(value: &ThemeColor) -> anyhow::Result<Self> {
         let s: &str = &value.0;
-        gpui::Rgba::try_from(s)
+        gpui_kit::gpui::Rgba::try_from(s)
     }
 }
 

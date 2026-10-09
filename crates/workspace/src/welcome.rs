@@ -1,13 +1,10 @@
-use gpui::{
+use gpui_kit::{component::{IconName, button::{Button, ButtonVariants}}, gpui::{
     Action, App, Context, EventEmitter, FocusHandle, Focusable, InteractiveElement, IntoElement,
     ParentElement, Render, RenderOnce, SharedString, StatefulInteractiveElement, Styled, Window,
     actions, prelude::FluentBuilder,
-};
+}};
 
-use gpui_component::{
-    IconName,
-    button::{Button, ButtonVariants},
-};
+
 use theme::ActiveTheme;
 use ui::{
     color::Color,

@@ -49,12 +49,8 @@ use crate::{
 use ::settings::Settings;
 use ::terminal::{TerminalBounds, TerminalBuilder, id::{SessionId, TabId}, runtime::RuntimeManager};
 use ::theme::{ActiveTheme, Theme};
-use gpui::{prelude::FluentBuilder, *};
-use gpui_component::{
-    Root,
-    resizable::{h_resizable, resizable_panel, v_resizable},
-    tab,
-};
+use gpui_kit::{base::{Root, resizable_panel}, component::{h_resizable, v_resizable}, gpui::{prelude::FluentBuilder, *}};
+
 use protocol::{  monitor::MonitorStore};
 use schemars::JsonSchema;
 use serde::Deserialize;

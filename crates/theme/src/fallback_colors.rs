@@ -1,4 +1,4 @@
-use gpui::{Hsla, WindowBackgroundAppearance, hsla};
+use gpui_kit::gpui::{Hsla, WindowBackgroundAppearance, hsla};
 
 use crate::{
     Appearance, DEFAULT_DARK_THEME, Theme, ThemeFamily,
@@ -156,7 +156,7 @@ pub(crate) fn zed_default_dark() -> Theme {
                 panel_overlay_hover: hover,
                 pane_focused_border: blue,
                 pane_group_border: hsla(225. / 360., 13. / 100., 12. / 100., 1.),
-                scrollbar_thumb_background: gpui::transparent_black(),
+                scrollbar_thumb_background: gpui_kit::gpui::transparent_black(),
                 scrollbar_thumb_hover_background: hover,
                 scrollbar_thumb_active_background: hsla(
                     225.0 / 360.,
@@ -165,7 +165,7 @@ pub(crate) fn zed_default_dark() -> Theme {
                     1.0,
                 ),
                 scrollbar_thumb_border: hsla(228. / 360., 8. / 100., 25. / 100., 1.),
-                scrollbar_track_background: gpui::transparent_black(),
+                scrollbar_track_background: gpui_kit::gpui::transparent_black(),
                 scrollbar_track_border: hsla(228. / 360., 8. / 100., 25. / 100., 1.),
                 minimap_thumb_background: hsla(225.0 / 360., 11.8 / 100., 26.7 / 100., 0.7),
                 minimap_thumb_hover_background: hsla(225.0 / 360., 11.8 / 100., 26.7 / 100., 0.7),

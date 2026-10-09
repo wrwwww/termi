@@ -19,7 +19,7 @@
 use crate::state::{
     AppState, Metric, MetricStatus, MonitorSnapshot, MonitorTab, MonitorWindow, NetMetric,
 };
-use gpui::*;
+use gpui_kit::gpui::*;
 use theme::{ActiveTheme, Theme};
 
 pub struct MonitorPanel {

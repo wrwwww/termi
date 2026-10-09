@@ -1,7 +1,7 @@
 //! `SettingsView` — two-column preferences page (nav + content).
 
 use crate::state::{AppState, ThemeMode};
-use gpui::*;
+use gpui_kit::gpui::*;
 use theme::ActiveTheme;
 
 pub struct SettingsView {

@@ -13,7 +13,7 @@ path = "src/settings_ui.rs"
 
 [dependencies]
 anyhow.workspace = true
-gpui.workspace = true
+gpui-kit.workspace = true
 serde.workspace = true
 utils.workspace = true
 smallvec.workspace = true

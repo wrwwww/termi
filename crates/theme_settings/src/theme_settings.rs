@@ -2,7 +2,7 @@ pub mod schema;
 use std::{collections::HashMap, sync::Arc};
 
 use anyhow::{Context, Result};
-use gpui::{App, Font, FontFallbacks, FontStyle, Global, Hsla, Pixels, SharedString, Window, px};
+use gpui_kit::gpui::{App, Font, FontFallbacks, FontStyle, Global, Hsla, Pixels, SharedString, Window, px};
 use log::info;
 use palette::convert::FromColorUnclamped;
 use refineable::Refineable;
@@ -177,7 +177,7 @@ pub fn reset_buffer_font_size(cx: &mut App) {
 }
 
 #[allow(missing_docs)]
-pub fn setup_ui_font(window: &mut Window, cx: &mut App) -> gpui::Font {
+pub fn setup_ui_font(window: &mut Window, cx: &mut App) ->  gpui_kit::gpui::Font {
     let (ui_font, ui_font_size) = {
         let theme_settings = ThemeSettings::get_global(cx);
         let font = theme_settings.ui_font.clone();
@@ -2431,11 +2431,11 @@ pub fn theme_colors_refinement(
     }
 }
 fn try_parse_color(color: &str) -> anyhow::Result<Hsla> {
-    let rgba = gpui::Rgba::try_from(color)?;
+    let rgba = gpui_kit::gpui::Rgba::try_from(color)?;
     let rgba = palette::rgb::Srgba::from_components((rgba.r, rgba.g, rgba.b, rgba.a));
     let hsla = palette::Hsla::from_color_unclamped(rgba);
 
-    let hsla = gpui::hsla(
+    let hsla =  gpui_kit::gpui::hsla(
         hsla.hue.into_positive_degrees() / 360.,
         hsla.saturation,
         hsla.lightness,

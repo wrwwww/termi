@@ -1,7 +1,7 @@
 use std::collections::HashMap;
 
 use futures::channel::mpsc::UnboundedSender;
-use gpui::Task;
+use gpui_kit::gpui::Task;
 use log::info;
 
 use crate::{

@@ -1,6 +1,6 @@
 pub mod settings_store;
 use anyhow::{Context as _, Result};
-use gpui::{App, Font, FontFallbacks, FontStyle, Pixels, px};
+use gpui_kit::gpui::{App, Font, FontFallbacks, FontStyle, Pixels, px};
 use rust_embed::RustEmbed;
 use serde::de::DeserializeOwned;
 use settings_content::{ParseStatus, SettingsContent};
@@ -10,7 +10,7 @@ use std::{
 };
 use utils::asset_str;
 pub mod content_into_gpui;
-use gpui::{AsyncApp, Global, SharedString, UpdateGlobal};
+use gpui_kit::gpui::{AsyncApp, Global, SharedString, UpdateGlobal};
 
 #[doc(hidden)]
 pub mod private {

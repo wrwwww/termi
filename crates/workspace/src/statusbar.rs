@@ -5,7 +5,7 @@
 
 use crate::state::AppState;
 use terminal::id::{SessionId,  TabId};
-use gpui::*;
+use gpui_kit::gpui::*;
  
 use settings::Settings;
 use settings_content::theme::ThemeAppearanceMode;

@@ -26,13 +26,9 @@
 //!
 //! AuthMethod::KeyboardInteractive
 
-use gpui::{prelude::FluentBuilder, *};
+use gpui_kit::{base::input::InputState, component::{input::Input, radio::RadioGroup, tab::TabBar}, gpui::{prelude::FluentBuilder, *}};
 
-use gpui_component::{
-    input::{Input, InputState},
-    radio::RadioGroup,
-    tab::TabBar,
-};
+
 
 use protocol::{AuthMethod, Protocol,  };
 

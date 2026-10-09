@@ -2,7 +2,7 @@
 
 use std::sync::Arc;
 
-use gpui::{App, Hsla, SharedString, WindowBackgroundAppearance};
+use gpui_kit::gpui::{App, Hsla, SharedString, WindowBackgroundAppearance};
 
 use refineable::Refineable;
 use serde::Deserialize;

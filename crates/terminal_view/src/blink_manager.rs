@@ -1,6 +1,6 @@
 use std::time::Duration;
 
-use gpui::{App, Context};
+use gpui_kit::gpui::{App, Context};
 use settings::settings_store::SettingsStore;
 
 pub struct BlinkManager {

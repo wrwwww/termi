@@ -1,6 +1,6 @@
 use std::collections::HashMap;
 
-use gpui::{App, AsyncApp, FontFallbacks, FontFeatures, FontWeight, Pixels, UpdateGlobal, px};
+use gpui_kit::gpui::{App, AsyncApp, FontFallbacks, FontFeatures, FontWeight, Pixels, UpdateGlobal, px};
 use serde::{Deserialize, Serialize};
 
 use settings::{Settings, content_into_gpui::IntoGpui, settings_store::SettingsStore};

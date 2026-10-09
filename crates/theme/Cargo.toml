@@ -11,7 +11,7 @@ workspace = true
 path = "src/theme.rs"
 
 [dependencies]
-gpui.workspace = true
+gpui-kit.workspace = true
 anyhow.workspace = true
 parking_lot.workspace = true
 thiserror.workspace = true

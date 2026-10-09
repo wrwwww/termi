@@ -1,5 +1,5 @@
 #![allow(missing_docs)]
-use gpui::{App, Hsla, SharedString};
+use gpui_kit::gpui::{App, Hsla, SharedString};
 
 use crate::{ActiveTheme, Appearance};
 

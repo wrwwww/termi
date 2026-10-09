@@ -1,4 +1,4 @@
-use gpui::{
+use gpui_kit::gpui::{
     App, Div, IntoElement, ParentElement, Rems, RenderOnce, SharedString, Styled, Window, div, rems,
 };
 use theme::ActiveTheme;

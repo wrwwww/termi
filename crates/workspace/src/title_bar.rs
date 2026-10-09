@@ -1,8 +1,8 @@
 pub mod platforms;
 
 #[cfg(target_os = "windows")]
-use gpui::Pixels;
-use gpui::{
+use gpui_kit::gpui::Pixels;
+use gpui_kit::gpui::{
     Action, AnyElement, App, Context, Decorations, ElementId, Entity, Hsla, InteractiveElement,
     IntoElement, MouseButton, ParentElement, Render, StatefulInteractiveElement, Styled,
     WeakEntity, Window, WindowButtonLayout, WindowControlArea, black, div, prelude::FluentBuilder,
@@ -179,13 +179,13 @@ impl Render for PlatformTitleBar {
                     this.should_move = false;
                 }))
                 .on_mouse_up(
-                    gpui::MouseButton::Left,
+                    gpui_kit::gpui::MouseButton::Left,
                     cx.listener(move |this, _ev, _window, _cx| {
                         this.should_move = false;
                     }),
                 )
                 .on_mouse_down(
-                    gpui::MouseButton::Left,
+                    gpui_kit::gpui::MouseButton::Left,
                     cx.listener(move |this, _ev, _window, _cx| {
                         this.should_move = true;
                     }),

@@ -1,4 +1,4 @@
-use gpui::{
+use gpui_kit::gpui::{
     AnyElement, App, Div, Hsla, IntoElement, ParentElement, PathBuilder, Refineable as _,
     RenderOnce, StyleRefinement, Styled, Window, canvas, div, point, prelude::FluentBuilder, px,
 };

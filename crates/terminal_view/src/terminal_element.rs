@@ -3,7 +3,7 @@ use std::time::{SystemTime, UNIX_EPOCH};
 use std::{mem, rc::Rc, time::Instant};
 
 use crate::TerminalView;
-use gpui::{
+use gpui_kit::gpui::{
     AbsoluteLength, AnyElement, App, AvailableSpace, Bounds, ContentMask, Context, DefiniteLength,
     DispatchPhase, Element, Entity, FocusHandle, Font, FontFeatures, FontStyle, FontWeight,
     HighlightStyle, Hitbox, HitboxBehavior, Hsla, InputHandler, InteractiveElement, Interactivity,
@@ -12,8 +12,7 @@ use gpui::{
     TextStyle, UTF16Selection, UnderlineStyle, WhiteSpace, Window, div, fill, font, hsla, point,
     px, relative, size,
 };
-
-use gpui_component::red_400;
+  
 use itertools::Itertools;
 use log::info;
 use settings::Settings;
@@ -552,7 +551,7 @@ impl Element for TerminalElement {
     type RequestLayoutState = ();
     type PrepaintState = MyPaintState;
 
-    fn id(&self) -> Option<gpui::ElementId> {
+    fn id(&self) -> Option<gpui_kit::gpui::ElementId> {
         None
     }
 
@@ -563,12 +562,12 @@ impl Element for TerminalElement {
     // 通过 window.request_layout() 向 GPUI 的布局引擎（Taffy）注册布局信息
     fn request_layout(
         &mut self,
-        _id: Option<&gpui::GlobalElementId>,
-        _inspector_id: Option<&gpui::InspectorElementId>,
-        window: &mut gpui::Window,
-        cx: &mut gpui::App,
-    ) -> (gpui::LayoutId, Self::RequestLayoutState) {
-        let mut style = gpui::Style::default();
+        _id: Option<&gpui_kit::gpui::GlobalElementId>,
+        _inspector_id: Option<&gpui_kit::gpui::InspectorElementId>,
+        window: &mut gpui_kit::gpui::Window,
+        cx: &mut gpui_kit::gpui::App,
+    ) -> (gpui_kit::gpui::LayoutId, Self::RequestLayoutState) {
+        let mut style = gpui_kit::gpui::Style::default();
         style.size.width = relative(1.).into();
         style.size.height = relative(1.).into();
 
@@ -579,12 +578,12 @@ impl Element for TerminalElement {
     //   此时你的元素已经获得了由父元素分配的最终位置和大小（bounds 参数）
     fn prepaint(
         &mut self,
-        id: Option<&gpui::GlobalElementId>,
-        inspector_id: Option<&gpui::InspectorElementId>,
-        bounds: gpui::Bounds<gpui::Pixels>, // 这就是你的元素最终在屏幕上的位置和大小
+        id: Option<&gpui_kit::gpui::GlobalElementId>,
+        inspector_id: Option<&gpui_kit::gpui::InspectorElementId>,
+        bounds: gpui_kit::gpui::Bounds<gpui_kit::gpui::Pixels>, // 这就是你的元素最终在屏幕上的位置和大小
         _request_layout: &mut Self::RequestLayoutState, // 来自 request_layout 的数据,
-        window: &mut gpui::Window,
-        cx: &mut gpui::App,
+        window: &mut gpui_kit::gpui::Window,
+        cx: &mut gpui_kit::gpui::App,
     ) -> Self::PrepaintState {
         let rem_size = self.rem_size(cx);
         self.interactivity.prepaint(
@@ -941,13 +940,13 @@ impl Element for TerminalElement {
     // 在这里，你可以调用 window.paint_quad 等方法绘制图形，并通过 window.on_mouse_event 等监听事件。
     fn paint(
         &mut self,
-        id: Option<&gpui::GlobalElementId>,
-        inspector_id: Option<&gpui::InspectorElementId>,
-        bounds: gpui::Bounds<gpui::Pixels>,
+        id: Option<&gpui_kit::gpui::GlobalElementId>,
+        inspector_id: Option<&gpui_kit::gpui::InspectorElementId>,
+        bounds: gpui_kit::gpui::Bounds<gpui_kit::gpui::Pixels>,
         _request_layout: &mut Self::RequestLayoutState,
         layout: &mut Self::PrepaintState,
-        window: &mut gpui::Window,
-        cx: &mut gpui::App,
+        window: &mut gpui_kit::gpui::Window,
+        cx: &mut gpui_kit::gpui::App,
     ) {
         window.with_content_mask(Some(ContentMask { bounds }), |window| {
             // let scroll_top = self.terminal_view.read(cx).scroll_top;
@@ -1089,7 +1088,7 @@ impl Element for TerminalElement {
                             .paint(
                                 ime_position,
                                 layout.dimensions.line_height,
-                                gpui::TextAlign::Left,
+                                gpui_kit::gpui::TextAlign::Left,
                                 None,
                                 window,
                                 cx,
@@ -1591,7 +1590,7 @@ impl BatchedTextRun {
             .paint(
                 pos,
                 dimensions.line_height,
-                gpui::TextAlign::Left,
+                gpui_kit::gpui::TextAlign::Left,
                 None,
                 window,
                 cx,
@@ -1821,9 +1820,9 @@ impl HighlightedRange {
 
         let top_curve_width = curve_width(first_line.start_x, first_line.end_x);
         let mut builder = if fill {
-            gpui::PathBuilder::fill()
+            gpui_kit::gpui::PathBuilder::fill()
         } else {
-            gpui::PathBuilder::stroke(px(1.))
+           gpui_kit:: gpui::PathBuilder::stroke(px(1.))
         };
         builder.move_to(first_top_right - top_curve_width);
         builder.curve_to(first_top_right + curve_height, first_top_right);

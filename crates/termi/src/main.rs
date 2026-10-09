@@ -1,18 +1,22 @@
 use std::sync::Mutex;
 
 use assets::Assets;
-use gpui::{
-    App, AppContext, Application, Bounds, TitlebarOptions, WindowBounds, WindowOptions, px, size,
+use gpui_kit::{
+     
+    base::Root,
+    component::TitleBar,
+    gpui::{
+        App, AppContext, Application, Bounds,    WindowBounds, WindowOptions, px,
+        size,
+    },
 };
-use gpui_component::{Root, Theme, ThemeMode, TitleBar};
-use gpui_platform;
 
 use log::info;
 use settings::Settings;
 use terminal::terminal_settings::TerminalSettings;
 use workspace::WorkspaceView;
 fn build_application() -> Application {
-    let platform = gpui_platform::current_platform(false);
+    let platform =  gpui_kit::platform::current_platform(false);
     if std::env::var("ZED_EXPERIMENTAL_A11Y").as_deref() == Ok("1") {
         Application::with_platform(platform)
     } else {
@@ -23,9 +27,10 @@ fn build_application() -> Application {
 fn main() {
     // log initialization
     env_logger::init();
+
     let app = build_application()
         .with_assets(Assets)
-        .with_assets(gpui_component_assets::Assets);
+        .with_assets(gpui_kit::assets::Assets);
     app.run(move |cx| {
         settings::init(cx);
         // extension::init(cx);
@@ -33,10 +38,10 @@ fn main() {
         load_embedded_fonts(cx);
         let settings = TerminalSettings::get_global(cx);
         info!("terminal settings {:#?}", settings);
-        gpui_component::init(cx);
+        // gpui_component::init(cx);
         // 在应用初始化时，将主题模式切换为 Dark
         // Theme::change(ThemeMode::Dark, None, cx);
-
+        gpui_kit::component::init(cx);
         // terminal_view::init(cx);
         // theme_selector::init(cx);
         open_window(cx);

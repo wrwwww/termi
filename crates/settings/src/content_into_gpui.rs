@@ -1,4 +1,4 @@
-use gpui::{
+use gpui_kit::gpui::{
     FontFeatures, FontStyle, FontWeight, Modifiers, Pixels, SharedString,
     WindowBackgroundAppearance, px,
 };

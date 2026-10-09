@@ -1,4 +1,4 @@
-use gpui::{App, Hsla, IntoElement, ParentElement, Styled};
+use gpui_kit::gpui::{App, Hsla, IntoElement, ParentElement, Styled};
 use theme::ActiveTheme;
 
 /// Sets a color that has a consistent meaning across all themes.

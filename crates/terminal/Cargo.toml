@@ -12,7 +12,7 @@ path = "src/terminal.rs"
 
 [dependencies]
 alacritty_terminal.workspace = true
-gpui.workspace = true
+gpui-kit.workspace = true
 itertools.workspace = true
 vte.workspace = true
 serde.workspace = true

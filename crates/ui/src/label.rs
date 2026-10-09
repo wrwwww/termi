@@ -1,7 +1,7 @@
 use std::ops::Range;
 
 pub mod label_like;
-use gpui::{
+use gpui_kit::gpui::{
     App, HighlightStyle, IntoElement, ParentElement, RenderOnce, SharedString, StyleRefinement,
     Styled, StyledText, Window,
 };
@@ -103,14 +103,14 @@ impl Label {
         self.base.base.style()
     }
 
-    gpui::margin_style_methods!({
+     gpui_kit::gpui::margin_style_methods!({
         visibility: pub
     });
 
     pub fn flex_1(mut self) -> Self {
         self.style().flex_grow = Some(1.);
         self.style().flex_shrink = Some(1.);
-        self.style().flex_basis = Some(gpui::relative(0.).into());
+        self.style().flex_basis = Some( gpui_kit::gpui::relative(0.).into());
         self
     }
 
@@ -156,12 +156,12 @@ impl LabelCommon for Label {
     /// # Examples
     ///
     /// ```
-    /// use gpui::FontWeight;
+    /// use gpui_kit::gpui::FontWeight;
     /// use ui::prelude::*;
     ///
     /// let my_label = Label::new("Hello, World!").weight(FontWeight::BOLD);
     /// ```
-    fn weight(mut self, weight: gpui::FontWeight) -> Self {
+    fn weight(mut self, weight:  gpui_kit::gpui::FontWeight) -> Self {
         self.base = self.base.weight(weight);
         self
     }

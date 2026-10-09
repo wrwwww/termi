@@ -1,4 +1,4 @@
-use gpui::Context;
+use gpui_kit::gpui::Context;
 use protocol::{AuthMethod, Protocol,  };
 use utils::collections::HashMap;
 use terminal::{id::{SessionId   }, session::session::{Session, SessionStatus}};

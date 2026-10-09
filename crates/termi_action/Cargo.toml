@@ -11,7 +11,7 @@ workspace = true
 path = "src/termi_action.rs"
 
 [dependencies]
-gpui.workspace = true
+gpui-kit.workspace = true
 serde.workspace = true
 
 

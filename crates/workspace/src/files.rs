@@ -1,7 +1,7 @@
 //! `FilesPane` — right-hand SFTP-style file browser. Static demo list.
 
 use crate::state::AppState;
-use gpui::*;
+use gpui_kit::gpui::*;
 use theme::{ActiveTheme, Theme};
 
 pub struct FilesPane {
